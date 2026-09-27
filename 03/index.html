@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教室座位表安排系統</title>
+    <!-- 引入 Tailwind CSS 以便快速排版 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 html2canvas 負責將網頁轉成圖檔下載 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <style>
+        /* 列印模式隱藏控制列 */
+        @media print {
+            body { background-color: white !important; }
+            .no-print { display: none !important; }
+            .print-shadow-none { box-shadow: none !important; }
+            .print-p-0 { padding: 0 !important; }
+            .print-m-0 { margin: 0 !important; }
+            .print-mb-8 { margin-bottom: 2rem !important; }
+            /* 列印時強制隱藏邊框與虛線背景 */
+            #seatingArea { border: none !important; background-color: transparent !important; }
+        }
+        
+        /* 匯出成圖檔時的專屬隱藏樣式 (透過 JS 觸發) */
+        body.exporting-image .no-print { display: none !important; }
+        body.exporting-image .print-shadow-none { box-shadow: none !important; border: 1px solid #e5e7eb; }
+        body.exporting-image { background-color: white !important; }
+        body.exporting-image #seatingArea { border: none !important; background-color: transparent !important; }
+
+        /* 座位基本樣式與互動 */
+        .seat {
+            transition: border-color 0.2s;
+            cursor: pointer;
+        }
+        .seat.dragging {
+            opacity: 0.5;
+            border-color: #3b82f6;
+        }
+        .seat:hover { border-color: #3b82f6; }
+        .seat-empty { background-color: #f8fafc; }
+        .seat-empty:hover { background-color: #f1f5f9; }
+        
+        .drag-over {
+            background-color: #e0f2fe !important;
+            border-style: dashed !important;
+        }
+
+        /* 教室本體旋轉動畫 (老師/學生視角切換) */
+        #classroom { transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
+        .teacher-view #classroom { transform: rotate(180deg); }
+        
+        /* 文字反向轉正動畫 (確保名字與黑板不會倒著) */
+        .rotatable-text {
+            display: inline-block;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .teacher-view .rotatable-text { transform: rotate(180deg); }
+
+        /* 群組動態增減按鈕的懸停效果 */
+        .group-action-btn { transition: opacity 0.2s; opacity: 0; }
+        .group-container:hover .group-action-btn { opacity: 1; }
+        
+        /* 拖曳與縮放手把樣式 */
+        .drag-handle { cursor: move; touch-action: none; }
+        .resize-handle { cursor: nwse-resize; touch-action: none; }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans min-h-screen">
+
+    <div id="app" class="pb-10">
+        <!-- 控制面板 (列印時隱藏) -->
+        <div class="no-print p-6 bg-white shadow-md mb-6 max-w-7xl mx-auto rounded-b-xl border-t-4 border-blue-500 flex flex-col md:flex-row gap-8">
+            
+            <!-- 左側：名單輸入 -->
+            <div class="flex-1">
+                <h2 class="text-lg font-bold mb-2 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                    1. 匯入學生名單
+                </h2>
+                <p class="text-sm text-gray-500 mb-2">請貼上名單，一行一人。格式：「姓名 性別」(以空白隔開)。</p>
+                <textarea id="inputText" class="w-full h-40 p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-400 focus:outline-none resize-none">
+王大明 男
+李小美 女
+陳阿呆 男
+林小花 女
+張三 男
+李四 男
+王五 男
+趙六 女
+孫七 女
+周八 女
+吳九 男
+鄭十 女
+錢一 男
+孫二 男
+張三三 女
+李四四 女
+王五五 男
+趙六六 男
+林七七 女
+陳八八 女
+黃九九 男
+劉十十 男
+郭一一 女
+宋二二 女</textarea>
+                <button onclick="handleImport()" class="mt-2 w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition font-medium">
+                    解析並匯入名單
+                </button>
+            </div>
+
+            <!-- 右側：控制選項 -->
+            <div class="flex-1 flex flex-col gap-4">
+                <div>
+                    <h2 class="text-lg font-bold mb-2 flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        2. 座位安排與設定
+                    </h2>
+                    
+                    <div class="flex flex-wrap gap-2 mb-4">
+                        <button onclick="handleRandomSeating()" class="flex-1 bg-purple-600 text-white py-2 px-2 rounded flex items-center justify-center gap-2 hover:bg-purple-700 shadow">
+                            隨機排座
+                        </button>
+                        <button onclick="handleBalancedSeating()" class="flex-1 bg-green-600 text-white py-2 px-2 rounded flex items-center justify-center gap-2 hover:bg-green-700 shadow" title="會根據男女總比例自動分配">
+                            盡量性別均衡排座
+                        </button>
+                        <button onclick="addGroup()" class="flex-1 bg-indigo-600 text-white py-2 px-2 rounded flex items-center justify-center gap-2 hover:bg-indigo-700 shadow" title="增加一個新的自由群組框">
+                            + 新增群組框
+                        </button>
+                        <button onclick="handleClearSeats()" class="bg-red-500 text-white py-2 px-4 rounded hover:bg-red-600 shadow" title="清空座位">
+                            清空
+                        </button>
+                    </div>
+
+                    <!-- 視角切換器 -->
+                    <div class="mb-3 bg-yellow-50 border-yellow-200 p-3 rounded border">
+                        <label class="font-bold text-gray-700 block mb-2">3. 視角切換 (觀看方向):</label>
+                        <div class="flex gap-6">
+                            <label class="flex items-center gap-2 cursor-pointer hover:opacity-80">
+                                <input type="radio" name="viewMode" value="student" checked onchange="changeView(this.value)" class="w-4 h-4 text-blue-600">
+                                <span class="font-medium text-slate-800">黑板在上方 (學生視角)</span>
+                            </label>
+                            <label class="flex items-center gap-2 cursor-pointer hover:opacity-80">
+                                <input type="radio" name="viewMode" value="teacher" onchange="changeView(this.value)" class="w-4 h-4 text-blue-600">
+                                <span class="font-medium text-slate-800">黑板在下方 (老師視角)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- 畫布設定 -->
+                    <div class="grid grid-cols-2 gap-4 mb-4">
+                        <div class="bg-gray-50 p-3 rounded border flex flex-col gap-2">
+                            <label class="font-medium whitespace-nowrap">畫布高度 (下拉空間):</label>
+                            <div class="flex items-center gap-2">
+                                <input type="range" min="600" max="2500" id="canvasHeightSlider" value="800" class="w-full accent-blue-600" oninput="updateCanvasHeight()">
+                                <span id="canvasHeightDisplay" class="w-16 text-right">800px</span>
+                            </div>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded border flex flex-col gap-2">
+                            <label class="font-medium whitespace-nowrap">全域字體大小:</label>
+                            <div class="flex items-center gap-2">
+                                <input type="range" min="14" max="40" id="fontSizeSlider" value="20" class="w-full accent-blue-600" oninput="updateFontSize()">
+                                <span id="fontSizeDisplay" class="w-12 text-right">20px</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-4 mb-4 bg-gray-50 p-3 rounded border">
+                        <label class="font-medium whitespace-nowrap">座位表日期:</label>
+                        <input type="date" id="chartDateInput" class="border p-1 rounded" onchange="updateDate()">
+                    </div>
+                    
+                    <!-- 匯出按鈕：提供圖檔 PNG 與 列印 PDF 兩種 -->
+                    <div class="flex gap-3">
+                        <button onclick="downloadImage()" class="flex-1 border-2 border-blue-600 text-blue-700 font-bold py-2 rounded flex items-center justify-center gap-2 hover:bg-blue-50 transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                            下載圖檔 (PNG)
+                        </button>
+                        <button onclick="window.print()" class="flex-1 border-2 border-slate-800 text-slate-800 font-bold py-2 rounded flex items-center justify-center gap-2 hover:bg-slate-100 transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+                            列印 (PDF)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="w-full overflow-x-auto pb-6 px-4">
+            <div id="printAreaWrapper" class="mx-auto transition-all" style="width: 1000px;">
+                <div class="bg-white p-8 rounded-xl shadow-lg print-shadow-none print-p-0" id="printArea">
+                    
+                    <!-- 標題 (固定不旋轉，永遠在頁面最上方) -->
+                    <div class="text-center mb-6 print-mb-4 relative z-0">
+                        <h2 class="text-3xl font-bold text-gray-800" id="chartTitle">教室座位表</h2>
+                    </div>
+
+                    <!-- 教室實體區域 (加入 relative 以支援內部物件絕對定位拖拉) -->
+                    <div id="classroom">
+                        <!-- 座位與黑板將在這個具有虛線邊界的容器中自由排版 -->
+                        <div id="seatingArea" class="relative w-full rounded-xl border-2 border-dashed border-gray-300" style="height: 800px; background-color: #fafafa;">
+                            <!-- 內部元素由 JavaScript 動態生成 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 底部未分配名單區塊 (列印時隱藏) -->
+        <div class="no-print max-w-7xl mx-auto mt-2 p-4">
+            <div id="unseatedArea" class="bg-white p-4 rounded-xl shadow border-2 border-dashed border-gray-300 min-h-[120px]">
+                <h3 class="font-bold text-gray-600 mb-3 flex items-center gap-2">
+                    未入座學生名單 (<span id="unseatedCount">0</span> 人)
+                    <span class="text-sm font-normal text-gray-400 ml-2">※ 拖拉名單入座。滑鼠懸停在座位或群組上，可看見縮放與旋轉按鈕。</span>
+                </h3>
+                <div id="unseatedList" class="flex flex-wrap gap-2">
+                    <!-- 未入座學生將會渲染在這裡 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allStudents = [];
+        let unseated = [];
+        let fontSize = 20;
+        
+        // 黑板的獨立設定 (X, Y, 寬度, 高度)
+        let blackboardConfig = { x: 350, y: 30, w: 300, h: 70 };
+        
+        // 動態陣列管理群組與座位
+        let groups = []; 
+        let groupRotations = [];
+        let seatRotations = [];
+        let groupConfigs = []; // 紀錄每個群組的 {x, y, w, h}
+
+        // 定義滑鼠/觸控拖拉方塊的狀態
+        let dragState = {
+            isDragging: false,
+            isResizing: false,
+            elType: null,    // 'blackboard' 或 'group'
+            elIdx: null,     // group 的 index
+            mouseX: 0,       // 啟動時的滑鼠X
+            mouseY: 0,       // 啟動時的滑鼠Y
+            startX: 0,       // 啟動時的物件X
+            startY: 0,       // 啟動時的物件Y
+            startW: 0,       // 啟動時的寬度
+            startH: 0        // 啟動時的高度
+        };
+        
+        // HTML5 Drag&Drop (負責學生換位子)
+        let draggedSource = null;
+        let draggedStudentId = null;
+        let draggedGroupIndex = null;
+        let draggedSeatIndex = null;
+
+        // 系統專用訊息框取代 Alert
+        function showMessage(msg) {
+            const box = document.createElement('div');
+            box.className = "fixed top-8 left-1/2 transform -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded shadow-2xl z-50 transition-opacity duration-300 font-bold";
+            box.innerText = msg;
+            document.body.appendChild(box);
+            setTimeout(() => {
+                box.style.opacity = '0';
+                setTimeout(() => box.remove(), 300);
+            }, 3000);
+        }
+
+        window.onload = function() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('chartDateInput').value = today;
+            updateDate();
+            
+            // 綁定未分配區塊的拖放事件
+            const unseatedArea = document.getElementById('unseatedArea');
+            unseatedArea.addEventListener('dragover', allowDrop);
+            unseatedArea.addEventListener('drop', dropToUnseated);
+            
+            // 初始化六個預設群組位置與資料
+            for (let i = 0; i < 6; i++) {
+                groups.push(Array(4).fill(null));
+                groupRotations.push(0);
+                seatRotations.push(Array(4).fill(0));
+                // 自動安排預設座標
+                let xPos = 40 + (i % 3) * 310;
+                let yPos = Math.floor(i / 3) * 250 + 130;
+                groupConfigs.push({ x: xPos, y: yPos, w: 280, h: 220 });
+            }
+
+            handleImport();
+            initDragAndResizeEngine(); // 啟動畫布自由拖拉引擎
+        };
+
+        function initDragAndResizeEngine() {
+            const handlePointerDown = (e) => {
+                const dragHandle = e.target.closest('.drag-handle');
+                const resizeHandle = e.target.closest('.resize-handle');
+                
+                if (!dragHandle && !resizeHandle) return; // 點擊到其他地方不管
+
+                // 相容 Touch 屬性
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+                if (dragHandle) {
+                    dragState.isDragging = true;
+                    dragState.elType = dragHandle.dataset.type;
+                    dragState.elIdx = parseInt(dragHandle.dataset.idx);
+                    dragState.mouseX = clientX;
+                    dragState.mouseY = clientY;
+                    const conf = dragState.elType === 'blackboard' ? blackboardConfig : groupConfigs[dragState.elIdx];
+                    dragState.startX = conf.x;
+                    dragState.startY = conf.y;
+                    if (!e.touches) e.preventDefault(); // 避免滑鼠選取文字
+                } else if (resizeHandle) {
+                    dragState.isResizing = true;
+                    dragState.elType = resizeHandle.dataset.type;
+                    dragState.elIdx = parseInt(resizeHandle.dataset.idx);
+                    dragState.mouseX = clientX;
+                    dragState.mouseY = clientY;
+                    const conf = dragState.elType === 'blackboard' ? blackboardConfig : groupConfigs[dragState.elIdx];
+                    dragState.startW = conf.w;
+                    dragState.startH = conf.h;
+                    if (!e.touches) e.preventDefault();
+                }
+            };
+
+            const handlePointerMove = (e) => {
+                if (!dragState.isDragging && !dragState.isResizing) return;
+                
+                // 拖移/縮放中阻止畫面捲動 (手機端)
+                e.preventDefault();
+
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                const dx = clientX - dragState.mouseX;
+                const dy = clientY - dragState.mouseY;
+                
+                const conf = dragState.elType === 'blackboard' ? blackboardConfig : groupConfigs[dragState.elIdx];
+                const elId = dragState.elType === 'blackboard' ? 'blackboard-container' : `group-container-${dragState.elIdx}`;
+                const el = document.getElementById(elId);
+
+                if (dragState.isDragging) {
+                    conf.x = dragState.startX + dx;
+                    conf.y = dragState.startY + dy;
+                    if (el) {
+                        el.style.left = conf.x + 'px';
+                        el.style.top = conf.y + 'px';
+                    }
+                } else if (dragState.isResizing) {
+                    // 設定縮放最小值防呆
+                    conf.w = Math.max(80, dragState.startW + dx); 
+                    conf.h = Math.max(50, dragState.startH + dy);
+                    if (el) {
+                        el.style.width = conf.w + 'px';
+                        el.style.height = conf.h + 'px';
+                        
+                        // 若為黑板，同步縮放內部文字大小以保持美觀
+                        if (dragState.elType === 'blackboard') {
+                            const textEl = el.querySelector('h1');
+                            if(textEl) textEl.style.fontSize = Math.min(conf.h * 0.4, conf.w * 0.2) + 'px';
+                        }
+                    }
+                }
+            };
+
+            const handlePointerUp = () => {
+                dragState.isDragging = false;
+                dragState.isResizing = false;
+            };
+
+            // 滑鼠綁定
+            document.addEventListener('mousedown', handlePointerDown);
+            document.addEventListener('mousemove', handlePointerMove, {passive: false});
+            document.addEventListener('mouseup', handlePointerUp);
+            // 觸控綁定
+            document.addEventListener('touchstart', handlePointerDown, {passive: false});
+            document.addEventListener('touchmove', handlePointerMove, {passive: false});
+            document.addEventListener('touchend', handlePointerUp);
+        }
+
+        function changeView(mode) {
+            const printArea = document.getElementById('printArea');
+            if (mode === 'teacher') printArea.classList.add('teacher-view');
+            else printArea.classList.remove('teacher-view');
+        }
+
+        function handleImport() {
+            const inputText = document.getElementById('inputText').value;
+            const lines = inputText.split('\n').filter(line => line.trim() !== '');
+            
+            const parsedStudents = lines.map((line, index) => {
+                const parts = line.trim().split(/\s+/);
+                const name = parts[0];
+                const genderStr = parts.length > 1 ? parts[1].toLowerCase() : '未知';
+                
+                let gender = 'U';
+                if (['男', 'm', 'boy'].includes(genderStr)) gender = 'M';
+                if (['女', 'f', 'girl'].includes(genderStr)) gender = 'F';
+                
+                return { id: 'stu_' + Date.now() + '_' + index, name: name, gender: gender };
+            });
+
+            allStudents = [...parsedStudents];
+            unseated = [...parsedStudents];
+            
+            // 保留目前的座位結構與人數，只清空上面坐的人
+            groups = groups.map(g => Array(g.length).fill(null));
+            
+            renderSeats();
+            renderUnseated();
+            showMessage("✅ 名單已成功匯入");
+        }
+
+        function handleRandomSeating() {
+            if (allStudents.length === 0) return showMessage("⚠️ 請先匯入學生名單！");
+            let shuffled = [...allStudents].sort(() => 0.5 - Math.random());
+            groups = groups.map(g => Array(g.length).fill(null));
+            unseated = [];
+            
+            let studentIndex = 0;
+            for(let gi = 0; gi < groups.length; gi++) {
+                for(let si = 0; si < groups[gi].length; si++) {
+                    if(studentIndex < shuffled.length) {
+                        groups[gi][si] = shuffled[studentIndex++];
+                    }
+                }
+            }
+            while(studentIndex < shuffled.length) unseated.push(shuffled[studentIndex++]);
+            renderSeats(); renderUnseated();
+        }
+
+        function handleBalancedSeating() {
+            if (allStudents.length === 0) return showMessage("⚠️ 請先匯入學生名單！");
+
+            let males = allStudents.filter(s => s.gender === 'M').sort(() => 0.5 - Math.random());
+            let females = allStudents.filter(s => s.gender === 'F').sort(() => 0.5 - Math.random());
+            let others = allStudents.filter(s => s.gender === 'U').sort(() => 0.5 - Math.random());
+
+            groups = groups.map(g => Array(g.length).fill(null));
+
+            groups.forEach((group, gi) => {
+                let groupStudents = [];
+                let targetSize = group.length;
+                
+                while(groupStudents.length < targetSize) {
+                    let spaceLeft = targetSize - groupStudents.length;
+                    if (spaceLeft >= 2 && males.length > 0 && females.length > 0) {
+                        groupStudents.push(males.pop(), females.pop());
+                    } else if (males.length > 0) {
+                        groupStudents.push(males.pop());
+                    } else if (females.length > 0) {
+                        groupStudents.push(females.pop());
+                    } else if (others.length > 0) {
+                        groupStudents.push(others.pop());
+                    } else {
+                        break;
+                    }
+                }
+                groupStudents.sort(() => 0.5 - Math.random());
+                groupStudents.forEach((stu, si) => groups[gi][si] = stu);
+            });
+
+            unseated = [...males, ...females, ...others];
+            renderSeats(); renderUnseated();
+        }
+
+        function handleClearSeats() {
+            groups = groups.map(g => Array(g.length).fill(null));
+            unseated = [...allStudents];
+            renderSeats(); renderUnseated();
+        }
+
+        function updateDate() {
+            const dateVal = document.getElementById('chartDateInput').value;
+            document.getElementById('chartTitle').innerText = `教室座位表 (${dateVal})`;
+        }
+
+        function updateFontSize() {
+            fontSize = document.getElementById('fontSizeSlider').value;
+            document.getElementById('fontSizeDisplay').innerText = fontSize + 'px';
+            renderSeats();
+        }
+
+        function updateCanvasHeight() {
+            const h = document.getElementById('canvasHeightSlider').value;
+            document.getElementById('canvasHeightDisplay').innerText = h + 'px';
+            document.getElementById('seatingArea').style.height = h + 'px';
+        }
+
+        function addGroup() {
+            groups.push(Array(4).fill(null)); // 預設新群組 4 個空位
+            groupRotations.push(0);
+            seatRotations.push(Array(4).fill(0));
+            // 將新群組擺放在稍微偏移黑板的位置
+            groupConfigs.push({ x: blackboardConfig.x, y: blackboardConfig.y + 120, w: 280, h: 220 });
+            renderSeats();
+            showMessage("✨ 已新增一個空白群組框，請拖拉移動它");
+        }
+        
+        function removeGroup(idx) {
+            // 退回學生至名單
+            groups[idx].forEach(s => { if(s) unseated.push(s); });
+            // 移除資料
+            groups.splice(idx, 1);
+            groupRotations.splice(idx, 1);
+            seatRotations.splice(idx, 1);
+            groupConfigs.splice(idx, 1);
+            renderSeats(); 
+            renderUnseated();
+            showMessage("🗑️ 群組已刪除");
+        }
+
+        function addSeat(groupIndex) {
+            groups[groupIndex].push(null);
+            seatRotations[groupIndex].push(0);
+            renderSeats();
+        }
+        
+        function removeSeat(groupIndex, seatIndex) {
+            const student = groups[groupIndex][seatIndex];
+            groups[groupIndex].splice(seatIndex, 1);
+            seatRotations[groupIndex].splice(seatIndex, 1);
+            if (student) unseated.push(student);
+            renderSeats(); renderUnseated();
+        }
+
+        function rotateGroup(groupIndex, event) {
+            if(event) { event.stopPropagation(); event.preventDefault(); }
+            groupRotations[groupIndex] = (groupRotations[groupIndex] + 45) % 360;
+            renderSeats();
+        }
+
+        function rotateSeat(groupIndex, seatIndex, event) {
+            if(event) { event.stopPropagation(); event.preventDefault(); }
+            seatRotations[groupIndex][seatIndex] = (seatRotations[groupIndex][seatIndex] + 45) % 360;
+            renderSeats();
+        }
+        
+        function downloadImage() {
+            const printArea = document.getElementById('printArea');
+            document.body.classList.add('exporting-image');
+            
+            setTimeout(() => {
+                html2canvas(printArea, { scale: 2, backgroundColor: "#ffffff", useCORS: true }).then(canvas => {
+                    document.body.classList.remove('exporting-image');
+                    const link = document.createElement('a');
+                    const dateVal = document.getElementById('chartDateInput').value;
+                    link.download = `座位表_${dateVal}.png`;
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                    showMessage("🖼️ 圖片下載成功");
+                }).catch(err => {
+                    document.body.classList.remove('exporting-image');
+                    showMessage("❌ 匯出圖片失敗，請稍後再試。");
+                    console.error(err);
+                });
+            }, 100);
+        }
+
+        function dragStart(ev, source, studentId, gi = null, si = null) {
+            draggedSource = source; draggedStudentId = studentId; draggedGroupIndex = gi; draggedSeatIndex = si;
+            ev.dataTransfer.setData("text/plain", studentId);
+            ev.currentTarget.classList.add('dragging');
+        }
+
+        function allowDrop(ev) {
+            ev.preventDefault();
+            if (ev.currentTarget.classList.contains('seat')) ev.currentTarget.classList.add('drag-over');
+        }
+        
+        function dragLeave(ev) {
+            if (ev.currentTarget.classList.contains('seat')) ev.currentTarget.classList.remove('drag-over');
+        }
+
+        function dragEnd(ev) { ev.currentTarget.classList.remove('dragging'); }
+
+        function dropToSeat(ev, targetGi, targetSi) {
+            ev.preventDefault();
+            ev.currentTarget.classList.remove('drag-over');
+            if (!draggedStudentId) return;
+
+            if (draggedSource === 'unseated') {
+                const studentIdx = unseated.findIndex(s => s.id === draggedStudentId);
+                if (studentIdx === -1) return;
+                const student = unseated[studentIdx];
+                if (groups[targetGi][targetSi]) unseated.push(groups[targetGi][targetSi]);
+                groups[targetGi][targetSi] = student;
+                unseated.splice(studentIdx, 1);
+            } else if (draggedSource === 'seat') {
+                if (draggedGroupIndex === targetGi && draggedSeatIndex === targetSi) return;
+                const temp = groups[targetGi][targetSi];
+                groups[targetGi][targetSi] = groups[draggedGroupIndex][draggedSeatIndex];
+                groups[draggedGroupIndex][draggedSeatIndex] = temp;
+            }
+            draggedSource = null; draggedStudentId = null; draggedGroupIndex = null; draggedSeatIndex = null;
+            renderSeats(); renderUnseated();
+        }
+
+        function dropToUnseated(ev) {
+            ev.preventDefault();
+            if (draggedSource === 'seat' && draggedGroupIndex !== null) {
+                const student = groups[draggedGroupIndex][draggedSeatIndex];
+                if (student) {
+                    groups[draggedGroupIndex][draggedSeatIndex] = null;
+                    unseated.push(student);
+                    renderSeats(); renderUnseated();
+                }
+            }
+            draggedSource = null; draggedStudentId = null; draggedGroupIndex = null; draggedSeatIndex = null;
+        }
+
+        function renderSeats() {
+            const seatingArea = document.getElementById('seatingArea');
+            let html = '';
+
+            // 1. 渲染主黑板 (現在可以調整大小與拖拉)
+            let bbTextSize = Math.min(blackboardConfig.h * 0.4, blackboardConfig.w * 0.2);
+            html += `
+                <div id="blackboard-container" class="absolute group-container border border-transparent hover:border-gray-400 rounded-lg flex items-center justify-center bg-slate-800 shadow z-10 transition-colors"
+                     style="left: ${blackboardConfig.x}px; top: ${blackboardConfig.y}px; width: ${blackboardConfig.w}px; height: ${blackboardConfig.h}px;">
+                    <h1 class="font-bold tracking-widest text-slate-200 rotatable-text w-full text-center pointer-events-none select-none" style="font-size: ${bbTextSize}px;">黑 板</h1>
+                    
+                    <!-- 黑板工具列 -->
+                    <div class="absolute -top-3 -right-3 no-print z-30 group-action-btn flex gap-1 items-center">
+                        <div class="drag-handle bg-yellow-500 text-white text-xs px-2 py-1 rounded-full shadow hover:bg-yellow-600 flex items-center gap-1 font-bold select-none" data-type="blackboard">✥ 拖曳黑板</div>
+                    </div>
+                    <!-- 黑板調整大小手把 -->
+                    <div class="absolute bottom-0 right-0 w-6 h-6 bg-blue-500 rounded-br-lg cursor-nwse-resize resize-handle no-print group-action-btn z-30 flex items-center justify-center text-white" data-type="blackboard" title="調整大小">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v6h-6"/><path d="M21 21l-7-7"/><path d="M3 9V3h6"/><path d="M3 3l7 7"/></svg>
+                    </div>
+                </div>
+            `;
+
+            // 2. 渲染每個群組 (絕對定位)
+            groups.forEach((group, gi) => {
+                const conf = groupConfigs[gi];
+                // 根據群組人數推算內層格線，預設盡量方形排版
+                const cols = Math.ceil(Math.sqrt(group.length)) || 2;
+                
+                html += `
+                <div id="group-container-${gi}" class="absolute group-container border-2 border-transparent hover:border-gray-300 rounded-lg p-2 z-10 bg-white bg-opacity-40 transition-colors"
+                     style="left: ${conf.x}px; top: ${conf.y}px; width: ${conf.w}px; height: ${conf.h}px;">
+                    
+                    <!-- 群組工具列 -->
+                    <div class="absolute -top-3 -right-3 no-print z-40 group-action-btn flex gap-1 items-center">
+                        <div class="drag-handle bg-yellow-500 text-white text-xs px-2 py-1 rounded-full shadow hover:bg-yellow-600 flex items-center gap-1 font-bold select-none" data-type="group" data-idx="${gi}">✥ 拖曳</div>
+                        <button onclick="rotateGroup(${gi}, event)" class="bg-emerald-500 text-white text-xs px-2 py-1 rounded-full shadow hover:bg-emerald-600 flex items-center gap-1 font-bold">↻ 轉向</button>
+                        <button onclick="addSeat(${gi})" class="bg-blue-500 text-white text-xs px-2 py-1 rounded-full shadow hover:bg-blue-600 flex items-center gap-1 font-bold">+ 加位</button>
+                        <button onclick="removeGroup(${gi})" class="bg-red-500 text-white text-xs px-2 py-1 rounded-full shadow hover:bg-red-600 flex items-center gap-1 font-bold">✕ 刪除</button>
+                    </div>
+
+                    <!-- 群組內部轉向層 (僅旋轉內部元素，方框本體保持不變) -->
+                    <div class="transition-transform duration-300 w-full h-full" style="transform: rotate(${groupRotations[gi] || 0}deg);">
+                        <div class="grid gap-2 w-full h-full" style="grid-template-columns: repeat(${cols}, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr);">
+                `;
+                
+                // 3. 渲染該群組內的座位
+                for (let si = 0; si < group.length; si++) {
+                    const student = group[si];
+                    let seatContent = '';
+                    let dragAttrs = '';
+                    // 為了適應自由調整群組大小，座位高度設定為 full 以塞滿 Grid cell
+                    let styleClass = `border-2 border-slate-700 rounded flex items-center justify-center p-1 seat relative w-full h-full`; 
+                    
+                    if (student) {
+                        const colorClass = student.gender === 'M' ? 'text-blue-700' : (student.gender === 'F' ? 'text-pink-600' : 'text-gray-700');
+                        styleClass += ' bg-white group shadow-sm';
+                        seatContent = `<span class="rotatable-text select-none pointer-events-none ${colorClass}">${student.name}</span>
+                                       <button onclick="removeSeat(${gi}, ${si})" class="absolute -top-2 -right-2 bg-red-100 hover:bg-red-500 hover:text-white text-red-500 rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity no-print shadow border border-red-200 z-20" title="移除此位子">✕</button>`;
+                        dragAttrs = `draggable="true" ondragstart="dragStart(event, 'seat', '${student.id}', ${gi}, ${si})" ondragend="dragEnd(event)"`;
+                    } else {
+                        styleClass += ' seat-empty group'; 
+                        const smallFontSize = Math.max(12, fontSize * 0.5);
+                        seatContent = `<span class="rotatable-text text-gray-300 select-none pointer-events-none font-normal" style="font-size: ${smallFontSize}px">空位</span>
+                                       <button onclick="removeSeat(${gi}, ${si})" class="absolute -top-2 -right-2 bg-red-100 hover:bg-red-500 hover:text-white text-red-500 rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity no-print shadow border border-red-200 z-20" title="移除此空位">✕</button>`;
+                    }
+
+                    let seatRotation = seatRotations[gi][si] || 0;
+
+                    html += `
+                        <div class="relative group" style="width: 100%; height: 100%;">
+                            <button onclick="rotateSeat(${gi}, ${si}, event)" class="absolute -top-2 -left-2 bg-emerald-100 hover:bg-emerald-500 hover:text-white text-emerald-600 rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity no-print shadow border border-emerald-200 z-20" title="旋轉此座位">↻</button>
+                            <div class="${styleClass} transition-transform duration-300"
+                                 style="transform: rotate(${seatRotation}deg); font-size: ${fontSize}px; font-weight: bold;"
+                                 ondragover="allowDrop(event)" 
+                                 ondragleave="dragLeave(event)"
+                                 ondrop="dropToSeat(event, ${gi}, ${si})"
+                                 ${dragAttrs}>
+                                ${seatContent}
+                            </div>
+                        </div>
+                    `;
+                }
+                html += `</div></div>`; // Close Grid & internal rotatable div
+                
+                // 群組調整大小手把
+                html += `
+                    <div class="absolute bottom-0 right-0 w-6 h-6 bg-blue-500 rounded-br-lg cursor-nwse-resize resize-handle no-print group-action-btn z-40 flex items-center justify-center text-white" data-type="group" data-idx="${gi}" title="調整大小">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v6h-6"/><path d="M21 21l-7-7"/><path d="M3 9V3h6"/><path d="M3 3l7 7"/></svg>
+                    </div>
+                `;
+                html += `</div>`; // Close group-container
+            });
+
+            seatingArea.innerHTML = html;
+        }
+
+        function renderUnseated() {
+            const listDiv = document.getElementById('unseatedList');
+            document.getElementById('unseatedCount').innerText = unseated.length;
+            
+            if (unseated.length === 0) {
+                listDiv.innerHTML = '<p class="text-gray-400 italic">目前所有學生皆已入座</p>';
+                return;
+            }
+
+            let html = '';
+            unseated.forEach(student => {
+                let bgClass = 'bg-gray-100 border-gray-300 text-gray-700';
+                if (student.gender === 'M') bgClass = 'bg-blue-50 border-blue-200 text-blue-700';
+                if (student.gender === 'F') bgClass = 'bg-pink-50 border-pink-200 text-pink-700';
+                
+                html += `
+                    <div draggable="true" 
+                         ondragstart="dragStart(event, 'unseated', '${student.id}')"
+                         ondragend="dragEnd(event)"
+                         class="px-4 py-2 rounded-full border cursor-grab text-base font-bold shadow-sm transition hover:shadow ${bgClass} seat">
+                        ${student.name}
+                    </div>
+                `;
+            });
+            listDiv.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
