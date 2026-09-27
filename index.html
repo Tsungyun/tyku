@@ -63,6 +63,8 @@
             /* 防止選取導致拖曳卡頓 */
             user-select: none;
             -webkit-user-select: none;
+            /* 關鍵魔法：讓圖片的白色背景與下層畫布混合變透明，保留深色刻度 */
+            mix-blend-mode: multiply;
         }
 
         /* 基準點定位錨點 (絕對準確的旋轉中心) */
