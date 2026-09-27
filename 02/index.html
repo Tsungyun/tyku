@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自訂位數乘法 練習題</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 html2pdf.js 以支援 PDF 匯出 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    
+    <style>
+        /* 網頁畫面上顯示的直式乘法樣式 */
+        .vertical-math {
+            font-family: 'Courier New', Courier, monospace;
+            display: inline-block;
+            text-align: right;
+            font-size: 1.125rem;
+            line-height: 1.5;
+            padding: 1rem;
+            background-color: #f9fafb;
+            border-radius: 0.5rem;
+            border: 1px solid #e5e7eb;
+            white-space: nowrap;
+            overflow-x: auto;
+            max-width: 100%;
+        }
+        .math-row {
+            display: flex;
+            justify-content: flex-end;
+            padding: 0 0.5rem;
+        }
+        .math-line {
+            border-bottom: 2px solid #374151;
+            margin: 0.25rem 0;
+            width: 100%;
+        }
+        .letter-spacing-wide {
+            letter-spacing: 0.4em;
+        }
+
+        /* 隱藏區塊，專門用於在背景建構 PDF 排版 */
+        #pdf-export-container {
+            position: absolute;
+            top: -9999px;
+            left: -9999px;
+            opacity: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen p-4 md:p-8 font-sans text-gray-800">
+
+    <div class="max-w-6xl mx-auto bg-white p-6 md:p-8 rounded-2xl shadow-xl">
+        
+        <div id="controls-section">
+            <h1 class="text-3xl md:text-4xl font-bold text-center mb-2 text-indigo-600 tracking-wide">自訂乘法練習題產生器</h1>
+            <p class="text-center text-gray-500 mb-8 font-medium">8 題模式 / 支援橫向 A4 對半裁切設計</p>
+            
+            <!-- 設定區塊 -->
+            <div class="bg-indigo-50/50 p-6 rounded-xl mb-8 flex flex-wrap justify-center items-center gap-6 border border-indigo-100 shadow-sm">
+                <div class="flex items-center space-x-3">
+                    <label for="multiplicand-digits" class="font-bold text-gray-700 text-lg">被乘數：</label>
+                    <select id="multiplicand-digits" class="border-gray-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 text-lg font-medium">
+                        <option value="1">1 位數</option>
+                        <option value="2">2 位數</option>
+                        <option value="3" selected>3 位數</option>
+                        <option value="4">4 位數</option>
+                        <option value="5">5 位數</option>
+                        <option value="6">6 位數</option>
+                        <option value="7">7 位數</option>
+                        <option value="8">8 位數</option>
+                        <option value="9">9 位數</option>
+                    </select>
+                </div>
+                <span class="text-indigo-400 font-bold text-2xl">×</span>
+                <div class="flex items-center space-x-3">
+                    <label for="multiplier-digits" class="font-bold text-gray-700 text-lg">乘數：</label>
+                    <select id="multiplier-digits" class="border-gray-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 text-lg font-medium">
+                        <option value="1">1 位數</option>
+                        <option value="2" selected>2 位數</option>
+                        <option value="3">3 位數</option>
+                        <option value="4">4 位數</option>
+                        <option value="5">5 位數</option>
+                        <option value="6">6 位數</option>
+                        <option value="7">7 位數</option>
+                        <option value="8">8 位數</option>
+                        <option value="9">9 位數</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 按鈕區塊 -->
+            <div class="flex flex-wrap justify-center gap-4 mb-10">
+                <button id="btn-generate" class="bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-3 px-8 rounded-lg shadow-md transition duration-200 transform hover:-translate-y-0.5">
+                    🎲 產生新題目
+                </button>
+                <button id="btn-show-answer" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-8 rounded-lg shadow-md transition duration-200 transform hover:-translate-y-0.5">
+                    👀 顯示解答
+                </button>
+                <button id="btn-export-q" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-8 rounded-lg shadow-md transition duration-200 transform hover:-translate-y-0.5 flex items-center">
+                    <span>📄 匯出題目 (PDF版)</span>
+                </button>
+                <button id="btn-export-a" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-8 rounded-lg shadow-md transition duration-200 transform hover:-translate-y-0.5 flex items-center">
+                    <span>📝 匯出解答 (PDF版)</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 網頁上的題目顯示區 (依照螢幕大小動態排版 1 ~ 4 欄) -->
+        <div id="questions-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <!-- 題目將透過 JavaScript 動態生成 -->
+        </div>
+    </div>
+
+    <!-- 用於暫存 PDF 排版的隱藏容器 -->
+    <div id="pdf-export-container"></div>
+
+    <script>
+        const questionsContainer = document.getElementById('questions-container');
+        const pdfExportContainer = document.getElementById('pdf-export-container');
+        
+        const btnGenerate = document.getElementById('btn-generate');
+        const btnShowAnswer = document.getElementById('btn-show-answer');
+        const btnExportQ = document.getElementById('btn-export-q');
+        const btnExportA = document.getElementById('btn-export-a');
+        const multiplicandSelect = document.getElementById('multiplicand-digits');
+        const multiplierSelect = document.getElementById('multiplier-digits');
+
+        let currentQuestions = [];
+        let answersShown = false;
+
+        // 隨機產生特定位數的數字字串 (避免大數精度流失)
+        function getRandomString(digits) {
+            let result = (Math.floor(Math.random() * 9) + 1).toString(); // 首位不為 0
+            for (let i = 1; i < digits; i++) {
+                result += Math.floor(Math.random() * 10).toString();
+            }
+            return result;
+        }
+
+        // 產生 8 題測驗
+        function generateQuestions() {
+            currentQuestions = [];
+            const m1Digits = parseInt(multiplicandSelect.value);
+            const m2Digits = parseInt(multiplierSelect.value);
+
+            // 修改為 8 題
+            for (let i = 0; i < 8; i++) {
+                const num1 = BigInt(getRandomString(m1Digits));
+                const num2 = BigInt(getRandomString(m2Digits));
+                currentQuestions.push({ num1, num2 });
+            }
+            
+            answersShown = false;
+            renderQuestionsForWeb();
+        }
+
+        // 產生直式乘法的 HTML (isCompact 決定是否為 PDF 的微縮版)
+        function generateVerticalMathHTML(bigInt1, bigInt2, isCompact = false) {
+            const strNum1 = bigInt1.toString();
+            const strNum2 = bigInt2.toString();
+            const finalProduct = bigInt1 * bigInt2;
+            
+            if (isCompact) {
+                // =============== PDF 專用的緊湊版 =================
+                // 為了確保 9位數 x 9位數 能塞進 A5 格子裡，字體縮小且間距變緊
+                let html = `<div style="font-family: 'Courier New', Courier, monospace; text-align: right; font-size: 11px; line-height: 1.15; white-space: nowrap; width: 100%; display: flex; flex-direction: column; align-items: flex-end;">`;
+                
+                html += `<div style="display: flex; justify-content: flex-end; letter-spacing: 0.15em;">${strNum1}</div>`;
+                
+                html += `<div style="display: flex; justify-content: flex-end; position: relative; width: 100%; align-items: center;">`;
+                html += `<span style="position: absolute; left: 10px; color: #6b7280; font-size: 10px;">×</span>`;
+                html += `<span style="letter-spacing: 0.15em;">${strNum2}</span>`;
+                html += `</div>`;
+                
+                html += `<div style="border-bottom: 1.5px solid #374151; margin: 3px 0; width: 100%;"></div>`;
+
+                if (strNum2.length === 1) {
+                    html += `<div style="display: flex; justify-content: flex-end; letter-spacing: 0.15em; font-weight: bold; color: #2563eb;">${finalProduct.toString()}</div></div>`;
+                    return html;
+                }
+
+                for (let i = strNum2.length - 1; i >= 0; i--) {
+                    const digit = BigInt(strNum2[i]);
+                    const partialProduct = bigInt1 * digit;
+                    const shift = strNum2.length - 1 - i;
+                    let spaces = '';
+                    for(let s = 0; s < shift; s++) spaces += '&nbsp;';
+                    html += `<div style="display: flex; justify-content: flex-end; letter-spacing: 0.15em;">${partialProduct.toString()}${spaces}</div>`;
+                }
+                
+                html += `<div style="border-bottom: 1.5px solid #374151; margin: 3px 0; width: 100%;"></div>`;
+                html += `<div style="display: flex; justify-content: flex-end; letter-spacing: 0.15em; font-weight: bold; color: #2563eb;">${finalProduct.toString()}</div></div>`;
+                
+                return html;
+            } else {
+                // =============== Web 畫面的標準版 =================
+                let html = `<div class="vertical-math">`;
+                html += `<div class="math-row letter-spacing-wide">${strNum1}</div>`;
+                html += `<div class="math-row relative">`;
+                html += `<span class="absolute left-0 text-gray-500">×</span>`;
+                html += `<span class="letter-spacing-wide">${strNum2}</span>`;
+                html += `</div>`;
+                html += `<div class="math-line"></div>`;
+
+                if (strNum2.length === 1) {
+                    html += `<div class="math-row letter-spacing-wide font-bold text-blue-600">${finalProduct.toString()}</div></div>`;
+                    return html;
+                }
+
+                for (let i = strNum2.length - 1; i >= 0; i--) {
+                    const digit = BigInt(strNum2[i]);
+                    const partialProduct = bigInt1 * digit;
+                    const shift = strNum2.length - 1 - i;
+                    let spaces = '';
+                    for(let s = 0; s < shift; s++) spaces += '&nbsp;';
+                    html += `<div class="math-row letter-spacing-wide">${partialProduct.toString()}${spaces}</div>`;
+                }
+                
+                html += `<div class="math-line"></div>`;
+                html += `<div class="math-row letter-spacing-wide font-bold text-blue-600">${finalProduct.toString()}</div></div>`;
+                return html;
+            }
+        }
+
+        // 渲染網頁畫面上的題目
+        function renderQuestionsForWeb() {
+            questionsContainer.innerHTML = ''; 
+
+            currentQuestions.forEach((q, index) => {
+                const card = document.createElement('div');
+                card.className = 'bg-white border-2 border-gray-100 p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow';
+
+                const header = document.createElement('div');
+                header.className = 'text-lg font-semibold text-gray-700 mb-4 border-b-2 border-gray-50 pb-2';
+                header.innerHTML = `<span class="text-indigo-500 mr-2 text-xl">(${index + 1})</span> ${q.num1.toString()} × ${q.num2.toString()} = ?`;
+                card.appendChild(header);
+
+                const answerDiv = document.createElement('div');
+                answerDiv.className = `mt-4 flex justify-center ${answersShown ? '' : 'hidden'}`;
+                answerDiv.innerHTML = generateVerticalMathHTML(q.num1, q.num2, false);
+                card.appendChild(answerDiv);
+                
+                questionsContainer.appendChild(card);
+            });
+            
+            // 更新「顯示解答」按鈕狀態
+            btnShowAnswer.innerHTML = answersShown ? "🙈 隱藏解答" : "👀 顯示解答";
+            if(answersShown) {
+                btnShowAnswer.className = "bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-8 rounded-lg shadow-md transition duration-200 transform hover:-translate-y-0.5";
+            } else {
+                btnShowAnswer.className = "bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-8 rounded-lg shadow-md transition duration-200 transform hover:-translate-y-0.5";
+            }
+        }
+
+        // 動態建構供 PDF 匯出的特殊排版 (A4 橫向、左右對稱)
+        function buildPDFLayout(isAnswerMode) {
+            const container = document.createElement('div');
+            // 設定一個固定像素比例以確保符合 A4 橫向的完美解析度 (1123px * 794px roughly corresponds to A4 at 96 DPI)
+            container.style.width = '1123px';
+            container.style.height = '794px';
+            container.style.backgroundColor = 'white';
+            container.style.display = 'flex';
+            container.style.flexDirection = 'row';
+            container.style.padding = '15px'; // 整頁最外圍邊距
+            container.style.boxSizing = 'border-box';
+
+            // 建立半邊版面的函數 (將執行兩次以達到左右雙欄複製)
+            const buildHalfPage = () => {
+                const half = document.createElement('div');
+                half.style.width = '50%';
+                half.style.height = '100%';
+                half.style.display = 'flex';
+                half.style.flexDirection = 'column';
+                half.style.padding = '0 20px'; // 左右邊距
+                half.style.boxSizing = 'border-box';
+
+                // 標題
+                const title = document.createElement('h2');
+                title.style.textAlign = 'center';
+                title.style.fontSize = '24px';
+                title.style.fontWeight = 'bold';
+                title.style.marginBottom = '15px';
+                title.style.color = '#1f2937';
+                title.style.letterSpacing = '2px';
+                title.innerText = isAnswerMode ? '乘法練習題 (解答卷)' : '乘法練習題 (題目卷)';
+                half.appendChild(title);
+
+                // 8 題網格 (2欄 x 4列)
+                const grid = document.createElement('div');
+                grid.style.display = 'grid';
+                grid.style.gridTemplateColumns = '1fr 1fr'; // 兩欄
+                grid.style.gridTemplateRows = 'repeat(4, 1fr)'; // 均分四列
+                grid.style.gap = '12px'; // 題目之間的間距
+                grid.style.flexGrow = '1'; // 填滿剩餘高度
+
+                currentQuestions.forEach((q, index) => {
+                    const card = document.createElement('div');
+                    card.style.border = '2px solid #e5e7eb'; // 邊框
+                    card.style.borderRadius = '8px';
+                    card.style.padding = '8px 12px';
+                    card.style.display = 'flex';
+                    card.style.flexDirection = 'column';
+
+                    const header = document.createElement('div');
+                    header.style.fontSize = '14px';
+                    header.style.fontWeight = 'bold';
+                    header.style.borderBottom = '1.5px solid #f3f4f6';
+                    header.style.paddingBottom = '4px';
+                    header.style.marginBottom = '6px';
+                    header.innerHTML = `<span style="color: #6366f1; margin-right: 4px;">(${index + 1})</span> ${q.num1.toString()} &times; ${q.num2.toString()} = ?`;
+                    card.appendChild(header);
+
+                    if (isAnswerMode) {
+                        const answerDiv = document.createElement('div');
+                        answerDiv.style.display = 'flex';
+                        answerDiv.style.justifyContent = 'center';
+                        answerDiv.style.alignItems = 'center';
+                        answerDiv.style.flexGrow = '1';
+                        // 呼叫產生微縮版本的直式乘法
+                        answerDiv.innerHTML = generateVerticalMathHTML(q.num1, q.num2, true);
+                        card.appendChild(answerDiv);
+                    }
+
+                    grid.appendChild(card);
+                });
+
+                half.appendChild(grid);
+                return half;
+            };
+
+            // 組合左半與右半部
+            const leftHalf = buildHalfPage();
+            const rightHalf = buildHalfPage();
+            
+            // 在右半部加上左邊的虛線框，作為「裁切線」
+            rightHalf.style.borderLeft = '2px dashed #9ca3af';
+
+            container.appendChild(leftHalf);
+            container.appendChild(rightHalf);
+
+            return container;
+        }
+
+        // 匯出成 PDF
+        function exportToPDF(isAnswerMode) {
+            // 防止連點
+            const btn = isAnswerMode ? btnExportA : btnExportQ;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `<span class="animate-pulse">⏳ 產生PDF中...</span>`;
+            btn.disabled = true;
+
+            // 清空隱藏容器並插入新的 PDF 版面
+            pdfExportContainer.innerHTML = '';
+            const layout = buildPDFLayout(isAnswerMode);
+            pdfExportContainer.appendChild(layout);
+
+            // 設定 PDF 匯出參數 (強制 A4 橫向)
+            const opt = {
+                margin:       0, // 已經在 layout 內做 padding，所以此處設 0
+                filename:     isAnswerMode ? '乘法練習題_解答版_雙欄.pdf' : '乘法練習題_題目版_雙欄.pdf',
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true, logging: false },
+                jsPDF:        { unit: 'px', format: [1123, 794], orientation: 'landscape' } 
+                // 1123x794 px matches perfectly with our layout container above
+            };
+
+            // 稍微延遲以確保 DOM 已確實被加入 (即使隱藏)
+            setTimeout(() => {
+                html2pdf().set(opt).from(layout).save().then(() => {
+                    // 完成後恢復按鈕狀態
+                    pdfExportContainer.innerHTML = '';
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }).catch(err => {
+                    console.error("PDF Generate Error", err);
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    alert("匯出 PDF 時發生錯誤，請重試。");
+                });
+            }, 300);
+        }
+
+        // 綁定事件
+        btnGenerate.addEventListener('click', generateQuestions);
+        
+        btnShowAnswer.addEventListener('click', () => {
+            answersShown = !answersShown;
+            renderQuestionsForWeb();
+        });
+
+        btnExportQ.addEventListener('click', () => exportToPDF(false));
+        btnExportA.addEventListener('click', () => exportToPDF(true));
+
+        // 初始執行一次
+        window.onload = generateQuestions;
+    </script>
+</body>
+</html>
