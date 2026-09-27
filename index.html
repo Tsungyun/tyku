@@ -167,10 +167,32 @@
         <h2 class="text-xl font-bold mb-4 text-gray-800 border-b pb-2">👨‍🏫 教師出題模式</h2>
         
         <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-1">設定夾角角度 (0~180°):</label>
-            <input type="number" id="input-angle" class="border border-gray-300 rounded px-3 py-2 w-full focus:ring-2 focus:ring-blue-500" value="45" min="0" max="180">
+            <label class="block text-sm font-medium text-gray-700 mb-1">設定夾角角度 (0~360°):</label>
+            <input type="number" id="input-angle" class="border border-gray-300 rounded px-3 py-2 w-full focus:ring-2 focus:ring-blue-500" value="45" min="0" max="360">
         </div>
         
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-1">圖形傾斜角度 (0~360°):</label>
+            <div class="flex gap-2">
+                <input type="number" id="input-rotation" class="border border-gray-300 rounded px-3 py-2 w-full focus:ring-2 focus:ring-blue-500" value="0">
+                <button id="random-rot-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-2 rounded" title="隨機傾斜">🎲</button>
+            </div>
+            <p class="text-xs text-gray-500 mt-1">設定傾斜可防止學生只量單邊。</p>
+        </div>
+
+        <button id="preview-btn" class="w-full bg-blue-100 hover:bg-blue-200 text-blue-700 font-semibold py-2 px-4 rounded mb-2 transition-colors">
+            👀 預覽當前角度
+        </button>
+        
+        <div class="flex gap-2 mb-6">
+            <button id="add-q-btn" class="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-2 rounded transition-colors shadow text-sm">
+                ➕ 加入單題
+            </button>
+            <button id="random-8-btn" class="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-2 rounded transition-colors shadow text-sm">
+                🎲 亂數產生 8 題
+            </button>
+        </div>
+
         <div class="mb-4">
             <label class="block text-sm font-medium text-gray-700 mb-1">圖形傾斜角度 (0~360°):</label>
             <div class="flex gap-2">
@@ -260,6 +282,7 @@
     const randomRotBtn = document.getElementById('random-rot-btn');
     const previewBtn = document.getElementById('preview-btn');
     const addQBtn = document.getElementById('add-q-btn');
+    const random8Btn = document.getElementById('random-8-btn');
     const qList = document.getElementById('q-list');
     const emptyQMsg = document.getElementById('empty-q-msg');
     const startTestBtn = document.getElementById('start-test-btn');
@@ -376,6 +399,31 @@
         inputAngle.value = '';
         inputRotation.value = Math.floor(Math.random() * 360);
         inputAngle.focus();
+    });
+
+    // 新增：亂數產生 8 題按鈕邏輯
+    random8Btn.addEventListener('click', () => {
+        questions = []; // 重新產生時先清空目前題庫
+        
+        for (let i = 0; i < 8; i++) {
+            let angle;
+            // 確保角度為 5 的倍數，且排除 0, 180, 360
+            do {
+                angle = Math.floor(Math.random() * 72) * 5; // 產生 0 ~ 355 中 5的倍數
+            } while (angle === 0 || angle === 180 || angle === 360);
+            
+            // 產生 0 ~ 359 的隨機傾斜旋轉角度
+            let rotation = Math.floor(Math.random() * 360);
+            
+            questions.push({ angle: angle, rotation: rotation });
+        }
+        
+        updateQList();
+        
+        // 畫出第一題作為預覽
+        if (questions.length > 0) {
+            drawAngle(questions[0].angle, questions[0].rotation);
+        }
     });
 
     function updateQList() {
@@ -673,32 +721,37 @@
         // 只取前 8 題，符合我們一頁雙份的設計
         const qsToExport = questions.slice(0, 8);
 
-        // 設定排版參數
-        const marginTop = 15;
-        const colWidth = 297 / 2; // 148.5 mm (一半的寬度)
-        const rowHeight = (210 - 25) / 8; // 將高度分為 8 列
+        // 設定排版參數：A4 切兩半，每半邊(寬 148.5) 畫 2 欄 4 列 (2x4 八格簿)
+        const halfWidth = 297 / 2; // 148.5 mm
+        const cellW = halfWidth / 2; // 74.25 mm (每個子欄位的寬度)
+        const cellH = (210 - 20) / 4; // 扣除上下各 10mm 邊界後，除以 4 列的高度
+        const marginTop = 10;
         const lineLength = 16; // 向量線段長度 (mm)
         const arcRadius = 4; // 提示弧線的半徑 (mm)
 
         // 繪製中央虛線裁切線 (提供老師對半裁切的參考線)
         doc.setDrawColor(200, 200, 200);
         doc.setLineDashPattern([2, 2], 0);
-        doc.line(colWidth, 5, colWidth, 205);
+        doc.line(halfWidth, 5, halfWidth, 205);
         doc.setLineDashPattern([], 0); // 恢復實線
 
         // 一次跑 8 題的迴圈
-        for (let row = 0; row < qsToExport.length; row++) {
-            const q = qsToExport[row];
-            const displayNum = row + 1; // 題號永遠是 1~8
+        for (let i = 0; i < qsToExport.length; i++) {
+            const q = qsToExport[i];
+            const displayNum = i + 1; // 題號永遠是 1~8
 
-            // 左右兩欄 (0: 左欄, 1: 右欄) 都印出完全相同的題目
-            for (let col = 0; col < 2; col++) {
-                // 基準座標計算
-                const baseX = col * colWidth;
-                const baseY = marginTop + row * rowHeight;
+            // 計算在 2x4 八格簿網格中的相對位置
+            const gridCol = i % 2; // 0 (左欄) 或 1 (右欄)
+            const gridRow = Math.floor(i / 2); // 0 到 3 列
+
+            // 左右兩大半版 (0: 左半張, 1: 右半張) 都印出完全相同的排版
+            for (let half = 0; half < 2; half++) {
+                // 基準座標計算 (半版偏移量 + 八格簿子網格偏移量)
+                const baseX = half * halfWidth + gridCol * cellW;
+                const baseY = marginTop + gridRow * cellH;
                 
                 // 題號的 X, Y
-                const textX = baseX + 15;
+                const textX = baseX + 8;
                 const textY = baseY + 12;
 
                 // 繪製題號
@@ -711,9 +764,9 @@
                     doc.text(`Ans: ${q.angle}°`, textX + 15, textY);
                 }
 
-                // 畫夾角線條的頂點位置
-                const vX = baseX + 75;
-                const vY = baseY + 11;
+                // 畫夾角線條的頂點位置 (設定在每個子格子的中央偏下，預留上方給文字)
+                const vX = baseX + cellW / 2;
+                const vY = baseY + cellH / 2 + 5;
                 
                 const radBase = q.rotation * Math.PI / 180;
                 const radAngle = (q.rotation - q.angle) * Math.PI / 180;
@@ -739,8 +792,8 @@
                 let lastX = vX + arcRadius * Math.cos(radBase);
                 let lastY = vY + arcRadius * Math.sin(radBase);
 
-                for (let i = 1; i <= segments; i++) {
-                    const currentAngle = radBase + i * angleStep;
+                for (let s = 1; s <= segments; s++) {
+                    const currentAngle = radBase + s * angleStep;
                     const nextX = vX + arcRadius * Math.cos(currentAngle);
                     const nextY = vY + arcRadius * Math.sin(currentAngle);
                     doc.line(lastX, lastY, nextX, nextY);
