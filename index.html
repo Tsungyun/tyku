@@ -201,6 +201,7 @@
 
         <!-- PDF 匯出按鈕區塊 -->
         <div class="mt-4 pt-4 border-t border-gray-200">
+            <p class="text-xs text-blue-600 font-bold mb-3 leading-relaxed">💡 提示：只需出 8 題即可，匯出 PDF 會自動以 A4 橫向排版，產生左右兩份完全相同的 8 題，方便印出後對半裁切使用！</p>
             <button id="export-q-btn" class="w-full bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded mb-2 transition-colors text-sm shadow">
                 📄 匯出題目 (PDF)
             </button>
@@ -329,6 +330,15 @@
         ctx.moveTo(vertexX, vertexY);
         ctx.lineTo(vertexX + lineLength * Math.cos(radAngle), vertexY + lineLength * Math.sin(radAngle));
         ctx.stroke();
+
+        // 畫夾角的提示弧線 (紅線)
+        const arcRadius = 45;
+        ctx.beginPath();
+        ctx.strokeStyle = 'rgba(239, 68, 68, 0.8)'; // 半透明紅色
+        ctx.lineWidth = 3;
+        // 使用 canvas 的 arc，anticlockwise 設為 true，能準確畫出我們要測量的內側夾角
+        ctx.arc(vertexX, vertexY, arcRadius, radBase, radAngle, true);
+        ctx.stroke();
         
         // 紀錄目前畫面上的狀態
         currentCanvasAngle = angleDegrees;
@@ -402,76 +412,7 @@
         }
     };
 
-    // --- PDF 匯出邏輯 ---
-    function generatePDF(isAnswerMode) {
-        const { jsPDF } = window.jspdf;
-        // 建立 A4 直式文件 (單位: mm)
-        const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-        
-        const pageWidth = 210;
-        const pageHeight = 297;
-        const margin = 12; // 邊距
-        const cols = 2;
-        const rows = 4;
-        
-        const cellWidth = (pageWidth - margin * 2) / cols;
-        const cellHeight = (pageHeight - margin * 2) / rows;
-        const lineLen = 30; // 輸出的線條長度(mm)
-
-        questions.forEach((q, index) => {
-            // 每滿 8 題自動換頁
-            if (index > 0 && index % 8 === 0) {
-                doc.addPage();
-            }
-            
-            const pageIndex = index % 8;
-            const col = pageIndex % 2;
-            const row = Math.floor(pageIndex / 2);
-            
-            const startX = margin + col * cellWidth;
-            const startY = margin + row * cellHeight;
-            const cx = startX + cellWidth / 2;
-            const cy = startY + cellHeight / 2 + 5; 
-            
-            // 繪製排版外框格線 (淺灰色)
-            doc.setDrawColor(220, 220, 220);
-            doc.setLineWidth(0.3);
-            doc.rect(startX, startY, cellWidth, cellHeight);
-            
-            // 繪製題號 (使用英文 Q 以避免預設字型中文亂碼)
-            doc.setTextColor(50, 50, 50);
-            doc.setFontSize(14);
-            doc.text(`Q ${index + 1}`, startX + 5, startY + 8);
-            
-            // 如果是解答模式，印出紅色的答案角度
-            if (isAnswerMode) {
-                doc.setTextColor(239, 68, 68); // Tailwind red-500
-                doc.setFontSize(16);
-                doc.text(`Ans: ${q.angle} deg`, startX + 5, startY + cellHeight - 5);
-            }
-            
-            // 計算 PDF 內的角度繪製坐標
-            const radBase = q.rotation * Math.PI / 180;
-            const radAngle = (q.rotation - q.angle) * Math.PI / 180;
-            
-            const x1 = cx + lineLen * Math.cos(radBase);
-            const y1 = cy + lineLen * Math.sin(radBase);
-            const x2 = cx + lineLen * Math.cos(radAngle);
-            const y2 = cy + lineLen * Math.sin(radAngle);
-            
-            // 繪製夾角線條 (黑色)
-            doc.setDrawColor(0, 0, 0);
-            doc.setLineWidth(1);
-            doc.line(cx, cy, x1, y1);
-            doc.line(cx, cy, x2, y2);
-        });
-
-        const filename = isAnswerMode ? 'angles_answers.pdf' : 'angles_questions.pdf';
-        doc.save(filename);
-    }
-
-    exportQBtn.addEventListener('click', () => generatePDF(false));
-    exportABtn.addEventListener('click', () => generatePDF(true));
+    // --- PDF 匯出邏輯 (舊版已整合至最下方) ---
 
     startTestBtn.addEventListener('click', () => {
         if (questions.length === 0) return;
@@ -552,85 +493,7 @@
         }
     });
 
-    // --- PDF 匯出功能 (A4 橫向, 兩欄八列) ---
-    async function exportPDF(isAnswer) {
-        if (questions.length === 0) {
-            alert('題庫中尚無題目，請先新增題目！');
-            return;
-        }
-
-        const { jsPDF } = window.jspdf;
-        // 建立 A4 橫向 (landscape) 的 PDF
-        const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-
-        const margin = 10;
-        const pageWidth = 297;
-        const pageHeight = 210;
-        
-        // 可用區域
-        const usableWidth = pageWidth - margin * 2;
-        const usableHeight = pageHeight - margin * 2;
-        
-        // 兩欄八列，共 16 格
-        const cols = 2;
-        const rows = 8;
-        const cellWidth = usableWidth / cols; // 約 138.5 mm
-        const cellHeight = usableHeight / rows; // 約 23.75 mm
-        const lineLength = 9; // PDF 內繪製的角度線段長度 (mm)
-
-        questions.forEach((q, index) => {
-            // 每 16 題新增一頁
-            if (index > 0 && index % 16 === 0) {
-                doc.addPage();
-            }
-
-            const indexOnPage = index % 16;
-            // 決定屬於哪一欄 (0~7 題在左欄，8~15 題在右欄)
-            const col = Math.floor(indexOnPage / 8); 
-            // 決定屬於哪一列 (0~7)
-            const row = indexOnPage % 8;
-
-            // 計算該格子的起始 X, Y 座標
-            const startX = margin + col * cellWidth;
-            const startY = margin + row * cellHeight;
-            
-            // 計算繪製圖形的中心點 (稍微偏右，留空間給題號)
-            const centerX = startX + (cellWidth / 2) + 10;
-            const centerY = startY + (cellHeight / 2);
-
-            // 繪製文字 (題號)
-            doc.setFontSize(11);
-            doc.setTextColor(0, 0, 0);
-            doc.text(`Q ${index + 1}`, startX + 5, startY + 8);
-            
-            // 如果是解答模式，印出紅色答案
-            if (isAnswer) {
-                doc.setFontSize(11);
-                doc.setTextColor(255, 0, 0);
-                doc.text(`Ans: ${q.angle} deg`, startX + 5, startY + 16);
-            }
-
-            // 繪製夾角向量圖形 (保證印出來不失真)
-            const radBase = q.rotation * Math.PI / 180;
-            const radAngle = (q.rotation - q.angle) * Math.PI / 180;
-
-            doc.setDrawColor(30, 30, 30);
-            doc.setLineWidth(0.6);
-            
-            // 第一條線
-            doc.line(centerX, centerY, centerX + lineLength * Math.cos(radBase), centerY + lineLength * Math.sin(radBase));
-            // 第二條線
-            doc.line(centerX, centerY, centerX + lineLength * Math.cos(radAngle), centerY + lineLength * Math.sin(radAngle));
-        });
-
-        // 儲存檔案
-        const filename = isAnswer ? '夾角測量_解答版.pdf' : '夾角測量_題目版.pdf';
-        doc.save(filename);
-    }
-
-    exportQBtn.addEventListener('click', () => exportPDF(false));
-    exportABtn.addEventListener('click', () => exportPDF(true));
-
+    // --- PDF 匯出功能 (舊版已整合至最下方) ---
 
     function resetProtractorToCenter() {
         const w = protractorImg.offsetWidth || 400;
@@ -796,7 +659,7 @@
         document.removeEventListener('touchend', stopScale);
     }
 
-    // --- PDF 匯出功能 ---
+    // --- 全新 PDF 匯出功能 (A4 橫向, 一頁雙份 8 題, 含提示弧線) ---
     function exportPDF(isAnswerMode) {
         if (questions.length === 0) {
             alert('題庫中沒有題目可匯出！');
@@ -807,77 +670,101 @@
         // A4 橫向 (landscape): 297 x 210 mm
         const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
         
-        // 設定基本排版參數
+        // 只取前 8 題，符合我們一頁雙份的設計
+        const qsToExport = questions.slice(0, 8);
+
+        // 設定排版參數
         const marginTop = 15;
         const colWidth = 297 / 2; // 148.5 mm (一半的寬度)
-        const rowHeight = (210 - 30) / 8; // 分為 8 列的高度
-        const lineLength = 18; // 向量線段長度 (mm)
+        const rowHeight = (210 - 25) / 8; // 將高度分為 8 列
+        const lineLength = 16; // 向量線段長度 (mm)
+        const arcRadius = 4; // 提示弧線的半徑 (mm)
 
-        for (let i = 0; i < questions.length; i++) {
-            const q = questions[i];
-            const pageIndex = i % 16; // 橫向兩欄，每頁最多 16 題
-            
-            // 如果是新的一頁 (且不是第一頁)
-            if (i > 0 && pageIndex === 0) {
-                doc.addPage();
+        // 繪製中央虛線裁切線 (提供老師對半裁切的參考線)
+        doc.setDrawColor(200, 200, 200);
+        doc.setLineDashPattern([2, 2], 0);
+        doc.line(colWidth, 5, colWidth, 205);
+        doc.setLineDashPattern([], 0); // 恢復實線
+
+        // 一次跑 8 題的迴圈
+        for (let row = 0; row < qsToExport.length; row++) {
+            const q = qsToExport[row];
+            const displayNum = row + 1; // 題號永遠是 1~8
+
+            // 左右兩欄 (0: 左欄, 1: 右欄) 都印出完全相同的題目
+            for (let col = 0; col < 2; col++) {
+                // 基準座標計算
+                const baseX = col * colWidth;
+                const baseY = marginTop + row * rowHeight;
+                
+                // 題號的 X, Y
+                const textX = baseX + 15;
+                const textY = baseY + 12;
+
+                // 繪製題號
+                doc.setFontSize(12);
+                doc.setTextColor(0, 0, 0);
+                doc.text(`Q ${displayNum}.`, textX, textY);
+                
+                if (isAnswerMode) {
+                    doc.setTextColor(220, 38, 38); // 紅色解答文字
+                    doc.text(`Ans: ${q.angle}°`, textX + 15, textY);
+                }
+
+                // 畫夾角線條的頂點位置
+                const vX = baseX + 75;
+                const vY = baseY + 11;
+                
+                const radBase = q.rotation * Math.PI / 180;
+                const radAngle = (q.rotation - q.angle) * Math.PI / 180;
+                
+                const endX1 = vX + lineLength * Math.cos(radBase);
+                const endY1 = vY + lineLength * Math.sin(radBase);
+                
+                const endX2 = vX + lineLength * Math.cos(radAngle);
+                const endY2 = vY + lineLength * Math.sin(radAngle);
+                
+                doc.setLineWidth(0.6);
+                doc.setDrawColor(31, 41, 55); 
+                
+                // 畫出兩條邊
+                doc.line(vX, vY, endX1, endY1);
+                doc.line(vX, vY, endX2, endY2);
+
+                // 畫出紅色的提示弧線 (以多段短直線近似圓弧)
+                doc.setLineWidth(0.4);
+                doc.setDrawColor(239, 68, 68);
+                const segments = 15;
+                const angleStep = (radAngle - radBase) / segments;
+                let lastX = vX + arcRadius * Math.cos(radBase);
+                let lastY = vY + arcRadius * Math.sin(radBase);
+
+                for (let i = 1; i <= segments; i++) {
+                    const currentAngle = radBase + i * angleStep;
+                    const nextX = vX + arcRadius * Math.cos(currentAngle);
+                    const nextY = vY + arcRadius * Math.sin(currentAngle);
+                    doc.line(lastX, lastY, nextX, nextY);
+                    lastX = nextX;
+                    lastY = nextY;
+                }
             }
-
-            // 決定欄 (0: 左欄, 1: 右欄) 與 列 (0~7)
-            const col = Math.floor(pageIndex / 8); 
-            const row = pageIndex % 8;
-
-            // 核心修改：無論左右欄，題號皆顯示為 1 到 8
-            const displayNum = row + 1;
-
-            // 基準座標計算
-            const baseX = col * colWidth;
-            const baseY = marginTop + row * rowHeight;
-            
-            // 題號/文字的 X, Y
-            const textX = baseX + 15;
-            const textY = baseY + 12;
-
-            // 繪製題號
-            doc.setFontSize(12);
-            doc.setTextColor(0, 0, 0);
-            doc.text(`Q ${displayNum}.`, textX, textY);
-            
-            if (isAnswerMode) {
-                doc.setTextColor(220, 38, 38); // 紅色解答文字
-                doc.text(`Ans: ${q.angle}°`, textX + 15, textY);
-            }
-
-            // 畫夾角線條的頂點位置
-            const vX = baseX + 75;
-            const vY = baseY + 11;
-            
-            const radBase = q.rotation * Math.PI / 180;
-            const radAngle = (q.rotation - q.angle) * Math.PI / 180;
-            
-            const endX1 = vX + lineLength * Math.cos(radBase);
-            const endY1 = vY + lineLength * Math.sin(radBase);
-            
-            const endX2 = vX + lineLength * Math.cos(radAngle);
-            const endY2 = vY + lineLength * Math.sin(radAngle);
-            
-            doc.setLineWidth(0.6);
-            doc.setDrawColor(31, 41, 55); 
-            
-            // 畫出兩條線，構成夾角 (不畫紅點)
-            doc.line(vX, vY, endX1, endY1);
-            doc.line(vX, vY, endX2, endY2);
         }
 
-        const fileName = isAnswerMode ? 'angles_answers.pdf' : 'angles_questions.pdf';
+        const fileName = isAnswerMode ? '測量角度_解答_一頁雙份.pdf' : '測量角度_題目_一頁雙份.pdf';
         doc.save(fileName);
     }
 
-    if (document.getElementById('export-q-btn')) {
-        document.getElementById('export-q-btn').addEventListener('click', () => exportPDF(false));
-    }
-    if (document.getElementById('export-a-btn')) {
-        document.getElementById('export-a-btn').addEventListener('click', () => exportPDF(true));
-    }
+    // 重新綁定乾淨的事件監聽器 (使用克隆按鈕來洗掉舊的、重複綁定的事件)
+    const exportQBtnEl = document.getElementById('export-q-btn');
+    const exportABtnEl = document.getElementById('export-a-btn');
+    
+    const newExportQBtn = exportQBtnEl.cloneNode(true);
+    const newExportABtn = exportABtnEl.cloneNode(true);
+    exportQBtnEl.parentNode.replaceChild(newExportQBtn, exportQBtnEl);
+    exportABtnEl.parentNode.replaceChild(newExportABtn, exportABtnEl);
+
+    newExportQBtn.addEventListener('click', () => exportPDF(false));
+    newExportABtn.addEventListener('click', () => exportPDF(true));
 
     // 啟動程式
     window.onload = init;
