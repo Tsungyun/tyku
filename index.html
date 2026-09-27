@@ -2,402 +2,650 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>互動幾何繪圖與量角器工具</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>互動式量角器測量工具 - 出題與測驗雙模式</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
             margin: 0;
-            overflow: hidden;
-            background-color: #f8fafc; /* Tailwind slate-50 */
+            overflow: hidden; /* 防止滾動，確保操作體驗 */
+            background-color: #f3f4f6;
             font-family: 'Inter', sans-serif;
-            user-select: none;
+            touch-action: none; /* 禁用預設觸控手勢 (如雙指縮放、滑動)，交給 JS 處理 */
         }
+        
         #app-container {
             position: relative;
             width: 100vw;
             height: 100vh;
         }
-        #drawing-canvas {
+
+        #canvas-container {
             position: absolute;
             top: 0;
             left: 0;
-            z-index: 10;
-        }
-        
-        /* 量角器定位容器：負責控制 X, Y 座標 */
-        #protractor-pos {
-            position: absolute;
-            left: 0;
-            top: 0;
-            z-index: 20;
-            display: none; /* 預設在繪圖模式隱藏 */
-            /* 確保這個容器本身不阻擋滑鼠事件，由內部的圖片來接收 */
-            pointer-events: none; 
-        }
-        
-        /* 量角器旋轉容器：負責控制旋轉角度 */
-        #protractor-rot {
-            pointer-events: auto; /* 恢復滑鼠事件接收 */
-        }
-        
-        /* 量角器圖片：固定寬度並將底邊中央對齊到原點 */
-        #protractor-img {
-            width: 500px;
-            /* 往左移 50%，往上移 100%，讓底邊中央對齊父容器的 (0,0) */
-            transform: translate(-50%, -100%);
-            cursor: grab;
-            filter: drop-shadow(0px 8px 16px rgba(0,0,0,0.3));
-        }
-        
-        #protractor-img:active {
-            cursor: grabbing;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
         }
 
-        #control-panel {
-            z-index: 30;
+        /* 隱藏/顯示的輔助類別 */
+        .hidden-mode {
+            display: none !important;
+        }
+
+        /* 量角器外部容器 (處理位置 x, y) */
+        #protractor-container {
+            position: absolute;
+            z-index: 10;
+            /* 預設隱藏，進入學生模式才顯示 */
+            display: none; 
+            left: 50px;
+            top: 50px;
+        }
+
+        /* 處理旋轉的包裝層 */
+        #rotate-wrapper {
+            position: relative;
+            transform-origin: 50% 100%; /* 基準點：X軸中央，Y軸底部 */
+            transform: rotate(0deg);
+            /* 確保旋轉時，內部元素的排版基準不會跑掉 */
+            display: inline-block; 
+        }
+
+        #protractor-img {
+            display: block;
+            width: 400px; /* 初始寬度 */
+            height: auto;
+            cursor: move; /* 滑鼠游標：移動 */
+            user-drag: none;
+            -webkit-user-drag: none;
+            /* 防止選取導致拖曳卡頓 */
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* 基準點定位錨點 (絕對準確的旋轉中心) */
+        #pivot-anchor {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            width: 2px;
+            height: 2px;
+            background-color: transparent; /* 隱藏起來，僅供 JS 抓座標 */
+        }
+
+        /* 旋轉控制把手 (藍色，上方) */
+        #rotate-handle {
+            position: absolute;
+            top: -40px; 
+            left: 50%;
+            transform: translateX(-50%);
+            width: 36px;
+            height: 36px;
+            background-color: #3b82f6; 
+            border-radius: 50%;
+            border: 2px solid white;
+            cursor: grab;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            color: white;
+            font-size: 20px;
+            user-select: none;
+        }
+        #rotate-handle:active { cursor: grabbing; }
+
+        /* 縮放控制把手 (綠色，右下角) */
+        #scale-handle {
+            position: absolute;
+            bottom: -15px;
+            right: -15px;
+            width: 30px;
+            height: 30px;
+            background-color: #10b981;
+            border-radius: 50%;
+            border: 2px solid white;
+            cursor: nwse-resize;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            color: white;
+            font-size: 16px;
+            user-select: none;
+        }
+
+        /* UI 面板共用樣式 */
+        .ui-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 20;
+            background: white;
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            width: 340px;
+            max-height: 90vh;
+            overflow-y: auto;
         }
     </style>
 </head>
 <body>
-    <div id="app-container">
-        <!-- 畫布 -->
-        <canvas id="drawing-canvas"></canvas>
-        
-        <!-- 量角器結構 -->
-        <div id="protractor-pos">
-            <div id="protractor-rot">
-                <!-- 更新圖片來源為量角器_2.png -->
-                <img id="protractor-img" src="量角器_2.png" alt="量角器" draggable="false">
-            </div>
-            <!-- 測量中心點 (紅點準星)，幫助精確對齊 -->
-            <div class="absolute w-3 h-3 bg-red-500 rounded-full border-2 border-white shadow-md pointer-events-none" style="transform: translate(-50%, -50%);"></div>
-        </div>
 
-        <!-- 控制面板 -->
-        <div id="control-panel" class="absolute top-4 left-4 bg-white/95 backdrop-blur shadow-2xl p-5 rounded-2xl border border-gray-200 flex flex-col gap-5 w-[320px]">
-            <div>
-                <h1 class="text-xl font-bold text-slate-800">幾何繪圖與測量</h1>
-                <p class="text-xs text-slate-500 mt-1">繪製形狀並使用量角器測量角度</p>
-            </div>
+<div id="app-container">
+    <!-- 繪圖區 -->
+    <div id="canvas-container">
+        <canvas id="angle-canvas"></canvas>
+    </div>
+
+    <!-- 量角器與控制把手 -->
+    <div id="protractor-container">
+        <div id="rotate-wrapper">
+            <!-- 圖片來源：需與 HTML 同目錄下的 量角器_2.png -->
+            <img id="protractor-img" src="量角器_2.png" alt="量角器" draggable="false">
             
-            <!-- 工具切換 -->
-            <div class="flex bg-slate-100 p-1 rounded-lg">
-                <button id="btn-draw" class="flex-1 py-2 text-sm font-bold rounded-md transition-all bg-white text-blue-600 shadow-sm border border-slate-200">
-                    ✏️ 繪圖模式
-                </button>
-                <button id="btn-measure" class="flex-1 py-2 text-sm font-bold rounded-md transition-all text-slate-500 hover:text-slate-700">
-                    📐 測量模式
-                </button>
-            </div>
+            <!-- 旋轉把手 -->
+            <div id="rotate-handle" title="拖曳旋轉">↻</div>
             
-            <!-- 量角器控制項 (僅在測量模式啟用) -->
-            <div id="rotation-control" class="flex flex-col gap-2 opacity-50 transition-opacity">
-                <div class="flex justify-between items-center">
-                    <label class="text-sm font-bold text-slate-700">量角器角度</label>
-                    <span id="rotation-value" class="text-sm font-mono bg-slate-100 px-2 py-1 rounded text-slate-700 border border-slate-200">0°</span>
-                </div>
-                <input type="range" id="rotation-slider" min="0" max="360" value="0" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" disabled>
-                <p class="text-[10px] text-slate-400">滑鼠滾輪也可旋轉量角器</p>
-            </div>
-
-            <!-- 清除畫布 -->
-            <button id="btn-clear" class="w-full py-2 bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 text-sm font-bold rounded-lg transition-colors">
-                🗑️ 清除所有繪圖
-            </button>
-
-            <!-- 操作說明 -->
-            <div class="text-xs text-slate-600 bg-blue-50/50 p-3 rounded-lg border border-blue-100">
-                <p class="font-bold mb-1 text-blue-800">操作提示：</p>
-                <ul class="list-disc pl-4 space-y-1">
-                    <li><b>繪圖：</b> 左鍵點擊新增頂點，點擊起點可閉合，按<b>右鍵</b>結束折線。</li>
-                    <li><b>測量：</b> 切換模式後，拖曳量角器對準紅點，調整角度測量。</li>
-                </ul>
-            </div>
+            <!-- 縮放把手 -->
+            <div id="scale-handle" title="拖曳縮放">⤡</div>
+            
+            <!-- 精確的基準點定位錨點 (位於底邊正中央) -->
+            <div id="pivot-anchor"></div>
         </div>
     </div>
 
-    <script>
-        const canvas = document.getElementById('drawing-canvas');
-        const ctx = canvas.getContext('2d');
+    <!-- 教師出題面板 -->
+    <div id="teacher-panel" class="ui-panel">
+        <h2 class="text-xl font-bold mb-4 text-gray-800 border-b pb-2">👨‍🏫 教師出題模式</h2>
         
-        // 量角器 DOM 元素
-        const protractorPos = document.getElementById('protractor-pos');
-        const protractorRot = document.getElementById('protractor-rot');
-        const protractorImg = document.getElementById('protractor-img');
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-1">設定夾角角度 (0~180°):</label>
+            <input type="number" id="input-angle" class="border border-gray-300 rounded px-3 py-2 w-full focus:ring-2 focus:ring-blue-500" value="45" min="0" max="180">
+        </div>
         
-        // 控制面板 DOM 元素
-        const btnDraw = document.getElementById('btn-draw');
-        const btnMeasure = document.getElementById('btn-measure');
-        const btnClear = document.getElementById('btn-clear');
-        const rotationSlider = document.getElementById('rotation-slider');
-        const rotationValueDisplay = document.getElementById('rotation-value');
-        const rotationControlBox = document.getElementById('rotation-control');
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-1">圖形傾斜角度 (0~360°):</label>
+            <div class="flex gap-2">
+                <input type="number" id="input-rotation" class="border border-gray-300 rounded px-3 py-2 w-full focus:ring-2 focus:ring-blue-500" value="0">
+                <button id="random-rot-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-2 rounded" title="隨機傾斜">🎲</button>
+            </div>
+            <p class="text-xs text-gray-500 mt-1">設定傾斜可防止學生只量單邊。</p>
+        </div>
 
-        // 應用程式狀態
-        let currentMode = 'draw'; 
+        <button id="preview-btn" class="w-full bg-blue-100 hover:bg-blue-200 text-blue-700 font-semibold py-2 px-4 rounded mb-2 transition-colors">
+            👀 預覽當前角度
+        </button>
         
-        // 繪圖資料
-        let currentLine = [];
-        let shapes = []; 
-        let mousePos = null; 
+        <button id="add-q-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded mb-6 transition-colors shadow">
+            ➕ 加入題庫
+        </button>
 
-        // 量角器狀態
-        let protX = window.innerWidth / 2;
-        let protY = window.innerHeight / 2;
-        let protAngle = 0; 
+        <div class="mb-4">
+            <h3 class="text-sm font-bold text-gray-700 mb-2">當前題庫清單：</h3>
+            <ul id="q-list" class="text-sm border rounded bg-gray-50 min-h-[60px] max-h-[120px] overflow-y-auto p-2">
+                <li class="text-gray-400 italic text-center py-2" id="empty-q-msg">尚無題目，請新增</li>
+            </ul>
+        </div>
+
+        <button id="start-test-btn" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded transition-colors shadow-lg disabled:opacity-50" disabled>
+            🚀 鎖定題庫，開始測驗
+        </button>
+    </div>
+
+    <!-- 學生測驗面板 -->
+    <div id="student-panel" class="ui-panel hidden-mode">
+        <div class="flex justify-between items-center mb-4 border-b pb-2">
+            <h2 class="text-xl font-bold text-gray-800">🎓 角度測量</h2>
+            <span id="score-display" class="text-sm font-semibold text-purple-600 bg-purple-100 px-2 py-1 rounded">第 1 題</span>
+        </div>
         
-        // 拖曳狀態
-        let isDragging = false;
-        let dragStartX = 0;
-        let dragStartY = 0;
-        let initialProtX = 0;
-        let initialProtY = 0;
+        <p class="text-sm text-gray-600 mb-4">請拖曳、旋轉並縮放畫面上的量角器，將底邊正中央的「基準點」對準頂點，測量夾角並輸入答案。</p>
 
-        function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            
-            // 初始化量角器位置到中心
-            if (protX === 0 && protY === 0) {
-                protX = canvas.width / 2;
-                protY = canvas.height / 2;
-                updateProtractorTransform();
-            }
-            redraw();
-        }
-        window.addEventListener('resize', resizeCanvas);
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-1">您測量到的角度 (°):</label>
+            <div class="flex gap-2">
+                <input type="number" id="student-answer" class="border border-gray-300 rounded px-3 py-2 w-full text-lg font-bold text-center focus:ring-2 focus:ring-purple-500" placeholder="?" tabindex="1">
+                <button id="check-btn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded transition-colors whitespace-nowrap">
+                    送出
+                </button>
+            </div>
+            <p id="feedback-msg" class="mt-3 text-sm font-bold hidden"></p>
+        </div>
+        
+        <button id="next-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded transition-colors hidden shadow">
+            下一題 ➔
+        </button>
+    </div>
+</div>
 
-        function drawGrid() {
-            ctx.strokeStyle = '#e2e8f0'; // slate-200
-            ctx.lineWidth = 1;
-            const step = 40;
-            for (let x = 0; x < canvas.width; x += step) {
-                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
-            }
-            for (let y = 0; y < canvas.height; y += step) {
-                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
-            }
-        }
+<script>
+    // --- 應用程式狀態 ---
+    let questions = [];
+    let currentProblemIndex = 0;
+    let isTeacherMode = true;
+    
+    // 目前繪製在 Canvas 上的角度狀態
+    let currentCanvasAngle = 0;
+    let currentCanvasRotation = 0;
+    let vertexX, vertexY;
 
-        function redraw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            drawGrid();
-            
-            ctx.lineJoin = 'round';
-            ctx.lineCap = 'round';
-            
-            // 繪製已完成的圖形
-            shapes.forEach(shape => {
-                if (shape.length < 2) return;
-                ctx.beginPath();
-                ctx.moveTo(shape[0].x, shape[0].y);
-                for (let i = 1; i < shape.length; i++) {
-                    ctx.lineTo(shape[i].x, shape[i].y);
-                }
-                ctx.lineWidth = 3;
-                ctx.strokeStyle = '#334155'; // slate-700
-                ctx.stroke();
-                
-                // 如果是閉合多邊形則填色
-                if (shape.length > 2 && isClosed(shape)) {
-                    ctx.fillStyle = 'rgba(59, 130, 246, 0.15)'; // blue-500 transparent
-                    ctx.fill();
-                }
-            });
+    // --- DOM 元素綁定 ---
+    const canvas = document.getElementById('angle-canvas');
+    const ctx = canvas.getContext('2d');
+    
+    const teacherPanel = document.getElementById('teacher-panel');
+    const studentPanel = document.getElementById('student-panel');
+    
+    const inputAngle = document.getElementById('input-angle');
+    const inputRotation = document.getElementById('input-rotation');
+    const randomRotBtn = document.getElementById('random-rot-btn');
+    const previewBtn = document.getElementById('preview-btn');
+    const addQBtn = document.getElementById('add-q-btn');
+    const qList = document.getElementById('q-list');
+    const emptyQMsg = document.getElementById('empty-q-msg');
+    const startTestBtn = document.getElementById('start-test-btn');
+    
+    const studentAnswerInput = document.getElementById('student-answer');
+    const checkBtn = document.getElementById('check-btn');
+    const nextBtn = document.getElementById('next-btn');
+    const feedbackMsg = document.getElementById('feedback-msg');
+    const scoreDisplay = document.getElementById('score-display');
+    
+    const protractorContainer = document.getElementById('protractor-container');
+    const rotateWrapper = document.getElementById('rotate-wrapper');
+    const protractorImg = document.getElementById('protractor-img');
+    const rotateHandle = document.getElementById('rotate-handle');
+    const scaleHandle = document.getElementById('scale-handle');
+    const pivotAnchor = document.getElementById('pivot-anchor');
 
-            // 繪製當前正在畫的線
-            if (currentLine.length > 0) {
-                ctx.beginPath();
-                ctx.moveTo(currentLine[0].x, currentLine[0].y);
-                for (let i = 1; i < currentLine.length; i++) {
-                    ctx.lineTo(currentLine[i].x, currentLine[i].y);
-                }
-                ctx.lineWidth = 3;
-                ctx.strokeStyle = '#2563eb'; // blue-600
-                ctx.stroke();
-
-                // 繪製預覽虛線
-                if (mousePos && currentMode === 'draw') {
-                    ctx.beginPath();
-                    ctx.moveTo(currentLine[currentLine.length - 1].x, currentLine[currentLine.length - 1].y);
-                    ctx.lineTo(mousePos.x, mousePos.y);
-                    ctx.setLineDash([8, 6]);
-                    ctx.strokeStyle = '#94a3b8'; // slate-400
-                    ctx.stroke();
-                    ctx.setLineDash([]); 
-                }
-
-                // 繪製頂點標記
-                ctx.fillStyle = '#ef4444'; // red-500
-                currentLine.forEach((p) => {
-                    ctx.beginPath();
-                    ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
-                    ctx.fill();
-                });
-            }
-        }
-
-        function isClosed(shape) {
-            if (shape.length < 3) return false;
-            const first = shape[0];
-            const last = shape[shape.length - 1];
-            const dist = Math.hypot(first.x - last.x, first.y - last.y);
-            return dist < 15;
-        }
-
-        function updateProtractorTransform() {
-            // 更新 X, Y 座標
-            protractorPos.style.transform = `translate(${protX}px, ${protY}px)`;
-            // 更新旋轉角度
-            protractorRot.style.transform = `rotate(${protAngle}deg)`;
-            
-            // 更新 UI 數值
-            rotationSlider.value = protAngle;
-            rotationValueDisplay.textContent = `${Math.round(protAngle)}°`;
-        }
-
-        function setMode(mode) {
-            currentMode = mode;
-            if (mode === 'draw') {
-                // UI 樣式
-                btnDraw.className = "flex-1 py-2 text-sm font-bold rounded-md transition-all bg-white text-blue-600 shadow-sm border border-slate-200";
-                btnMeasure.className = "flex-1 py-2 text-sm font-bold rounded-md transition-all text-slate-500 hover:text-slate-700 hover:bg-slate-200";
-                
-                // 畫布與量角器狀態
-                canvas.style.cursor = 'crosshair';
-                protractorPos.style.display = 'none'; // 隱藏量角器
-                
-                // 停用旋轉滑桿
-                rotationSlider.disabled = true;
-                rotationControlBox.classList.add('opacity-50');
-            } else {
-                // UI 樣式
-                btnMeasure.className = "flex-1 py-2 text-sm font-bold rounded-md transition-all bg-white text-green-600 shadow-sm border border-slate-200";
-                btnDraw.className = "flex-1 py-2 text-sm font-bold rounded-md transition-all text-slate-500 hover:text-slate-700 hover:bg-slate-200";
-                
-                // 畫布與量角器狀態
-                canvas.style.cursor = 'default';
-                protractorPos.style.display = 'block'; // 強制顯示量角器
-                
-                // 啟用旋轉滑桿
-                rotationSlider.disabled = false;
-                rotationControlBox.classList.remove('opacity-50');
-                
-                // 結束正在繪製的線段
-                if (currentLine.length > 0) {
-                    shapes.push([...currentLine]);
-                    currentLine = [];
-                }
-                mousePos = null;
-                
-                // 確保切換時量角器位置正確更新
-                updateProtractorTransform();
-            }
-            redraw();
-        }
-
-        btnDraw.addEventListener('click', () => setMode('draw'));
-        btnMeasure.addEventListener('click', () => setMode('measure'));
-        btnClear.addEventListener('click', () => {
-            shapes = [];
-            currentLine = [];
-            mousePos = null;
-            redraw();
-        });
-
-        // -- 畫布互動 (繪圖模式) --
-        canvas.addEventListener('mousedown', (e) => {
-            if (currentMode !== 'draw') return;
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-
-            // 檢查是否點擊起點來閉合圖形
-            if (currentLine.length > 2) {
-                const startPoint = currentLine[0];
-                const dist = Math.hypot(startPoint.x - x, startPoint.y - y);
-                if (dist < 15) { 
-                    currentLine.push({...startPoint}); 
-                    shapes.push([...currentLine]);
-                    currentLine = [];
-                    redraw();
-                    return;
-                }
-            }
-
-            currentLine.push({ x, y });
-            redraw();
-        });
-
-        canvas.addEventListener('mousemove', (e) => {
-            if (currentMode !== 'draw') return;
-            const rect = canvas.getBoundingClientRect();
-            mousePos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-            if (currentLine.length > 0) redraw();
-        });
-
-        // 右鍵結束當前線段
-        canvas.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            if (currentMode === 'draw' && currentLine.length > 0) {
-                shapes.push([...currentLine]);
-                currentLine = [];
-                mousePos = null;
-                redraw();
-            }
-        });
-
-        // -- 量角器互動 (測量模式) --
-        // 1. 拖曳功能
-        protractorImg.addEventListener('mousedown', (e) => {
-            if (currentMode !== 'measure') return;
-            e.preventDefault();
-            isDragging = true;
-            dragStartX = e.clientX;
-            dragStartY = e.clientY;
-            initialProtX = protX;
-            initialProtY = protY;
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            if (!isDragging) return;
-            const dx = e.clientX - dragStartX;
-            const dy = e.clientY - dragStartY;
-            protX = initialProtX + dx;
-            protY = initialProtY + dy;
-            updateProtractorTransform();
-        });
-
-        document.addEventListener('mouseup', () => {
-            isDragging = false;
-        });
-
-        // 2. 滾輪旋轉功能
-        protractorImg.addEventListener('wheel', (e) => {
-            if (currentMode !== 'measure') return;
-            e.preventDefault(); // 防止網頁滾動
-            const speed = 1.5;
-            protAngle += e.deltaY > 0 ? -speed : speed; // 滾輪方向決定順/逆時針
-            protAngle = (protAngle % 360 + 360) % 360;
-            updateProtractorTransform();
-        }, { passive: false });
-
-        // 3. 滑桿旋轉功能
-        rotationSlider.addEventListener('input', (e) => {
-            if (currentMode === 'measure') {
-                protAngle = parseFloat(e.target.value);
-                updateProtractorTransform();
-            }
-        });
-
-        // 初始化
+    // --- 初始化 ---
+    function init() {
         resizeCanvas();
-        // 將初始座標設為螢幕中央
-        protX = window.innerWidth / 2;
-        protY = window.innerHeight / 2;
-        setMode('draw'); // 啟動預設為繪圖模式
+        window.addEventListener('resize', resizeCanvas);
+        // 初始清空畫面
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
 
-    </script>
+    function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        // 頂點預設在畫面中央偏左，保留右側給 UI 面板
+        vertexX = canvas.width / 2 - 100;
+        vertexY = canvas.height / 2 + 50;
+        
+        // 重新繪圖
+        if (isTeacherMode && currentCanvasAngle !== 0) {
+            drawAngle(currentCanvasAngle, currentCanvasRotation);
+        } else if (!isTeacherMode && questions.length > 0) {
+            drawAngle(questions[currentProblemIndex].angle, questions[currentProblemIndex].rotation);
+        }
+    }
+
+    // --- 繪圖邏輯 ---
+    function drawAngle(angleDegrees, rotationDegrees) {
+        if (!ctx) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // 線條長度依據螢幕大小動態調整
+        const lineLength = Math.min(canvas.width, canvas.height) * 0.35;
+        
+        // 角度轉弧度
+        const radBase = rotationDegrees * Math.PI / 180;
+        const radAngle = (rotationDegrees - angleDegrees) * Math.PI / 180; 
+
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = '#1f2937'; 
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        // 第一條線
+        ctx.beginPath();
+        ctx.moveTo(vertexX, vertexY);
+        ctx.lineTo(vertexX + lineLength * Math.cos(radBase), vertexY + lineLength * Math.sin(radBase));
+        ctx.stroke();
+
+        // 第二條線
+        ctx.beginPath();
+        ctx.moveTo(vertexX, vertexY);
+        ctx.lineTo(vertexX + lineLength * Math.cos(radAngle), vertexY + lineLength * Math.sin(radAngle));
+        ctx.stroke();
+        
+        // 繪製頂點 (夾角交接處)，幫助學生對準
+        ctx.beginPath();
+        ctx.arc(vertexX, vertexY, 6, 0, 2 * Math.PI);
+        ctx.fillStyle = '#ef4444'; // 紅色頂點
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#fff';
+        ctx.stroke();
+        
+        // 紀錄目前畫面上的狀態
+        currentCanvasAngle = angleDegrees;
+        currentCanvasRotation = rotationDegrees;
+    }
+
+    // --- 教師出題模式邏輯 ---
+    
+    randomRotBtn.addEventListener('click', () => {
+        inputRotation.value = Math.floor(Math.random() * 360);
+    });
+
+    previewBtn.addEventListener('click', () => {
+        const ang = parseInt(inputAngle.value) || 0;
+        const rot = parseInt(inputRotation.value) || 0;
+        drawAngle(ang, rot);
+    });
+
+    addQBtn.addEventListener('click', () => {
+        const ang = parseInt(inputAngle.value);
+        const rot = parseInt(inputRotation.value) || 0;
+        
+        if (isNaN(ang) || ang < 0 || ang > 360) {
+            alert('請輸入有效的角度');
+            return;
+        }
+
+        questions.push({ angle: ang, rotation: rot });
+        updateQList();
+        
+        // 在畫面上預覽剛加入的題目
+        drawAngle(ang, rot);
+        
+        // 準備下一題預設值 (稍微變化一下)
+        inputAngle.value = '';
+        inputRotation.value = Math.floor(Math.random() * 360);
+        inputAngle.focus();
+    });
+
+    function updateQList() {
+        if (questions.length > 0) {
+            emptyQMsg.style.display = 'none';
+            startTestBtn.disabled = false;
+        }
+        
+        // 重新渲染清單
+        qList.innerHTML = '';
+        questions.forEach((q, index) => {
+            const li = document.createElement('li');
+            li.className = 'flex justify-between items-center py-1 border-b last:border-0';
+            li.innerHTML = `
+                <span>題 ${index + 1}: <strong>${q.angle}°</strong> <span class="text-xs text-gray-500">(傾斜 ${q.rotation}°)</span></span>
+                <button class="text-red-500 hover:text-red-700 text-xs px-2" onclick="removeQ(${index})">刪除</button>
+            `;
+            qList.appendChild(li);
+        });
+    }
+
+    window.removeQ = function(index) {
+        questions.splice(index, 1);
+        updateQList();
+        if (questions.length === 0) {
+            emptyQMsg.style.display = 'block';
+            startTestBtn.disabled = true;
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // 清空畫面
+        }
+    };
+
+    startTestBtn.addEventListener('click', () => {
+        if (questions.length === 0) return;
+        
+        // 切換模式
+        isTeacherMode = false;
+        teacherPanel.classList.add('hidden-mode');
+        studentPanel.classList.remove('hidden-mode');
+        
+        // 顯示量角器並置中
+        protractorContainer.style.display = 'block';
+        resetProtractorToCenter();
+        
+        // 載入第一題
+        currentProblemIndex = 0;
+        loadProblemForStudent();
+    });
+
+    // --- 學生測驗模式邏輯 ---
+    function loadProblemForStudent() {
+        const q = questions[currentProblemIndex];
+        drawAngle(q.angle, q.rotation);
+        
+        scoreDisplay.textContent = `第 ${currentProblemIndex + 1} / ${questions.length} 題`;
+        studentAnswerInput.value = '';
+        studentAnswerInput.disabled = false;
+        feedbackMsg.classList.add('hidden');
+        checkBtn.classList.remove('hidden');
+        nextBtn.classList.add('hidden');
+        
+        // 每次新題目，稍微重置一下量角器角度，但保留位置和大小，讓學生自己調
+        // 或者強制復原，這裡選擇重置旋轉角度
+        currentProtractorRotation = 0;
+        rotateWrapper.style.transform = `rotate(0deg)`;
+    }
+
+    checkBtn.addEventListener('click', () => {
+        const ans = parseInt(studentAnswerInput.value);
+        feedbackMsg.classList.remove('hidden', 'text-green-600', 'text-red-600', 'bg-green-100', 'bg-red-100');
+        
+        if (isNaN(ans)) {
+            feedbackMsg.textContent = '⚠️ 請輸入數字答案';
+            feedbackMsg.classList.add('text-red-600');
+            return;
+        }
+
+        const target = questions[currentProblemIndex].angle;
+        const tolerance = 2; // 容許誤差正負2度
+
+        if (Math.abs(ans - target) <= tolerance) {
+            feedbackMsg.innerHTML = '✅ 答對了！測量非常精準！';
+            feedbackMsg.classList.add('text-green-600', 'bg-green-100', 'p-2', 'rounded');
+            
+            checkBtn.classList.add('hidden');
+            studentAnswerInput.disabled = true;
+            
+            if (currentProblemIndex < questions.length - 1) {
+                nextBtn.textContent = '下一題 ➔';
+                nextBtn.classList.remove('hidden');
+            } else {
+                nextBtn.textContent = '🎉 測驗完成 (重新開始)';
+                nextBtn.classList.remove('hidden');
+                nextBtn.classList.replace('bg-green-500', 'bg-purple-600');
+                nextBtn.classList.replace('hover:bg-green-600', 'hover:bg-purple-700');
+            }
+        } else {
+            let hint = ans > target ? '偏大' : '偏小';
+            feedbackMsg.innerHTML = `❌ 不太對喔，你的答案有點${hint}。<br>請重新對準「基準點」與「0度線」再試一次！`;
+            feedbackMsg.classList.add('text-red-600', 'bg-red-50', 'p-2', 'rounded');
+            studentAnswerInput.focus();
+            studentAnswerInput.select();
+        }
+    });
+
+    studentAnswerInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !checkBtn.classList.contains('hidden')) {
+            checkBtn.click();
+        }
+    });
+
+    nextBtn.addEventListener('click', () => {
+        if (currentProblemIndex < questions.length - 1) {
+            currentProblemIndex++;
+            loadProblemForStudent();
+        } else {
+            // 重新開始：回到出題模式
+            location.reload(); 
+        }
+    });
+
+    function resetProtractorToCenter() {
+        const w = protractorImg.offsetWidth || 400;
+        const h = protractorImg.offsetHeight || 200;
+        protractorContainer.style.left = (window.innerWidth / 2 - w / 2) + 'px';
+        protractorContainer.style.top = (window.innerHeight / 2 - h / 2) + 'px';
+    }
+
+
+    // ==========================================
+    // 量角器互動邏輯 (移動、旋轉、縮放)
+    // ==========================================
+    
+    function getEventPos(e) {
+        if (e.touches && e.touches.length > 0) {
+            return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        }
+        return { x: e.clientX, y: e.clientY };
+    }
+
+    // --- 1. 移動 (Drag) ---
+    let isDragging = false;
+    let dragStartX, dragStartY;
+    let containerStartLeft, containerStartTop;
+
+    protractorImg.addEventListener('mousedown', startDrag);
+    protractorImg.addEventListener('touchstart', startDrag, {passive: false});
+
+    function startDrag(e) {
+        e.preventDefault(); // 防止預設行為 (例如拖曳圖片)
+        isDragging = true;
+        const pos = getEventPos(e);
+        dragStartX = pos.x;
+        dragStartY = pos.y;
+        
+        containerStartLeft = parseFloat(protractorContainer.style.left) || 0;
+        containerStartTop = parseFloat(protractorContainer.style.top) || 0;
+
+        document.addEventListener('mousemove', onDrag);
+        document.addEventListener('touchmove', onDrag, {passive: false});
+        document.addEventListener('mouseup', stopDrag);
+        document.addEventListener('touchend', stopDrag);
+    }
+
+    function onDrag(e) {
+        if (!isDragging) return;
+        e.preventDefault();
+        const pos = getEventPos(e);
+        const dx = pos.x - dragStartX;
+        const dy = pos.y - dragStartY;
+        
+        protractorContainer.style.left = `${containerStartLeft + dx}px`;
+        protractorContainer.style.top = `${containerStartTop + dy}px`;
+    }
+
+    function stopDrag() {
+        isDragging = false;
+        document.removeEventListener('mousemove', onDrag);
+        document.removeEventListener('touchmove', onDrag);
+        document.removeEventListener('mouseup', stopDrag);
+        document.removeEventListener('touchend', stopDrag);
+    }
+
+
+    // --- 2. 旋轉 (Rotate) ---
+    let isRotating = false;
+    let currentProtractorRotation = 0;
+    // 記錄精確基準點的螢幕座標
+    let exactPivotX, exactPivotY; 
+
+    rotateHandle.addEventListener('mousedown', startRotate);
+    rotateHandle.addEventListener('touchstart', startRotate, {passive: false});
+
+    function startRotate(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        isRotating = true;
+        
+        // 關鍵：利用 DOM 中隱藏的 #pivot-anchor 來獲取當下最精確的基準點螢幕座標
+        // 這樣無論容器如何移動、圖片如何縮放，旋轉軸心絕對不會跑掉
+        const pivotRect = pivotAnchor.getBoundingClientRect();
+        exactPivotX = pivotRect.left + pivotRect.width / 2;
+        exactPivotY = pivotRect.top + pivotRect.height / 2;
+
+        document.addEventListener('mousemove', onRotate);
+        document.addEventListener('touchmove', onRotate, {passive: false});
+        document.addEventListener('mouseup', stopRotate);
+        document.addEventListener('touchend', stopRotate);
+    }
+
+    function onRotate(e) {
+        if (!isRotating) return;
+        e.preventDefault();
+        const pos = getEventPos(e);
+        
+        // 計算滑鼠位置與基準點的絕對角度 (Math.atan2 回傳弧度)
+        const dy = pos.y - exactPivotY;
+        const dx = pos.x - exactPivotX;
+        let angleRad = Math.atan2(dy, dx);
+        let angleDeg = angleRad * (180 / Math.PI);
+        
+        // 因為把手在正上方 (相對於基準點是 -90 度)
+        // 所以滑鼠角度加上 90 度，就是圖片應該旋轉的角度
+        currentProtractorRotation = angleDeg + 90;
+        
+        rotateWrapper.style.transform = `rotate(${currentProtractorRotation}deg)`;
+    }
+
+    function stopRotate() {
+        isRotating = false;
+        document.removeEventListener('mousemove', onRotate);
+        document.removeEventListener('touchmove', onRotate);
+        document.removeEventListener('mouseup', stopRotate);
+        document.removeEventListener('touchend', stopRotate);
+    }
+
+
+    // --- 3. 縮放 (Scale) ---
+    let isScaling = false;
+    let scaleStartX;
+    let imgStartWidth;
+
+    scaleHandle.addEventListener('mousedown', startScale);
+    scaleHandle.addEventListener('touchstart', startScale, {passive: false});
+
+    function startScale(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        isScaling = true;
+        const pos = getEventPos(e);
+        scaleStartX = pos.x;
+        // 獲取目前圖片的寬度
+        imgStartWidth = protractorImg.offsetWidth;
+
+        document.addEventListener('mousemove', onScale);
+        document.addEventListener('touchmove', onScale, {passive: false});
+        document.addEventListener('mouseup', stopScale);
+        document.addEventListener('touchend', stopScale);
+    }
+
+    function onScale(e) {
+        if (!isScaling) return;
+        e.preventDefault();
+        const pos = getEventPos(e);
+        
+        // 根據滑鼠水平移動距離來增減寬度
+        const dx = pos.x - scaleStartX;
+        
+        // 限制最小與最大尺寸 (避免縮到不見或太大)
+        let newWidth = imgStartWidth + dx;
+        if (newWidth < 200) newWidth = 200;
+        if (newWidth > 800) newWidth = 800;
+        
+        // 直接改變圖片的實體寬度，這樣底部的基準點依然會保持在正中央 (50% 100%)
+        protractorImg.style.width = `${newWidth}px`;
+    }
+
+    function stopScale() {
+        isScaling = false;
+        document.removeEventListener('mousemove', onScale);
+        document.removeEventListener('touchmove', onScale);
+        document.removeEventListener('mouseup', stopScale);
+        document.removeEventListener('touchend', stopScale);
+    }
+
+    // 啟動程式
+    window.onload = init;
+
+</script>
 </body>
 </html>
