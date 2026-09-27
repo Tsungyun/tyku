@@ -184,31 +184,19 @@
             👀 預覽當前角度
         </button>
         
-        <div class="flex gap-2 mb-6">
-            <button id="add-q-btn" class="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-2 rounded transition-colors shadow text-sm">
+        <div class="flex flex-col gap-2 mb-6 mt-4">
+            <button id="add-q-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition-colors shadow text-sm">
                 ➕ 加入單題
             </button>
-            <button id="random-8-btn" class="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-2 rounded transition-colors shadow text-sm">
-                🎲 亂數產生 8 題
-            </button>
-        </div>
-
-        <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-1">圖形傾斜角度 (0~360°):</label>
             <div class="flex gap-2">
-                <input type="number" id="input-rotation" class="border border-gray-300 rounded px-3 py-2 w-full focus:ring-2 focus:ring-blue-500" value="0">
-                <button id="random-rot-btn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-2 rounded" title="隨機傾斜">🎲</button>
+                <button id="random-180-btn" class="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-2 rounded transition-colors shadow text-xs">
+                    🎲 亂數 8 題<br>(180°內)
+                </button>
+                <button id="random-360-btn" class="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-2 rounded transition-colors shadow text-xs">
+                    🎲 亂數 8 題<br>(360°內)
+                </button>
             </div>
-            <p class="text-xs text-gray-500 mt-1">設定傾斜可防止學生只量單邊。</p>
         </div>
-
-        <button id="preview-btn" class="w-full bg-blue-100 hover:bg-blue-200 text-blue-700 font-semibold py-2 px-4 rounded mb-2 transition-colors">
-            👀 預覽當前角度
-        </button>
-        
-        <button id="add-q-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded mb-6 transition-colors shadow">
-            ➕ 加入題庫
-        </button>
 
         <div class="mb-4">
             <h3 class="text-sm font-bold text-gray-700 mb-2">當前題庫清單：</h3>
@@ -282,7 +270,8 @@
     const randomRotBtn = document.getElementById('random-rot-btn');
     const previewBtn = document.getElementById('preview-btn');
     const addQBtn = document.getElementById('add-q-btn');
-    const random8Btn = document.getElementById('random-8-btn');
+    const random180Btn = document.getElementById('random-180-btn');
+    const random360Btn = document.getElementById('random-360-btn');
     const qList = document.getElementById('q-list');
     const emptyQMsg = document.getElementById('empty-q-msg');
     const startTestBtn = document.getElementById('start-test-btn');
@@ -401,29 +390,40 @@
         inputAngle.focus();
     });
 
-    // 新增：亂數產生 8 題按鈕邏輯
-    random8Btn.addEventListener('click', () => {
-        questions = []; // 重新產生時先清空目前題庫
-        
+    // 亂數產生 8 題 (180度以內)
+    random180Btn.addEventListener('click', () => {
+        questions = []; 
         for (let i = 0; i < 8; i++) {
             let angle;
-            // 確保角度為 5 的倍數，且排除 0, 180, 360
             do {
-                angle = Math.floor(Math.random() * 72) * 5; // 產生 0 ~ 355 中 5的倍數
-            } while (angle === 0 || angle === 180 || angle === 360);
+                // 產生 0 ~ 175 中 5 的倍數
+                angle = Math.floor(Math.random() * 36) * 5; 
+            } while (angle === 0 || angle === 180); // 嚴格排除 0, 180
             
-            // 產生 0 ~ 359 的隨機傾斜旋轉角度
+            // 產生 0 ~ 359 的隨機傾斜角度
             let rotation = Math.floor(Math.random() * 360);
-            
             questions.push({ angle: angle, rotation: rotation });
         }
-        
         updateQList();
-        
-        // 畫出第一題作為預覽
-        if (questions.length > 0) {
-            drawAngle(questions[0].angle, questions[0].rotation);
+        if (questions.length > 0) drawAngle(questions[0].angle, questions[0].rotation);
+    });
+
+    // 亂數產生 8 題 (360度以內)
+    random360Btn.addEventListener('click', () => {
+        questions = []; 
+        for (let i = 0; i < 8; i++) {
+            let angle;
+            do {
+                // 產生 0 ~ 355 中 5 的倍數
+                angle = Math.floor(Math.random() * 72) * 5; 
+            } while (angle === 0 || angle === 180 || angle === 360); // 嚴格排除 0, 180, 360
+            
+            // 產生 0 ~ 359 的隨機傾斜角度
+            let rotation = Math.floor(Math.random() * 360);
+            questions.push({ angle: angle, rotation: rotation });
         }
+        updateQList();
+        if (questions.length > 0) drawAngle(questions[0].angle, questions[0].rotation);
     });
 
     function updateQList() {
