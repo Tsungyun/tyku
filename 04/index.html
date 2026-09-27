@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌟 自助點名系統 - 紅綠燈嚴格版 🌟</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap');
+        
+        body {
+            font-family: 'Nunito', 'Microsoft JhengHei', sans-serif;
+            background-color: #f8fafc;
+            background-image: radial-gradient(#cbd5e1 2px, transparent 2px);
+            background-size: 40px 40px;
+            overflow-x: hidden;
+        }
+
+        .student-card {
+            transition: all 0.15s ease-in-out;
+        }
+        .student-card:active {
+            transform: scale(0.92);
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px) rotate(-3deg); }
+            50% { transform: translateX(5px) rotate(3deg); }
+            75% { transform: translateX(-5px) rotate(-3deg); }
+        }
+        .shake {
+            animation: shake 0.35s ease-in-out;
+        }
+
+        @keyframes floatUp {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
+            20% { transform: translate(-50%, -70%) scale(1.3); opacity: 1; }
+            80% { transform: translate(-50%, -100%) scale(1.1); opacity: 1; }
+            100% { transform: translate(-50%, -120%) scale(0.8); opacity: 0; }
+        }
+        .float-anim {
+            animation: floatUp 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+            text-shadow: 2px 2px 0px white, -2px -2px 0px white, 2px -2px 0px white, -2px 2px 0px white;
+        }
+
+        @keyframes warningFade {
+            0% { opacity: 0; transform: scale(0.8); }
+            15% { opacity: 1; transform: scale(1.05); }
+            25% { transform: scale(1); }
+            85% { opacity: 1; transform: scale(1); }
+            100% { opacity: 0; transform: scale(1.1); }
+        }
+        .warning-anim {
+            animation: warningFade 2s ease-in-out forwards;
+        }
+
+        /* 交通號誌發光效果 */
+        .light-glow-red { box-shadow: 0 0 15px 4px rgba(239, 68, 68, 0.6); }
+        .light-glow-green { box-shadow: 0 0 15px 4px rgba(34, 197, 94, 0.6); }
+
+        dialog::backdrop {
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(4px);
+        }
+
+        /* 教師模式邊框特效 */
+        .teacher-mode-active {
+            box-shadow: 0 0 0 4px #3b82f6 inset;
+            animation: pulse-border 2s infinite;
+        }
+        @keyframes pulse-border {
+            0% { box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.5) inset; }
+            50% { box-shadow: 0 0 0 4px rgba(59, 130, 246, 1) inset; }
+            100% { box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.5) inset; }
+        }
+    </style>
+</head>
+<body id="main-body" class="min-h-screen flex flex-col items-center py-2 px-2 text-slate-800 transition-all duration-300">
+
+    <header class="w-full max-w-7xl bg-white rounded-xl shadow-md p-3 md:p-4 mb-3 border-b-4 border-indigo-500 relative">
+        <div class="flex flex-col md:flex-row justify-between items-center gap-4 relative z-10">
+            <!-- 標題與時鐘 -->
+            <div class="flex items-center gap-3 w-full md:w-auto justify-center md:justify-start">
+                <h1 class="text-xl md:text-2xl font-black text-indigo-600 hidden sm:block whitespace-nowrap">🚦 紀律點名</h1>
+                <div class="flex items-center gap-2 bg-slate-100 px-4 py-2 rounded-xl border border-slate-200">
+                    <span class="text-slate-500 font-bold text-sm">現在時間</span>
+                    <div id="clock" class="text-3xl md:text-4xl font-black text-slate-800 font-mono tracking-wider">
+                        00:00:00
+                    </div>
+                </div>
+            </div>
+
+            <!-- 課表時間與紅綠燈狀態 -->
+            <div class="flex items-center gap-3 bg-gray-50 px-4 py-2 rounded-xl border border-gray-200 w-full md:w-auto justify-center shadow-inner">
+                <div class="text-gray-600 font-bold text-sm flex items-center gap-1">
+                    <i class="far fa-clock text-indigo-500"></i> 設定時間:
+                </div>
+                <div id="display-class-time" class="text-3xl md:text-4xl font-black text-indigo-700 font-mono drop-shadow-sm tracking-wider">
+                    --:--
+                </div>
+                
+                <!-- 號誌燈 -->
+                <div class="flex items-center gap-2 ml-2 bg-slate-800 px-3 py-1.5 rounded-full border-2 border-slate-700">
+                    <div id="light-red" class="w-5 h-5 rounded-full bg-red-900 transition-all duration-300"></div>
+                    <div id="light-green" class="w-5 h-5 rounded-full bg-green-900 transition-all duration-300"></div>
+                    <span id="status-text" class="text-white font-bold text-sm ml-1 w-16 text-center tracking-widest">等待中</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="w-full max-w-7xl mb-24">
+        <!-- 提示橫幅 (當前若是教師模式則顯示) -->
+        <div id="mode-banner" class="hidden w-full bg-blue-600 text-white font-black text-center py-2 rounded-lg mb-4 shadow-md animate-pulse">
+            <i class="fas fa-info-circle mr-2"></i> 目前為「教師加扣分模式」：點擊學生直接修改分數，不會影響點名狀態。
+        </div>
+
+        <div id="student-grid" class="grid grid-cols-4 md:grid-cols-6 gap-2 md:gap-3">
+            <!-- 學生卡片會由 JS 動態生成 -->
+        </div>
+    </main>
+
+    <!-- 全局提示框 -->
+    <div id="toast-container" class="fixed top-5 left-1/2 transform -translate-x-1/2 flex flex-col gap-2 z-50 pointer-events-none w-full max-w-md px-4"></div>
+
+    <!-- 教師加扣分快捷工具列 -->
+    <div class="fixed bottom-6 left-1/2 transform -translate-x-1/2 flex gap-2 md:gap-3 z-40 bg-white/90 backdrop-blur-md px-3 py-2 md:px-5 md:py-3 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.2)] border-2 border-slate-200 transition-all items-center">
+        <span class="hidden md:inline text-slate-700 font-black text-sm mr-2"><i class="fas fa-chalkboard-teacher text-indigo-500"></i> 教師操作:</span>
+        <button onclick="toggleTeacherMode('add')" id="btn-mode-add" class="flex items-center gap-1 md:gap-2 px-3 py-2 md:px-5 md:py-2.5 rounded-xl font-black bg-slate-100 text-slate-600 hover:bg-blue-100 hover:text-blue-700 border-2 border-slate-200 transition-all">
+            <i class="fas fa-arrow-up"></i> 加分 (+2)
+        </button>
+        <button onclick="toggleTeacherMode('deduct')" id="btn-mode-deduct" class="flex items-center gap-1 md:gap-2 px-3 py-2 md:px-5 md:py-2.5 rounded-xl font-black bg-slate-100 text-slate-600 hover:bg-rose-100 hover:text-rose-700 border-2 border-slate-200 transition-all">
+            <i class="fas fa-arrow-down"></i> 扣分 (-2)
+        </button>
+    </div>
+
+    <!-- 設定按鈕 -->
+    <button onclick="document.getElementById('settings-modal').showModal()" class="fixed bottom-6 right-6 bg-indigo-600 hover:bg-indigo-700 text-white w-14 h-14 rounded-full shadow-2xl hover:scale-110 transition-transform flex items-center justify-center text-2xl z-40 border-4 border-white">
+        <i class="fas fa-cog"></i>
+    </button>
+
+    <dialog id="settings-modal" class="w-[95%] max-w-2xl rounded-2xl p-0 border-0 shadow-2xl bg-white overflow-hidden">
+        <div class="bg-indigo-600 p-4 text-white flex justify-between items-center">
+            <h2 class="text-xl font-black"><i class="fas fa-sliders-h mr-2"></i> 教師控制面板</h2>
+            <button onclick="document.getElementById('settings-modal').close()" class="text-white hover:text-indigo-200 transition-colors">
+                <i class="fas fa-times text-2xl"></i>
+            </button>
+        </div>
+        <div class="p-5 max-h-[75vh] overflow-y-auto flex flex-col gap-5">
+            <div class="bg-blue-50 p-3 rounded-lg border border-blue-200 text-blue-800 text-sm font-bold flex gap-2">
+                <i class="fas fa-info-circle mt-0.5 text-lg"></i>
+                <p>規則說明：設定時間的 <strong>前後2分鐘</strong> 為綠燈。<br>
+                🟢 綠燈：第1次按 +10 分。狂按每次 -2 分。<br>
+                🔴 紅燈：亂按每次 -1 分。時間過期未按自動扣 5 分。</p>
+            </div>
+
+            <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <h3 class="text-lg font-bold text-slate-800 mb-3 border-b pb-2"><i class="far fa-clock text-indigo-500 mr-2"></i> 1. 設定點名時間</h3>
+                <div class="flex gap-2 mb-3">
+                    <input type="time" id="new-schedule-time" class="flex-1 p-2 rounded-lg border-2 border-slate-300 focus:border-indigo-500 outline-none font-bold text-lg">
+                    <button onclick="addSchedule()" class="bg-indigo-500 hover:bg-indigo-600 text-white px-5 py-2 rounded-lg font-bold">加入清單</button>
+                </div>
+                <div id="schedule-list" class="flex flex-wrap gap-2"></div>
+            </div>
+
+            <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <h3 class="text-lg font-bold text-slate-800 mb-3 border-b pb-2"><i class="fas fa-users text-indigo-500 mr-2"></i> 2. 學生名單 (請分行輸入)</h3>
+                <textarea id="student-input-list" rows="4" class="w-full p-3 rounded-lg border-2 border-slate-300 focus:border-indigo-500 outline-none mb-3 text-sm font-bold" placeholder="王小明&#10;陳大華..."></textarea>
+                <button onclick="importStudents()" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-3 rounded-lg font-black text-lg shadow-md transition-colors">套用全新名單 (將清除舊紀錄)</button>
+            </div>
+
+            <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <h3 class="text-lg font-bold text-slate-800 mb-3 border-b pb-2"><i class="fas fa-database text-indigo-500 mr-2"></i> 3. 資料管理</h3>
+                <div class="flex gap-3">
+                    <button onclick="exportCSV()" class="flex-1 bg-sky-500 hover:bg-sky-600 text-white px-3 py-3 rounded-lg font-bold shadow-md"><i class="fas fa-download mr-1"></i> 匯出成績 CSV</button>
+                    <button onclick="resetAttendance()" class="flex-1 bg-rose-500 hover:bg-rose-600 text-white px-3 py-3 rounded-lg font-bold shadow-md"><i class="fas fa-undo mr-1"></i> 分數歸零重設</button>
+                </div>
+            </div>
+        </div>
+    </dialog>
+
+    <!-- 自訂確認對話框 -->
+    <dialog id="confirm-modal" class="rounded-2xl p-0 border-0 shadow-2xl bg-white overflow-hidden max-w-sm w-[90%] z-[100]">
+        <div class="bg-rose-500 p-4 text-white font-bold flex items-center gap-2">
+            <i class="fas fa-exclamation-triangle"></i> <span class="text-lg">系統確認</span>
+        </div>
+        <div class="p-5">
+            <p id="confirm-message" class="text-slate-700 font-bold mb-6 text-center text-lg">確定要執行此動作嗎？</p>
+            <div class="flex gap-3">
+                <button onclick="document.getElementById('confirm-modal').close()" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-800 px-4 py-3 rounded-xl font-bold transition-colors">取消</button>
+                <button id="confirm-yes-btn" class="flex-1 bg-rose-500 hover:bg-rose-600 text-white px-4 py-3 rounded-xl font-bold shadow-md transition-colors">確定執行</button>
+            </div>
+        </div>
+    </dialog>
+
+    <script>
+        const colors = [
+            'from-pink-400 to-rose-500', 'from-purple-400 to-indigo-500', 
+            'from-cyan-400 to-blue-500', 'from-teal-400 to-emerald-500', 
+            'from-amber-400 to-orange-500', 'from-violet-400 to-fuchsia-500'
+        ];
+
+        const defaultNames = Array.from({length: 30}, (_, i) => `${i + 1}號`);
+        
+        // 嚴格計分規則
+        const WINDOW_MINS = 2;          // 綠燈範圍：設定時間正負2分鐘
+        const SCORE_SUCCESS = 10;       // 綠燈正確點名加分
+        const SCORE_GREEN_SPAM = -2;    // 綠燈狂按扣分
+        const SCORE_RED_CLICK = -1;     // 紅燈亂按扣分
+        const SCORE_LATE_AUTO = -5;     // 超時未點名自動扣分
+
+        // 教師加扣分規則
+        const TEACHER_ADD_VAL = 2;
+        const TEACHER_DEDUCT_VAL = -2;
+
+        let appState = {
+            students: [],
+            schedule: ['08:00', '10:00', '13:30', '15:00'],
+            activeClassTime: '',
+            latePenaltyApplied: false, // 標記該時段是否已經結算過遲到扣分
+            clickMode: 'normal'        // 'normal' (一般點名), 'add' (教師加分), 'deduct' (教師扣分)
+        };
+
+        function init() {
+            // 測試用：預設一個馬上要開始的時間
+            const now = new Date();
+            now.setMinutes(now.getMinutes() + 1); 
+            const testTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+            if (!appState.schedule.includes(testTime)) {
+                appState.schedule.push(testTime);
+                appState.schedule.sort();
+            }
+            appState.activeClassTime = testTime;
+
+            setupStudents(defaultNames);
+            document.getElementById('student-input-list').value = defaultNames.join('\n');
+            renderStudents();
+            renderSchedule();
+            updateDisplayClassTime();
+        }
+
+        // 教師加扣分模式切換
+        function toggleTeacherMode(mode) {
+            const body = document.getElementById('main-body');
+            const banner = document.getElementById('mode-banner');
+            const btnAdd = document.getElementById('btn-mode-add');
+            const btnDeduct = document.getElementById('btn-mode-deduct');
+
+            // 如果點擊的是當前已啟用的模式，則關閉（恢復正常模式）
+            if (appState.clickMode === mode) {
+                appState.clickMode = 'normal';
+                showSysToast("已恢復正常點名模式", "success");
+            } else {
+                appState.clickMode = mode;
+                showSysToast(mode === 'add' ? "已切換：教師加分模式" : "已切換：教師扣分模式", mode === 'add' ? "success" : "error");
+            }
+
+            // 更新 UI 狀態
+            if (appState.clickMode === 'normal') {
+                body.classList.remove('teacher-mode-active');
+                banner.classList.add('hidden');
+                
+                // 重設按鈕樣式
+                btnAdd.className = "flex items-center gap-1 md:gap-2 px-3 py-2 md:px-5 md:py-2.5 rounded-xl font-black bg-slate-100 text-slate-600 hover:bg-blue-100 hover:text-blue-700 border-2 border-slate-200 transition-all";
+                btnDeduct.className = "flex items-center gap-1 md:gap-2 px-3 py-2 md:px-5 md:py-2.5 rounded-xl font-black bg-slate-100 text-slate-600 hover:bg-rose-100 hover:text-rose-700 border-2 border-slate-200 transition-all";
+            } else if (appState.clickMode === 'add') {
+                body.classList.add('teacher-mode-active');
+                banner.classList.remove('hidden');
+                banner.className = "w-full bg-blue-600 text-white font-black text-center py-2 rounded-lg mb-4 shadow-md animate-pulse";
+                banner.innerHTML = `<i class="fas fa-arrow-up mr-2"></i> 目前為「教師加分模式」：點擊學生直接加 ${TEACHER_ADD_VAL} 分`;
+
+                // 啟動加分按鈕樣式，恢復扣分按鈕
+                btnAdd.className = "flex items-center gap-1 md:gap-2 px-3 py-2 md:px-5 md:py-2.5 rounded-xl font-black bg-blue-600 text-white border-2 border-blue-700 shadow-inner scale-105 transition-all";
+                btnDeduct.className = "flex items-center gap-1 md:gap-2 px-3 py-2 md:px-5 md:py-2.5 rounded-xl font-black bg-slate-100 text-slate-600 hover:bg-rose-100 hover:text-rose-700 border-2 border-slate-200 transition-all opacity-60";
+            } else if (appState.clickMode === 'deduct') {
+                body.classList.add('teacher-mode-active');
+                banner.classList.remove('hidden');
+                banner.className = "w-full bg-rose-600 text-white font-black text-center py-2 rounded-lg mb-4 shadow-md animate-pulse";
+                banner.innerHTML = `<i class="fas fa-arrow-down mr-2"></i> 目前為「教師扣分模式」：點擊學生直接扣 ${Math.abs(TEACHER_DEDUCT_VAL)} 分`;
+
+                // 啟動扣分按鈕樣式，恢復加分按鈕
+                btnDeduct.className = "flex items-center gap-1 md:gap-2 px-3 py-2 md:px-5 md:py-2.5 rounded-xl font-black bg-rose-600 text-white border-2 border-rose-700 shadow-inner scale-105 transition-all";
+                btnAdd.className = "flex items-center gap-1 md:gap-2 px-3 py-2 md:px-5 md:py-2.5 rounded-xl font-black bg-slate-100 text-slate-600 hover:bg-blue-100 hover:text-blue-700 border-2 border-slate-200 transition-all opacity-60";
+            }
+        }
+
+        function getWindowTimes() {
+            if (!appState.activeClassTime) return null;
+            const [hours, minutes] = appState.activeClassTime.split(':');
+            const classTime = new Date();
+            classTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+            
+            // 計算綠燈區間
+            const startTime = new Date(classTime.getTime() - WINDOW_MINS * 60000);
+            const endTime = new Date(classTime.getTime() + WINDOW_MINS * 60000);
+            
+            return { startTime, endTime, classTime };
+        }
+
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock').textContent = now.toLocaleTimeString('zh-TW', { hour12: false });
+            
+            updateStatusIndicator(now);
+            checkAutoLatePenalty(now);
+        }
+        setInterval(updateClock, 1000);
+
+        function updateStatusIndicator(now) {
+            const lightRed = document.getElementById('light-red');
+            const lightGreen = document.getElementById('light-green');
+            const statusText = document.getElementById('status-text');
+            
+            const windowTimes = getWindowTimes();
+
+            if (!windowTimes) {
+                lightRed.className = "w-5 h-5 rounded-full bg-slate-600 transition-all duration-300";
+                lightGreen.className = "w-5 h-5 rounded-full bg-slate-600 transition-all duration-300";
+                statusText.textContent = "未設定";
+                statusText.className = "text-slate-400 font-bold text-sm ml-1 w-16 text-center tracking-widest";
+                return;
+            }
+
+            // 判斷是否在綠燈區間
+            const isGreenLight = now >= windowTimes.startTime && now <= windowTimes.endTime;
+
+            if (isGreenLight) {
+                // 綠燈亮
+                lightRed.className = "w-5 h-5 rounded-full bg-red-900 transition-all duration-300";
+                lightGreen.className = "w-5 h-5 rounded-full bg-green-500 light-glow-green transition-all duration-300 animate-pulse";
+                statusText.textContent = "開放中";
+                statusText.className = "text-green-400 font-bold text-sm ml-1 w-16 text-center tracking-widest drop-shadow";
+            } else {
+                // 紅燈亮
+                lightRed.className = "w-5 h-5 rounded-full bg-red-500 light-glow-red transition-all duration-300";
+                lightGreen.className = "w-5 h-5 rounded-full bg-green-900 transition-all duration-300";
+                statusText.textContent = now > windowTimes.endTime ? "已結束" : "未開放";
+                statusText.className = "text-red-400 font-bold text-sm ml-1 w-16 text-center tracking-widest drop-shadow";
+            }
+        }
+
+        // 自動檢查：如果綠燈時間結束，針對還沒點名的人扣 5 分
+        function checkAutoLatePenalty(now) {
+            const windowTimes = getWindowTimes();
+            if (!windowTimes) return;
+
+            if (now > windowTimes.endTime && !appState.latePenaltyApplied) {
+                let changed = false;
+                appState.students.forEach(s => {
+                    // 如果狀態還是 pending (完全沒按)，或是只在紅燈提早按過(沒拿到綠燈分數)
+                    if (s.status === 'pending' || s.status === 'red_early') {
+                        updateScore(s, SCORE_LATE_AUTO);
+                        s.status = 'late_auto';
+                        changed = true;
+                    }
+                });
+                
+                appState.latePenaltyApplied = true; // 標記已處理，避免重複扣分
+                if(changed) {
+                    renderStudents();
+                    showSysToast(`打鐘時間已過，未點名學生自動扣 ${Math.abs(SCORE_LATE_AUTO)} 分！`, 'error');
+                }
+            }
+        }
+
+        function updateScore(student, change) {
+            student.score += change;
+            if (appState.activeClassTime) {
+                if (!student.periodScores) student.periodScores = {};
+                if (!student.periodScores[appState.activeClassTime]) {
+                    student.periodScores[appState.activeClassTime] = 0;
+                }
+                student.periodScores[appState.activeClassTime] += change;
+            }
+        }
+
+        function handleStudentClick(studentId) {
+            const student = appState.students.find(s => s.id === studentId);
+            if (!student) return;
+
+            let floatText = "";
+            let floatColor = "";
+            let shouldShake = false;
+            let cardWarning = "";
+
+            // =============== 👩‍🏫 教師加扣分模式 ===============
+            if (appState.clickMode === 'add') {
+                updateScore(student, TEACHER_ADD_VAL);
+                floatText = `+${TEACHER_ADD_VAL}`;
+                floatColor = "text-blue-500";
+                
+                // 畫面更新與特效
+                renderStudents();
+                const btn = document.querySelector(`[data-id="${student.id}"]`);
+                if (btn) {
+                    createFloatingText(btn, floatText, floatColor);
+                    shootConfetti(btn); // 慶祝動畫
+                }
+                return; // 直接中斷，不執行下方點名邏輯
+            } 
+            else if (appState.clickMode === 'deduct') {
+                updateScore(student, TEACHER_DEDUCT_VAL);
+                floatText = String(TEACHER_DEDUCT_VAL);
+                floatColor = "text-rose-600";
+                
+                // 畫面更新與特效
+                renderStudents();
+                const btn = document.querySelector(`[data-id="${student.id}"]`);
+                if (btn) {
+                    createFloatingText(btn, floatText, floatColor);
+                    btn.classList.remove('shake');
+                    void btn.offsetWidth; // 觸發重繪
+                    btn.classList.add('shake');
+                }
+                return; // 直接中斷，不執行下方點名邏輯
+            }
+
+            // =============== 🚦 一般點名模式 ===============
+            const now = new Date();
+            const windowTimes = getWindowTimes();
+            
+            if (!windowTimes) {
+                showSysToast("老師尚未設定時間，無法點名！", "error");
+                return;
+            }
+
+            const isGreenLight = now >= windowTimes.startTime && now <= windowTimes.endTime;
+
+            if (!isGreenLight) {
+                // 🔴 紅燈狀態
+                updateScore(student, SCORE_RED_CLICK);
+                
+                // 記錄是太早按還是遲到按
+                if (student.status !== 'ontime' && student.status !== 'ontime_spam' && student.status !== 'late_auto') {
+                     student.status = (now < windowTimes.startTime) ? 'red_early' : 'red_late';
+                }
+
+                floatText = String(SCORE_RED_CLICK);
+                floatColor = "text-rose-600";
+                shouldShake = true;
+                cardWarning = "不要亂按<br>守規矩";
+                
+            } else {
+                // 🟢 綠燈狀態
+                // 確認是否已經成功點名過 (包含已經狂按過的)
+                const hasScored = (student.status === 'ontime' || student.status === 'ontime_spam');
+
+                if (!hasScored) {
+                    // 第一次正確點名！
+                    updateScore(student, SCORE_SUCCESS);
+                    student.status = 'ontime';
+                    floatText = `+${SCORE_SUCCESS}`;
+                    floatColor = "text-emerald-500";
+                    
+                    setTimeout(() => {
+                        const newBtn = document.querySelector(`[data-id="${student.id}"]`);
+                        if(newBtn) shootConfetti(newBtn);
+                    }, 50);
+                } else {
+                    // 已經點過名了，還在綠燈狂按 -> 懲罰
+                    updateScore(student, SCORE_GREEN_SPAM);
+                    student.status = 'ontime_spam';
+                    floatText = String(SCORE_GREEN_SPAM);
+                    floatColor = "text-rose-600";
+                    shouldShake = true;
+                    cardWarning = "已加分<br>請勿狂按";
+                }
+            }
+
+            // 更新 UI
+            renderStudents();
+            
+            // 套用局部動畫
+            const updatedBtn = document.querySelector(`[data-id="${studentId}"]`);
+            if (updatedBtn) {
+                if (shouldShake) {
+                    updatedBtn.classList.remove('shake');
+                    void updatedBtn.offsetWidth;
+                    updatedBtn.classList.add('shake');
+                }
+                if (floatText) createFloatingText(updatedBtn, floatText, floatColor);
+                if (cardWarning) showCardWarning(updatedBtn, cardWarning);
+            }
+        }
+
+        function showCardWarning(container, text) {
+            const warning = document.createElement('div');
+            // 鮮豔紅底白字，極具警告意味
+            warning.className = 'absolute inset-0 bg-red-600/95 text-white font-black flex items-center justify-center text-sm sm:text-base z-50 p-1 text-center leading-snug warning-anim tracking-widest rounded-xl shadow-inner border-2 border-red-800';
+            warning.innerHTML = text;
+            container.appendChild(warning);
+            setTimeout(() => warning.remove(), 2000);
+        }
+
+        function createFloatingText(container, text, colorClass) {
+            const floater = document.createElement('div');
+            floater.className = `absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 font-black text-4xl sm:text-5xl pointer-events-none float-anim ${colorClass}`;
+            floater.innerText = text;
+            container.appendChild(floater);
+            setTimeout(() => floater.remove(), 900);
+        }
+
+        function renderStudents() {
+            const grid = document.getElementById('student-grid');
+            grid.innerHTML = '';
+
+            appState.students.forEach(student => {
+                const btn = document.createElement('button');
+                btn.setAttribute('data-id', student.id);
+                
+                // 預設樣式
+                btn.className = `student-card relative w-full aspect-square md:aspect-[4/3] rounded-xl flex flex-col items-center justify-center p-2 border-b-4 shadow-sm overflow-hidden group focus:outline-none cursor-pointer hover:-translate-y-1 hover:shadow-md transition-all`;
+                
+                let bgClass = "";
+                let watermark = "";
+                let watermarkColor = "";
+
+                // 根據狀態決定卡片外觀
+                if (student.status === 'pending') {
+                    // 未操作 (彩色漸層)
+                    bgClass = `bg-gradient-to-br ${student.color} border-black/10 text-white`;
+                } 
+                else if (student.status === 'ontime') {
+                    bgClass = "bg-green-100 border-green-400 text-green-900";
+                    watermark = "✔ 成功"; watermarkColor = "text-green-300";
+                }
+                else if (student.status === 'ontime_spam') {
+                    bgClass = "bg-amber-100 border-amber-400 text-amber-900";
+                    watermark = "狂按扣分"; watermarkColor = "text-amber-300/60";
+                }
+                else if (student.status === 'red_early' || student.status === 'red_late') {
+                    bgClass = "bg-orange-100 border-orange-400 text-orange-900";
+                    watermark = "違規"; watermarkColor = "text-orange-300/60";
+                }
+                else if (student.status === 'late_auto') {
+                    bgClass = "bg-slate-200 border-slate-400 text-slate-700 grayscale opacity-80";
+                    watermark = "未到"; watermarkColor = "text-slate-400/50";
+                }
+
+                btn.className += ` ${bgClass}`;
+                btn.onclick = () => handleStudentClick(student.id);
+
+                // 顯示名字
+                let innerHTML = `
+                    <div class="text-base sm:text-lg md:text-xl font-black z-10 w-full text-center leading-tight tracking-widest drop-shadow-sm">
+                        ${student.name}
+                    </div>
+                `;
+
+                // 若有分數或狀態，疊加浮水印與分數標籤
+                if (student.status !== 'pending') {
+                    // 分數若大於0顯示綠色+號，否則顯示紅色
+                    const scoreStyle = student.score > 0 ? 'bg-green-100 text-green-700 border-green-300' 
+                                     : student.score < 0 ? 'bg-rose-100 text-rose-700 border-rose-300' 
+                                     : 'bg-gray-100 text-gray-700 border-gray-300';
+                    const scoreText = student.score > 0 ? `+${student.score}` : `${student.score}`;
+
+                    innerHTML += `
+                        <div class="absolute inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden">
+                            <span class="${watermarkColor} font-black text-2xl md:text-4xl opacity-50 rotate-[-15deg] select-none tracking-widest whitespace-nowrap">${watermark}</span>
+                        </div>
+                        <div class="absolute bottom-1 right-1 md:bottom-2 md:right-2 font-black text-xs md:text-sm px-1.5 md:px-2 py-0.5 rounded shadow-sm z-20 border ${scoreStyle}">
+                            累計: ${scoreText}
+                        </div>
+                    `;
+                } else if (student.score !== 0) {
+                     // 即使是pending，如果之前有分數也要顯示 (例如：剛開始沒點名，但老師給了加分)
+                     const scoreStyle = student.score > 0 ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-rose-100 text-rose-700 border-rose-300';
+                     innerHTML += `
+                        <div class="absolute bottom-1 right-1 font-black text-xs md:text-sm px-1.5 py-0.5 rounded shadow-sm z-20 border ${scoreStyle}">
+                            總分: ${student.score > 0 ? '+'+student.score : student.score}
+                        </div>
+                     `;
+                }
+
+                btn.innerHTML = innerHTML;
+                grid.appendChild(btn);
+            });
+        }
+
+        function setupStudents(nameArray) {
+            appState.students = nameArray.map((name, index) => ({
+                id: index + 1,
+                name: name.trim(),
+                score: 0,
+                periodScores: {},
+                status: 'pending', 
+                color: colors[index % colors.length]
+            })).filter(s => s.name !== '');
+        }
+
+        // 自訂確認視窗功能
+        function customConfirm(message, onConfirm) {
+            document.getElementById('confirm-message').textContent = message;
+            const yesBtn = document.getElementById('confirm-yes-btn');
+            yesBtn.onclick = () => {
+                document.getElementById('confirm-modal').close();
+                onConfirm();
+            };
+            document.getElementById('confirm-modal').showModal();
+        }
+
+        function importStudents() {
+            const text = document.getElementById('student-input-list').value;
+            if (!text.trim()) { showSysToast("名單不能為空！", "error"); return; }
+            
+            // 使用自訂視窗取代原生的 confirm()
+            customConfirm('這將會清除所有現有分數與紀錄，確定要套用嗎？', () => {
+                // 支援從 Excel 複製的資料 (用換行或逗號分隔)
+                const names = text.split(/[\n\t,]+/).map(n => n.trim()).filter(n => n);
+                setupStudents(names);
+                renderStudents();
+                showSysToast(`成功匯入 ${names.length} 位學生！`);
+                document.getElementById('settings-modal').close();
+            });
+        }
+
+        function resetAttendance() {
+            // 使用自訂視窗取代原生的 confirm()
+            customConfirm('確定重設所有人狀態及分數紀錄？所有分數將歸零。', () => {
+                appState.students.forEach(s => { 
+                    s.status = 'pending'; 
+                    s.score = 0; 
+                    s.periodScores = {};
+                    s.color = colors[Math.floor(Math.random() * colors.length)];
+                });
+                renderStudents();
+                showSysToast("已歸零所有狀態與分數！");
+                document.getElementById('settings-modal').close();
+            });
+        }
+
+        function addSchedule() {
+            const timeVal = document.getElementById('new-schedule-time').value;
+            if (!timeVal) return;
+            if (!appState.schedule.includes(timeVal)) {
+                appState.schedule.push(timeVal);
+                appState.schedule.sort();
+                renderSchedule();
+            }
+        }
+
+        function removeSchedule(time) {
+            appState.schedule = appState.schedule.filter(t => t !== time);
+            if (appState.activeClassTime === time) {
+                appState.activeClassTime = '';
+                updateDisplayClassTime();
+                updateStatusIndicator(new Date());
+            }
+            renderSchedule();
+        }
+
+        function setActiveClassTime(time) {
+            appState.activeClassTime = time;
+            appState.latePenaltyApplied = false; // 重置超時扣分標記
+            
+            // 切換新時間時，將所有學生狀態歸零，允許新的一輪點名，保留總分
+            appState.students.forEach(s => {
+                s.status = 'pending';
+                s.color = colors[Math.floor(Math.random() * colors.length)];
+            });
+
+            updateDisplayClassTime();
+            updateStatusIndicator(new Date());
+            renderSchedule();
+            renderStudents();
+            showSysToast(`已切換時段至: ${time}，重新開放點名！`);
+        }
+
+        function updateDisplayClassTime() {
+            document.getElementById('display-class-time').textContent = appState.activeClassTime || "--:--";
+        }
+
+        function exportCSV() {
+            if (appState.students.length === 0) return;
+
+            const periodsSet = new Set();
+            appState.students.forEach(s => {
+                if (s.periodScores) Object.keys(s.periodScores).forEach(p => periodsSet.add(p));
+            });
+            const periodsArray = Array.from(periodsSet).sort();
+
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFF座號,姓名,目前狀態";
+            periodsArray.forEach(p => csvContent += `,${p} 得分`);
+            csvContent += ",總得分\n";
+
+            appState.students.forEach(s => {
+                let statusStr = "";
+                switch(s.status) {
+                    case 'pending': statusStr = '未操作'; break;
+                    case 'ontime': statusStr = '準時點名'; break;
+                    case 'ontime_spam': statusStr = '準時但狂按'; break;
+                    case 'red_early': statusStr = '紅燈提早按'; break;
+                    case 'red_late': statusStr = '紅燈遲到按'; break;
+                    case 'late_auto': statusStr = '逾時未點名'; break;
+                    default: statusStr = s.status;
+                }
+
+                let row = `${s.id},${s.name},${statusStr}`;
+                periodsArray.forEach(p => {
+                    const ps = s.periodScores && s.periodScores[p] ? s.periodScores[p] : 0;
+                    row += `,${ps}`; 
+                });
+                row += `,${s.score}\n`;
+                csvContent += row;
+            });
+
+            const link = document.createElement("a");
+            link.setAttribute("href", encodeURI(csvContent));
+            link.setAttribute("download", `紅綠燈點名紀錄_${new Date().toLocaleDateString().replace(/\//g,'')}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        }
+
+        function renderSchedule() {
+            const list = document.getElementById('schedule-list');
+            list.innerHTML = '';
+            appState.schedule.forEach(time => {
+                const isActive = time === appState.activeClassTime;
+                list.innerHTML += `
+                    <div class="flex items-center gap-2 p-2 rounded-lg border-2 ${isActive ? 'bg-indigo-100 border-indigo-500' : 'bg-white border-slate-200'}">
+                        <span class="font-bold font-mono text-lg ${isActive ? 'text-indigo-800' : 'text-slate-600'}">${time}</span>
+                        ${!isActive ? `<button onclick="setActiveClassTime('${time}')" class="bg-indigo-500 text-white px-2 py-1 rounded hover:bg-indigo-600 text-sm font-bold">套用</button>` : `<i class="fas fa-check-circle text-indigo-600 text-xl ml-1"></i>`}
+                        <button onclick="removeSchedule('${time}')" class="text-slate-400 hover:text-rose-500 ml-1 transition-colors"><i class="fas fa-trash"></i></button>
+                    </div>
+                `;
+            });
+        }
+
+        function showSysToast(message, type = "success") {
+            const toastContainer = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const bgConfig = type === 'success' ? 'bg-emerald-500 border-emerald-700' : 'bg-rose-600 border-rose-800';
+            toast.className = `${bgConfig} border-b-4 text-white px-5 py-3 rounded-xl font-bold shadow-2xl transform transition-all duration-300 -translate-y-5 opacity-0 flex items-center gap-3 text-lg z-50`;
+            toast.innerHTML = `<i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-triangle'} text-2xl"></i> <span>${message}</span>`;
+            toastContainer.appendChild(toast);
+            
+            setTimeout(() => toast.classList.remove('-translate-y-5', 'opacity-0'), 10);
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-5');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function shootConfetti(element) {
+            const rect = element.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            for (let i = 0; i < 30; i++) {
+                const confetti = document.createElement('div');
+                const colors = ['#fce18a', '#ff726d', '#b48def', '#f4306d', '#48b8d0', '#22c55e', '#3b82f6'];
+                confetti.style.position = 'fixed';
+                confetti.style.left = centerX + 'px';
+                confetti.style.top = centerY + 'px';
+                confetti.style.width = Math.random() * 8 + 5 + 'px';
+                confetti.style.height = Math.random() * 8 + 5 + 'px';
+                confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                confetti.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
+                confetti.style.pointerEvents = 'none';
+                confetti.style.zIndex = '100';
+                document.body.appendChild(confetti);
+                
+                const angle = Math.random() * Math.PI * 2;
+                const velocity = 40 + Math.random() * 80;
+                const tx = Math.cos(angle) * velocity;
+                const ty = Math.sin(angle) * velocity - 40;
+                
+                confetti.animate([
+                    { transform: `translate(0, 0) scale(1) rotate(0deg)`, opacity: 1 },
+                    { transform: `translate(${tx}px, ${ty}px) scale(0) rotate(${Math.random()*720}deg)`, opacity: 0 }
+                ], { duration: 800 + Math.random() * 400, easing: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)', fill: 'forwards' });
+                
+                setTimeout(() => confetti.remove(), 1200);
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
