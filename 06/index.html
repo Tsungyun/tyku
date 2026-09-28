@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自訂加減法 練習題產生器</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 html2pdf.js 以支援 PDF 匯出 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    
+    <style>
+        /* 網頁畫面上顯示的直式算式樣式 */
+        .vertical-math {
+            font-family: 'Courier New', Courier, monospace;
+            display: inline-block;
+            text-align: right;
+            font-size: 1.25rem;
+            line-height: 1.5;
+            padding: 1rem 1.5rem;
+            background-color: #f9fafb;
+            border-radius: 0.5rem;
+            border: 1px solid #e5e7eb;
+            white-space: nowrap;
+            overflow-x: auto;
+            max-width: 100%;
+            min-width: 120px;
+        }
+        .math-row {
+            display: flex;
+            justify-content: flex-end;
+            padding: 0 0.25rem;
+            position: relative;
+        }
+        .math-line {
+            border-bottom: 2px solid #374151;
+            margin: 0.5rem 0;
+            width: 100%;
+        }
+        .letter-spacing-wide {
+            letter-spacing: 0.3em;
+        }
+        /* 隱藏區塊，專門用於在背景建構 PDF 排版 */
+        #pdf-export-container {
+            position: absolute;
+            top: -9999px;
+            left: -9999px;
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        /* 自訂設定區塊的切換動畫過渡 */
+        .settings-panel {
+            transition: all 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen p-4 md:p-8 font-sans text-gray-800">
+
+    <div class="max-w-6xl mx-auto bg-white p-6 md:p-8 rounded-2xl shadow-xl border border-gray-100">
+        
+        <div id="controls-section">
+            <h1 class="text-3xl md:text-4xl font-bold text-center mb-2 text-indigo-600 tracking-wide">自訂加減法練習題產生器</h1>
+            <p class="text-center text-gray-500 mb-8 font-medium">8 題模式 / 支援橫向 A4 對半裁切設計</p>
+            
+            <!-- 題目類型選擇 -->
+            <div class="flex justify-center mb-6">
+                <div class="bg-gray-100 p-1 rounded-lg inline-flex shadow-inner">
+                    <button id="mode-add" class="mode-btn px-6 py-2 rounded-md font-bold text-gray-600 bg-white shadow-sm transition-all text-indigo-600">加法練習</button>
+                    <button id="mode-sub" class="mode-btn px-6 py-2 rounded-md font-bold text-gray-500 hover:text-gray-700 transition-all">減法練習</button>
+                    <button id="mode-mix" class="mode-btn px-6 py-2 rounded-md font-bold text-gray-500 hover:text-gray-700 transition-all">混合練習</button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <!-- 加法設定區塊 -->
+                <div id="panel-add" class="settings-panel bg-blue-50/50 p-5 rounded-xl border border-blue-100 shadow-sm h-full">
+                    <h3 class="font-bold text-blue-700 mb-3 text-lg border-b border-blue-200 pb-2">➕ 加法設定</h3>
+                    
+                    <div class="mb-4">
+                        <label class="block text-sm font-bold text-gray-700 mb-2">出題模式：</label>
+                        <select id="add-generation-mode" class="w-full border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2 text-base font-medium">
+                            <option value="digits">按「位數」亂數出題</option>
+                            <option value="maxSum">按「總和範圍」出題</option>
+                        </select>
+                    </div>
+
+                    <!-- 加法：按位數 -->
+                    <div id="add-settings-digits" class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <label class="font-bold text-gray-600">被加數：</label>
+                            <select id="augend-digits" class="border-gray-300 rounded-md shadow-sm focus:ring-blue-500 p-1.5 w-32">
+                                <option value="1">1 位數</option><option value="2">2 位數</option>
+                                <option value="3" selected>3 位數</option><option value="4">4 位數</option>
+                                <option value="5">5 位數</option><option value="6">6 位數</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <label class="font-bold text-gray-600">加數：</label>
+                            <select id="addend-digits" class="border-gray-300 rounded-md shadow-sm focus:ring-blue-500 p-1.5 w-32">
+                                <option value="1">1 位數</option><option value="2" selected>2 位數</option>
+                                <option value="3">3 位數</option><option value="4">4 位數</option>
+                                <option value="5">5 位數</option><option value="6">6 位數</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- 加法：按總和範圍 -->
+                    <div id="add-settings-max" class="hidden space-y-3">
+                        <div class="flex items-center justify-between">
+                            <label class="font-bold text-gray-600">和的範圍：</label>
+                            <select id="add-max-value" class="border-gray-300 rounded-md shadow-sm focus:ring-blue-500 p-1.5 w-40">
+                                <option value="10">10 以內</option>
+                                <option value="100">100 以內</option>
+                                <option value="1000" selected>1,000 以內</option>
+                                <option value="10000">1 萬以內</option>
+                                <option value="100000">10 萬以內</option>
+                                <option value="1000000">100 萬以內</option>
+                                <option value="10000000">1,000 萬以內</option>
+                                <option value="100000000">1 億以內</option>
+                            </select>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-2">* 系統將自動產生相加不超過此範圍的兩個數字。</p>
+                    </div>
+                </div>
+
+                <!-- 減法設定區塊 -->
+                <div id="panel-sub" class="settings-panel bg-red-50/50 p-5 rounded-xl border border-red-100 shadow-sm opacity-50 pointer-events-none h-full">
+                    <h3 class="font-bold text-red-700 mb-3 text-lg border-b border-red-200 pb-2">➖ 減法設定</h3>
+                    
+                    <div class="space-y-4 mt-2">
+                        <div class="flex items-center justify-between">
+                            <label class="font-bold text-gray-600">被減數：</label>
+                            <select id="minuend-digits" class="border-gray-300 rounded-md shadow-sm focus:ring-red-500 p-1.5 w-32">
+                                <option value="1">1 位數</option><option value="2">2 位數</option>
+                                <option value="3" selected>3 位數</option><option value="4">4 位數</option>
+                                <option value="5">5 位數</option><option value="6">6 位數</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <label class="font-bold text-gray-600">減數：</label>
+                            <select id="subtrahend-digits" class="border-gray-300 rounded-md shadow-sm focus:ring-red-500 p-1.5 w-32">
+                                <option value="1">1 位數</option><option value="2" selected>2 位數</option>
+                                <option value="3">3 位數</option><option value="4">4 位數</option>
+                                <option value="5">5 位數</option><option value="6">6 位數</option>
+                            </select>
+                        </div>
+                        
+                        <div class="pt-2 border-t border-red-100">
+                            <label class="block text-sm font-bold text-gray-700 mb-2">差的結果設定：</label>
+                            <select id="sub-result-type" class="w-full border-gray-300 rounded-lg shadow-sm focus:border-red-500 focus:ring-red-500 p-2 text-base font-medium text-red-700 bg-white">
+                                <option value="positive">只允許正數 (大減小)</option>
+                                <option value="negative">只允許負數 (小減大)</option>
+                                <option value="mixed">正負數隨機出現</option>
+                            </select>
+                            <p class="text-xs text-gray-500 mt-2">* 選定後，系統將按設定自動調整被減數與減數大小關係。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 按鈕區塊 -->
+            <div class="flex flex-wrap justify-center gap-4 mb-10 border-t border-gray-200 pt-8">
+                <button id="btn-generate" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg shadow-md transition duration-200 transform hover:-translate-y-0.5 text-lg">
+                    🎲 產生新題目
+                </button>
+                <button id="btn-show-answer" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-8 rounded-lg shadow-md transition duration-200 transform hover:-translate-y-0.5 text-lg">
+                    👀 顯示解答
+                </button>
+                <button id="btn-export-q" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-200 transform hover:-translate-y-0.5 flex items-center">
+                    <span>📄 匯出題目 (PDF)</span>
+                </button>
+                <button id="btn-export-a" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-200 transform hover:-translate-y-0.5 flex items-center">
+                    <span>📝 匯出解答 (PDF)</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 網頁上的題目顯示區 (依照螢幕大小動態排版 1 ~ 4 欄) -->
+        <div id="questions-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <!-- 題目將透過 JavaScript 動態生成 -->
+        </div>
+    </div>
+
+    <!-- 專屬版權宣告頁尾 (乾淨、單行設計) -->
+    <div class="text-center text-gray-400 text-sm mt-8 mb-4 tracking-wider">
+        &copy; 谷宗芸老師設計 / AI 輔助生成
+    </div>
+
+    <!-- 用於暫存 PDF 排版的隱藏容器 -->
+    <div id="pdf-export-container"></div>
+
+    <script>
+        // DOM 元素選取
+        const questionsContainer = document.getElementById('questions-container');
+        const pdfExportContainer = document.getElementById('pdf-export-container');
+        
+        const btnGenerate = document.getElementById('btn-generate');
+        const btnShowAnswer = document.getElementById('btn-show-answer');
+        const btnExportQ = document.getElementById('btn-export-q');
+        const btnExportA = document.getElementById('btn-export-a');
+        
+        // 設定相關 DOM
+        const modeBtns = document.querySelectorAll('.mode-btn');
+        const panelAdd = document.getElementById('panel-add');
+        const panelSub = document.getElementById('panel-sub');
+        
+        const addGenMode = document.getElementById('add-generation-mode');
+        const addSettingsDigits = document.getElementById('add-settings-digits');
+        const addSettingsMax = document.getElementById('add-settings-max');
+        
+        let currentMode = 'add'; // 'add', 'sub', 'mix'
+        let currentQuestions = [];
+        let answersShown = false;
+
+        // UI 互動：切換主模式 (加法/減法/混合)
+        modeBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                // 重置按鈕樣式
+                modeBtns.forEach(b => {
+                    b.classList.remove('bg-white', 'shadow-sm', 'text-indigo-600');
+                    b.classList.add('text-gray-500');
+                });
+                // 標記選中按鈕
+                const target = e.target;
+                target.classList.remove('text-gray-500');
+                target.classList.add('bg-white', 'shadow-sm', 'text-indigo-600');
+                
+                currentMode = target.id.replace('mode-', '');
+                
+                // 控制面板顯示與禁用狀態
+                if (currentMode === 'add') {
+                    panelAdd.classList.remove('opacity-50', 'pointer-events-none');
+                    panelSub.classList.add('opacity-50', 'pointer-events-none');
+                } else if (currentMode === 'sub') {
+                    panelSub.classList.remove('opacity-50', 'pointer-events-none');
+                    panelAdd.classList.add('opacity-50', 'pointer-events-none');
+                } else { // mix
+                    panelAdd.classList.remove('opacity-50', 'pointer-events-none');
+                    panelSub.classList.remove('opacity-50', 'pointer-events-none');
+                }
+            });
+        });
+
+        // UI 互動：切換加法出題模式 (位數 vs 總和範圍)
+        addGenMode.addEventListener('change', (e) => {
+            if (e.target.value === 'digits') {
+                addSettingsDigits.classList.remove('hidden');
+                addSettingsMax.classList.add('hidden');
+            } else {
+                addSettingsDigits.classList.add('hidden');
+                addSettingsMax.classList.remove('hidden');
+            }
+        });
+
+        // 產生特定位數的隨機數字串 (支援大數)
+        function getRandomStringByDigits(digits) {
+            let result = (Math.floor(Math.random() * 9) + 1).toString(); // 首位 1-9
+            for (let i = 1; i < digits; i++) {
+                result += Math.floor(Math.random() * 10).toString(); // 後續 0-9
+            }
+            return result;
+        }
+
+        // 產生單一加法題目
+        function generateAddQuestion(usedNumbers) {
+            const mode = addGenMode.value;
+            let num1, num2;
+            let attempts = 0;
+            const maxAttempts = 100; // 防呆機制，避免位數太小時無限迴圈
+            
+            while (attempts < maxAttempts) {
+                if (mode === 'digits') {
+                    const d1 = parseInt(document.getElementById('augend-digits').value);
+                    const d2 = parseInt(document.getElementById('addend-digits').value);
+                    num1 = BigInt(getRandomStringByDigits(d1));
+                    num2 = BigInt(getRandomStringByDigits(d2));
+                } else {
+                    // 總和範圍模式
+                    const maxVal = parseInt(document.getElementById('add-max-value').value);
+                    const targetSum = Math.floor(Math.random() * (maxVal - 1)) + 2;
+                    const part1 = Math.floor(Math.random() * (targetSum - 1)) + 1;
+                    const part2 = targetSum - part1;
+                    
+                    num1 = BigInt(part1);
+                    num2 = BigInt(part2);
+                }
+
+                // 確保數字在此次出題尚未出現過，且兩數不相同
+                if (!usedNumbers.has(num1) && !usedNumbers.has(num2) && num1 !== num2) {
+                    break;
+                }
+                attempts++;
+            }
+            
+            usedNumbers.add(num1);
+            usedNumbers.add(num2);
+            return { num1, num2, op: '+', result: num1 + num2 };
+        }
+
+        // 產生單一減法題目
+        function generateSubQuestion(usedNumbers) {
+            const d1 = parseInt(document.getElementById('minuend-digits').value);
+            const d2 = parseInt(document.getElementById('subtrahend-digits').value);
+            const resType = document.getElementById('sub-result-type').value;
+            
+            let num1, num2;
+            let attempts = 0;
+            const maxAttempts = 100; // 防呆機制
+            
+            while (attempts < maxAttempts) {
+                num1 = BigInt(getRandomStringByDigits(d1));
+                num2 = BigInt(getRandomStringByDigits(d2));
+                
+                // 依照設定強制調整兩數大小關係
+                if (resType === 'positive' && num1 < num2) {
+                    let temp = num1;
+                    num1 = num2;
+                    num2 = temp;
+                } else if (resType === 'negative' && num1 > num2) {
+                    let temp = num1;
+                    num1 = num2;
+                    num2 = temp;
+                }
+                // 若為 'mixed' 則維持原本生成的隨機大小順序
+
+                // 確保數字在此次出題尚未出現過，且兩數不相同
+                if (!usedNumbers.has(num1) && !usedNumbers.has(num2) && num1 !== num2) {
+                    break;
+                }
+                attempts++;
+            }
+            
+            usedNumbers.add(num1);
+            usedNumbers.add(num2);
+            return { num1, num2, op: '-', result: num1 - num2 };
+        }
+
+        // 產生 8 題測驗
+        function generateQuestions() {
+            currentQuestions = [];
+            let usedNumbers = new Set(); // 追蹤此批次已用過的數字，確保這8題中不重複
+            
+            for (let i = 0; i < 8; i++) {
+                let isAdd = true;
+                
+                if (currentMode === 'add') {
+                    isAdd = true;
+                } else if (currentMode === 'sub') {
+                    isAdd = false;
+                } else {
+                    // 混合模式：隨機決定加或減
+                    isAdd = Math.random() > 0.5;
+                }
+                
+                if (isAdd) {
+                    currentQuestions.push(generateAddQuestion(usedNumbers));
+                } else {
+                    currentQuestions.push(generateSubQuestion(usedNumbers));
+                }
+            }
+            
+            answersShown = false;
+            renderQuestionsForWeb();
+        }
+
+        // 產生直式加減法的 HTML (isCompact 決定是否為 PDF 的微縮版)
+        function generateVerticalMathHTML(q, isCompact = false) {
+            const strNum1 = q.num1.toString();
+            const strNum2 = q.num2.toString();
+            const strResult = q.result.toString();
+            const opSign = q.op;
+            
+            if (isCompact) {
+                // =============== PDF 專用的緊湊版 =================
+                let html = `<div style="font-family: 'Courier New', Courier, monospace; text-align: right; font-size: 14px; line-height: 1.2; white-space: nowrap; display: flex; flex-direction: column; align-items: flex-end; width: 120px;">`;
+                
+                // 第一列：數字一
+                html += `<div style="display: flex; justify-content: flex-end; letter-spacing: 0.2em; width: 100%;">${strNum1}</div>`;
+                
+                // 第二列：運算符號 + 數字二
+                html += `<div style="display: flex; justify-content: flex-end; position: relative; width: 100%; align-items: center; margin-top: 2px;">`;
+                html += `<span style="position: absolute; left: 0; color: #6b7280; font-weight: bold;">${opSign}</span>`;
+                html += `<span style="letter-spacing: 0.2em;">${strNum2}</span>`;
+                html += `</div>`;
+                
+                // 分隔線
+                html += `<div style="border-bottom: 2px solid #374151; margin: 6px 0; width: 100%;"></div>`;
+                
+                // 結果列 (考慮負號顯示)
+                html += `<div style="display: flex; justify-content: flex-end; letter-spacing: 0.2em; font-weight: bold; color: #2563eb; width: 100%;">`;
+                // 若結果為負數，將負號稍微推近一點
+                if(q.result < 0n) {
+                    html += `<span style="margin-right: 4px;">-</span>${(-q.result).toString()}`;
+                } else {
+                    html += strResult;
+                }
+                html += `</div></div>`;
+                
+                return html;
+            } else {
+                // =============== Web 畫面的標準版 =================
+                let html = `<div class="vertical-math">`;
+                
+                // 第一列
+                html += `<div class="math-row letter-spacing-wide">${strNum1}</div>`;
+                
+                // 第二列
+                html += `<div class="math-row">`;
+                html += `<span class="absolute left-2 text-gray-400 font-bold">${opSign}</span>`;
+                html += `<span class="letter-spacing-wide">${strNum2}</span>`;
+                html += `</div>`;
+                
+                // 分隔線
+                html += `<div class="math-line"></div>`;
+                
+                // 結果列
+                html += `<div class="math-row letter-spacing-wide font-bold text-blue-600">`;
+                if(q.result < 0n) {
+                    html += `<span class="mr-1 text-red-500">-</span>${(-q.result).toString()}`;
+                } else {
+                    html += strResult;
+                }
+                html += `</div></div>`;
+                
+                return html;
+            }
+        }
+
+        // 渲染網頁畫面上的題目
+        function renderQuestionsForWeb() {
+            questionsContainer.innerHTML = ''; 
+
+            currentQuestions.forEach((q, index) => {
+                const card = document.createElement('div');
+                card.className = 'bg-white border-2 border-gray-100 p-5 rounded-xl shadow-sm hover:shadow-md transition-shadow flex flex-col h-full';
+
+                // 標題與橫式算式
+                const header = document.createElement('div');
+                header.className = 'text-lg font-semibold text-gray-700 mb-4 border-b-2 border-gray-50 pb-2 truncate';
+                
+                // 判斷運算符號給予不同顏色
+                const opColor = q.op === '+' ? 'text-blue-500' : 'text-red-500';
+                
+                header.innerHTML = `<span class="text-indigo-500 mr-2 text-xl">(${index + 1})</span> ${q.num1.toString()} <span class="${opColor} mx-1">${q.op}</span> ${q.num2.toString()} = ?`;
+                card.appendChild(header);
+
+                // 直式解答區
+                const answerDiv = document.createElement('div');
+                answerDiv.className = `mt-auto flex justify-center py-2 ${answersShown ? '' : 'hidden'}`;
+                answerDiv.innerHTML = generateVerticalMathHTML(q, false);
+                card.appendChild(answerDiv);
+                
+                questionsContainer.appendChild(card);
+            });
+            
+            // 更新「顯示解答」按鈕狀態
+            btnShowAnswer.innerHTML = answersShown ? "🙈 隱藏解答" : "👀 顯示解答";
+            if(answersShown) {
+                btnShowAnswer.className = "bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-8 rounded-lg shadow-md transition duration-200 transform hover:-translate-y-0.5 text-lg";
+            } else {
+                btnShowAnswer.className = "bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-8 rounded-lg shadow-md transition duration-200 transform hover:-translate-y-0.5 text-lg";
+            }
+        }
+
+        // 動態建構供 PDF 匯出的特殊排版 (A4 橫向、左右對稱雙欄)
+        function buildPDFLayout(isAnswerMode) {
+            const container = document.createElement('div');
+            // 設定固定像素比例以符合 A4 橫向 (1123px * 794px roughly A4 at 96 DPI)
+            container.style.width = '1123px';
+            container.style.height = '794px';
+            container.style.backgroundColor = 'white';
+            container.style.display = 'flex';
+            container.style.flexDirection = 'row';
+            container.style.padding = '25px 15px'; 
+            container.style.boxSizing = 'border-box';
+
+            // 根據目前模式產生標題
+            let titleText = '加減法練習題';
+            if(currentMode === 'add') titleText = '加法練習題';
+            if(currentMode === 'sub') titleText = '減法練習題';
+            titleText += isAnswerMode ? ' (解答卷)' : ' (題目卷)';
+
+            const buildHalfPage = () => {
+                const half = document.createElement('div');
+                half.style.width = '50%';
+                half.style.height = '100%';
+                half.style.display = 'flex';
+                half.style.flexDirection = 'column';
+                half.style.padding = '0 30px'; // 左右邊距
+                half.style.boxSizing = 'border-box';
+
+                // 標題
+                const title = document.createElement('h2');
+                title.style.textAlign = 'center';
+                title.style.fontSize = '26px';
+                title.style.fontWeight = 'bold';
+                title.style.marginBottom = '25px';
+                title.style.color = '#1f2937';
+                title.style.letterSpacing = '2px';
+                title.innerText = titleText;
+                half.appendChild(title);
+
+                // 8 題網格 (2欄 x 4列)
+                const grid = document.createElement('div');
+                grid.style.display = 'grid';
+                grid.style.gridTemplateColumns = '1fr 1fr'; 
+                grid.style.gridTemplateRows = 'repeat(4, 1fr)'; 
+                grid.style.gap = '20px 15px'; 
+                grid.style.flexGrow = '1'; 
+
+                currentQuestions.forEach((q, index) => {
+                    const card = document.createElement('div');
+                    card.style.border = '2px solid #e5e7eb';
+                    card.style.borderRadius = '10px';
+                    card.style.padding = '12px 15px';
+                    card.style.display = 'flex';
+                    card.style.flexDirection = 'column';
+
+                    const header = document.createElement('div');
+                    header.style.fontSize = '16px';
+                    header.style.fontWeight = 'bold';
+                    header.style.borderBottom = '1.5px solid #f3f4f6';
+                    header.style.paddingBottom = '8px';
+                    header.style.marginBottom = '12px';
+                    
+                    const opColor = q.op === '+' ? '#3b82f6' : '#ef4444';
+                    
+                    // 判斷是否為解答模式，若是則在等號後加上答案，否則留空 (不顯示問號)
+                    let answerStr = '';
+                    if (isAnswerMode) {
+                        // 若為負數，在負號與數字間加個半形空格讓排版更美觀
+                        answerStr = q.result < 0n ? `- ${(-q.result).toString()}` : q.result.toString();
+                    }
+                    
+                    header.innerHTML = `<span style="color: #6366f1; margin-right: 6px; font-size: 18px;">(${index + 1})</span> ${q.num1.toString()} <span style="color:${opColor}; margin:0 4px;">${q.op}</span> ${q.num2.toString()} = <span style="color: #2563eb; margin-left: 2px;">${answerStr}</span>`;
+                    card.appendChild(header);
+
+                    if (isAnswerMode) {
+                        const answerDiv = document.createElement('div');
+                        answerDiv.style.display = 'flex';
+                        answerDiv.style.justifyContent = 'center';
+                        answerDiv.style.alignItems = 'center';
+                        answerDiv.style.flexGrow = '1';
+                        // 呼叫產生微縮版本的直式加減法
+                        answerDiv.innerHTML = generateVerticalMathHTML(q, true);
+                        card.appendChild(answerDiv);
+                    }
+
+                    grid.appendChild(card);
+                });
+
+                half.appendChild(grid);
+                return half;
+            };
+
+            const leftHalf = buildHalfPage();
+            const rightHalf = buildHalfPage();
+            
+            // 中間裁切虛線
+            rightHalf.style.borderLeft = '2px dashed #9ca3af';
+
+            container.appendChild(leftHalf);
+            container.appendChild(rightHalf);
+
+            return container;
+        }
+
+        function exportToPDF(isAnswerMode) {
+            const btn = isAnswerMode ? btnExportA : btnExportQ;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `<span class="animate-pulse">⏳ 產生PDF中...</span>`;
+            btn.disabled = true;
+
+            pdfExportContainer.innerHTML = '';
+            const layout = buildPDFLayout(isAnswerMode);
+            pdfExportContainer.appendChild(layout);
+
+            const opt = {
+                margin:       0, 
+                filename:     isAnswerMode ? '加減法練習題_解答版.pdf' : '加減法練習題_題目版.pdf',
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true, logging: false },
+                jsPDF:        { unit: 'px', format: [1123, 794], orientation: 'landscape' } 
+            };
+
+            setTimeout(() => {
+                html2pdf().set(opt).from(layout).save().then(() => {
+                    pdfExportContainer.innerHTML = '';
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }).catch(err => {
+                    console.error("PDF Generate Error", err);
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    alert("匯出 PDF 時發生錯誤，請重試。");
+                });
+            }, 300);
+        }
+
+        btnGenerate.addEventListener('click', generateQuestions);
+        
+        btnShowAnswer.addEventListener('click', () => {
+            answersShown = !answersShown;
+            renderQuestionsForWeb();
+        });
+
+        btnExportQ.addEventListener('click', () => exportToPDF(false));
+        btnExportA.addEventListener('click', () => exportToPDF(true));
+
+        // 初始執行一次產生題目
+        window.onload = generateQuestions;
+    </script>
+</body>
+</html>
