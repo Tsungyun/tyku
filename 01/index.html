@@ -723,15 +723,18 @@
                 const textX = baseX + 8;
                 const textY = baseY + 12;
 
-                // 填上題號與橫式等於 (為了 PDF 不發生中文字型亂碼，統一用英文與符號構成橫式)
+                // 填上題號
                 doc.setFontSize(12);
                 doc.setTextColor(0, 0, 0);
-                doc.text(`Q ${displayNum}. _______ = `, textX, textY);
+                doc.text(`Q ${displayNum}.`, textX, textY);
                 
-                // 解答模式：在等號後面印出紅色答案字樣（量角器測量無額外算式，直接給出角度即可）
+                // 依據模式印出 A: 作答區或解答 (顯示在題號正下方)
                 if (isAnswerMode) {
                     doc.setTextColor(220, 38, 38); 
-                    doc.text(`${q.angle}°`, textX + 27, textY);
+                    doc.text(`A: ${q.angle}°`, textX, textY + 7);
+                } else {
+                    doc.setTextColor(0, 0, 0);
+                    doc.text(`A: __________`, textX, textY + 7);
                 }
 
                 // 夾角中心點
