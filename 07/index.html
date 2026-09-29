@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自訂除法練習題產生器</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 html2pdf.js 以支援 PDF 匯出 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    
+    <style>
+        /* 網頁畫面上顯示的直式除法外框樣式 */
+        .vertical-math {
+            display: inline-block;
+            background-color: #f9fafb;
+            border-radius: 0.5rem;
+            border: 1px solid #e5e7eb;
+            padding: 1.5rem;
+            overflow-x: auto;
+            max-width: 100%;
+        }
+
+        /* 隱藏區塊，專門用於在背景建構 PDF 排版 */
+        #pdf-export-container {
+            position: absolute;
+            top: -9999px;
+            left: -9999px;
+            opacity: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen p-4 md:p-8 font-sans text-gray-800">
+
+    <div class="max-w-6xl mx-auto bg-white p-6 md:p-8 rounded-2xl shadow-xl border border-gray-100">
+        
+        <div id="controls-section">
+            <h1 class="text-3xl md:text-4xl font-bold text-center mb-2 text-indigo-600 tracking-wide">自訂除法練習題產生器</h1>
+            <p class="text-center text-gray-500 mb-8 font-medium">8 題模式 / 支援橫向 A4 對半裁切設計 / 小數精密除法</p>
+            
+            <!-- 設定區塊 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <!-- 左側設定：位數與大小關係 -->
+                <div class="bg-indigo-50/50 p-5 rounded-xl border border-indigo-100 shadow-sm">
+                    <h3 class="font-bold text-indigo-700 mb-4 text-lg border-b border-indigo-200 pb-2">🔢 基本數值設定</h3>
+                    
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <label class="font-bold text-gray-700">被除數：</label>
+                            <select id="dividend-digits" class="border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 p-1.5 w-32 font-medium">
+                                <option value="1">1 位數</option><option value="2">2 位數</option>
+                                <option value="3" selected>3 位數</option><option value="4">4 位數</option>
+                                <option value="5">5 位數</option><option value="6">6 位數</option>
+                                <option value="7">7 位數</option><option value="8">8 位數</option>
+                                <option value="9">9 位數</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <label class="font-bold text-gray-700">除數：</label>
+                            <select id="divisor-digits" class="border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 p-1.5 w-32 font-medium">
+                                <option value="1">1 位數</option><option value="2" selected>2 位數</option>
+                                <option value="3">3 位數</option><option value="4">4 位數</option>
+                                <option value="5">5 位數</option><option value="6">6 位數</option>
+                                <option value="7">7 位數</option><option value="8">8 位數</option>
+                                <option value="9">9 位數</option>
+                            </select>
+                        </div>
+                        <div class="pt-2 border-t border-indigo-100">
+                            <label class="block text-sm font-bold text-gray-700 mb-2">大小關係限制：</label>
+                            <select id="size-relation" class="w-full border-gray-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 text-base font-medium text-indigo-700 bg-white">
+                                <option value="gt">限制被除數 &gt; 除數 (大除小)</option>
+                                <option value="lt">限制被除數 &lt; 除數 (小除大)</option>
+                                <option value="rnd">不限制 (大小隨機)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右側設定：小數與餘數 -->
+                <div class="bg-emerald-50/50 p-5 rounded-xl border border-emerald-100 shadow-sm">
+                    <h3 class="font-bold text-emerald-700 mb-4 text-lg border-b border-emerald-200 pb-2">🎯 目標與餘數設定</h3>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">商計算至：</label>
+                            <select id="target-precision" class="w-full border-gray-300 rounded-lg shadow-sm focus:border-emerald-500 focus:ring-emerald-500 p-2 text-base font-medium text-gray-700 bg-white">
+                                <option value="0">整數 (不出現小數點)</option>
+                                <option value="1">小數點後第 1 位</option>
+                                <option value="2">小數點後第 2 位</option>
+                                <option value="3">小數點後第 3 位</option>
+                            </select>
+                        </div>
+                        <div class="pt-2 border-t border-emerald-100">
+                            <label class="block text-sm font-bold text-gray-700 mb-2">餘數狀態 (在此精確度下)：</label>
+                            <select id="remainder-type" class="w-full border-gray-300 rounded-lg shadow-sm focus:border-emerald-500 focus:ring-emerald-500 p-2 text-base font-medium text-emerald-700 bg-white">
+                                <option value="zero">必定整除 (無餘數)</option>
+                                <option value="has">必定有餘數</option>
+                                <option value="rnd">不限制 (整除或餘數隨機)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 按鈕區塊 -->
+            <div class="flex flex-wrap justify-center gap-4 mb-10 border-t border-gray-200 pt-8">
+                <button id="btn-generate" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-lg shadow-md transition duration-200 transform hover:-translate-y-0.5 text-lg">
+                    🎲 產生新題目
+                </button>
+                <button id="btn-show-answer" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-8 rounded-lg shadow-md transition duration-200 transform hover:-translate-y-0.5 text-lg">
+                    👀 顯示解答
+                </button>
+                <button id="btn-export-q" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-200 transform hover:-translate-y-0.5 flex items-center">
+                    <span>📄 匯出題目 (PDF)</span>
+                </button>
+                <button id="btn-export-a" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-200 transform hover:-translate-y-0.5 flex items-center">
+                    <span>📝 匯出解答 (PDF)</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 網頁上的題目顯示區 -->
+        <div id="questions-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <!-- 題目將透過 JavaScript 動態生成 -->
+        </div>
+    </div>
+
+    <!-- 專屬版權宣告頁尾 -->
+    <div class="text-center text-gray-400 text-sm mt-8 mb-4 tracking-wider">
+        &copy; 谷宗芸老師設計 / AI 輔助生成
+    </div>
+
+    <!-- 用於暫存 PDF 排版的隱藏容器 -->
+    <div id="pdf-export-container"></div>
+
+    <script>
+        // DOM 元素選取
+        const questionsContainer = document.getElementById('questions-container');
+        const pdfExportContainer = document.getElementById('pdf-export-container');
+        
+        const btnGenerate = document.getElementById('btn-generate');
+        const btnShowAnswer = document.getElementById('btn-show-answer');
+        const btnExportQ = document.getElementById('btn-export-q');
+        const btnExportA = document.getElementById('btn-export-a');
+        
+        const sizeRelationSel = document.getElementById('size-relation');
+        const precSel = document.getElementById('target-precision');
+        const remSel = document.getElementById('remainder-type');
+        
+        let currentQuestions = [];
+        let answersShown = false;
+
+        // UI 邏輯：防止不合理的數學設定 (例如：被除數 < 除數 時，整數無法整除)
+        function updateUIConstraints() {
+            if (sizeRelationSel.value === 'lt' && precSel.value === '0') {
+                if (remSel.value === 'zero') remSel.value = 'has';
+                remSel.options[0].disabled = true; // 禁用整除
+            } else {
+                remSel.options[0].disabled = false;
+            }
+        }
+
+        sizeRelationSel.addEventListener('change', updateUIConstraints);
+        precSel.addEventListener('change', updateUIConstraints);
+
+        // 產生特定位數的隨機數字串
+        function getRandomString(digits) {
+            let result = (Math.floor(Math.random() * 9) + 1).toString();
+            for (let i = 1; i < digits; i++) {
+                result += Math.floor(Math.random() * 10).toString();
+            }
+            return result;
+        }
+
+        // 求最大公因數 (用於整除建構法)
+        function gcd(a, b) {
+            while (b !== 0n) {
+                let temp = b;
+                b = a % b;
+                a = temp;
+            }
+            return a;
+        }
+
+        // 產生單一除法題目
+        function generateDivisionQuestion(usedNumbers) {
+            let A_digits = parseInt(document.getElementById('dividend-digits').value);
+            let B_digits = parseInt(document.getElementById('divisor-digits').value);
+            let sizeRel = sizeRelationSel.value;
+            let prec = parseInt(precSel.value);
+            let remType = remSel.value;
+            
+            let maxAttempts = 50000;
+            let attempts = 0;
+            let num1, num2;
+            
+            while (attempts < maxAttempts) {
+                attempts++;
+                
+                if (remType === 'zero') {
+                    // 要求整除：採用數學建構法確保 100% 成功，而不依賴純隨機盲測
+                    num2 = BigInt(getRandomString(B_digits));
+                    let multiplier = 10n ** BigInt(prec);
+                    let gcdVal = gcd(num2, multiplier);
+                    let requiredFactor = num2 / gcdVal; // A 必須是這個數的倍數
+                    
+                    let minA = 10n ** BigInt(A_digits - 1);
+                    if (A_digits === 1) minA = 1n;
+                    let maxA = (10n ** BigInt(A_digits)) - 1n;
+                    
+                    let minK = minA / requiredFactor + (minA % requiredFactor === 0n ? 0n : 1n);
+                    let maxK = maxA / requiredFactor;
+                    
+                    if (minK > maxK) continue; // 該除數條件下無法構造，重試
+                    
+                    let range = maxK - minK + 1n;
+                    let k = minK + BigInt(Math.floor(Math.random() * Number(range))); 
+                    num1 = requiredFactor * k;
+                    
+                    // 確保不會提早整除 (例如要求小數第2位才整除，不能在小數第1位就整除了)
+                    if (prec > 0) {
+                        let prevMult = 10n ** BigInt(prec - 1);
+                        if ((num1 * prevMult) % num2 === 0n) continue;
+                    }
+                } else {
+                    // 隨機或要求有餘數：用隨機產生後驗證
+                    num1 = BigInt(getRandomString(A_digits));
+                    num2 = BigInt(getRandomString(B_digits));
+                    
+                    let mult = 10n ** BigInt(prec);
+                    let isZeroRem = ((num1 * mult) % num2 === 0n);
+                    
+                    if (remType === 'has' && isZeroRem) continue;
+                }
+                
+                // 驗證大小關係
+                if (sizeRel === 'gt' && num1 <= num2) continue;
+                if (sizeRel === 'lt' && num1 >= num2) continue;
+                
+                // 驗證數字獨立性 (避免 8 題內出現完全一樣的組合)
+                let pairKey = num1.toString() + "/" + num2.toString();
+                if (usedNumbers.has(pairKey)) {
+                    // 若條件極端嚴苛，嘗試 4 萬次後放行重複以防無限迴圈當機
+                    if (attempts < 40000) continue; 
+                }
+                
+                usedNumbers.add(pairKey);
+                return { num1, num2, precision: prec };
+            }
+            
+            // 極端防呆退路 (正常設定下不會觸發)
+            console.warn("條件過於嚴苛，已退回預設題目");
+            return { num1: 10n, num2: 2n, precision: 0 };
+        }
+
+        // 產生 8 題測驗
+        function generateQuestions() {
+            currentQuestions = [];
+            let usedNumbers = new Set();
+            
+            for (let i = 0; i < 8; i++) {
+                currentQuestions.push(generateDivisionQuestion(usedNumbers));
+            }
+            
+            answersShown = false;
+            renderQuestionsForWeb();
+        }
+
+        // 格式化橫式答案 (含餘數顯示)
+        function formatAnswer(A, B, P) {
+            let mult = 10n ** BigInt(P);
+            let dividend = A * mult;
+            let q = dividend / B;
+            let r = dividend % B;
+            
+            let qStr = q.toString();
+            if (P > 0) {
+                qStr = qStr.padStart(P + 1, '0');
+                qStr = qStr.slice(0, -P) + "." + qStr.slice(-P);
+            }
+            
+            if (r === 0n) return qStr;
+            
+            let rStr = r.toString();
+            if (P > 0) {
+                rStr = rStr.padStart(P + 1, '0');
+                rStr = "0." + rStr.slice(-P); // 確保餘數小數點位置正確
+            }
+            
+            return `${qStr} ... ${rStr}`;
+        }
+
+        // 產生精準對齊的直式除法 HTML
+        function generateVerticalDivisionHTML(q, isCompact = false) {
+            let A = q.num1;
+            let B = q.num2;
+            let P = q.precision;
+            
+            let dividendStr = A.toString();
+            let divisorStr = B.toString();
+            if (P > 0) dividendStr += "." + "0".repeat(P);
+            
+            let dividendDigits = dividendStr.replace(".", "").split("");
+            let b = BigInt(B);
+            
+            let quotientStr = "";
+            let stepRows = [];
+            let current = 0n;
+            
+            let decIndex = dividendStr.indexOf(".");
+            if (decIndex === -1) decIndex = dividendStr.length;
+            
+            let offset = divisorStr.length + 3; // 除數長度 + " ) " 長度
+            let totalCols = offset + dividendStr.length; // 總格數
+            
+            let firstStep = true;
+            
+            // 模擬直式計算步驟
+            for (let i = 0; i < dividendDigits.length; i++) {
+                current = current * 10n + BigInt(dividendDigits[i]);
+                let qDigit = current / b;
+                quotientStr += qDigit.toString();
+                let sub = qDigit * b;
+                
+                // 只有在商數大於 0 或已經是最後一步時才顯示減法過程
+                if (qDigit > 0n || (i === dividendDigits.length - 1 && current > 0n && firstStep)) {
+                    let offsetIdx = i;
+                    if (P > 0 && i >= decIndex) offsetIdx++; // 越過小數點，索引向右偏移
+                    
+                    if (!firstStep) {
+                        stepRows.push({ text: current.toString(), endIdx: offsetIdx, border: false });
+                    }
+                    stepRows.push({ text: sub.toString(), endIdx: offsetIdx, border: true });
+                    
+                    current = current - sub;
+                    firstStep = false;
+                }
+            }
+            
+            let finalRemOffset = dividendDigits.length - 1;
+            if (P > 0) finalRemOffset++;
+            stepRows.push({ text: current.toString(), endIdx: finalRemOffset, border: false, color: '#2563eb' });
+            
+            // 處理商數 (補零與小數點)
+            let finalQ = quotientStr.substring(0, decIndex) + (P > 0 ? "." + quotientStr.substring(decIndex) : "");
+            finalQ = finalQ.replace(/^0+(?=\d)/, "");
+            if (finalQ.startsWith(".")) finalQ = "0" + finalQ;
+            
+            // 設定視覺參數
+            let fontSize = isCompact ? "13px" : "18px";
+            let html = `<div style="font-family: 'Courier New', Courier, monospace; font-size: ${fontSize}; line-height: 1.3; display: flex; flex-direction: column; align-items: flex-start; letter-spacing: 0.1em;">`;
+            
+            // 輔助函式：建立精準對齊的每一行字串
+            function buildLine(valStr, endIdx, hasBorder) {
+                let chars = Array(totalCols).fill('&nbsp;');
+                let currCol = offset + endIdx;
+                for (let i = valStr.length - 1; i >= 0; i--) {
+                    if (currCol === offset + decIndex) currCol--; // 跳過小數點的直欄
+                    chars[currCol] = valStr[i];
+                    currCol--;
+                }
+                
+                if (hasBorder) {
+                    let startCol = currCol + 1;
+                    let before = chars.slice(0, startCol).join('');
+                    let bordered = chars.slice(startCol, offset + endIdx + 1).join('');
+                    let after = chars.slice(offset + endIdx + 1).join('');
+                    return `<div>${before}<span style="border-bottom: 2px solid #374151;">${bordered}</span>${after}</div>`;
+                } else {
+                    return `<div>${chars.join('')}</div>`;
+                }
+            }
+            
+            // 1. 商數列
+            let qChars = Array(totalCols).fill('&nbsp;');
+            let qIndex = offset + decIndex - 1; 
+            let intPart = finalQ.split('.')[0];
+            for(let i=intPart.length-1; i>=0; i--) qChars[qIndex--] = intPart[i];
+            
+            if (finalQ.includes('.')) {
+                qChars[offset + decIndex] = '.';
+                let decPart = finalQ.split('.')[1];
+                let decIdx = offset + decIndex + 1;
+                for(let i=0; i<decPart.length; i++) qChars[decIdx++] = decPart[i];
+            }
+            html += `<div>${qChars.join('')}</div>`;
+            
+            // 2. 除數與被除數列
+            let divRow = Array(totalCols).fill('&nbsp;');
+            for(let i=0; i<divisorStr.length; i++) divRow[i] = divisorStr[i];
+            divRow[divisorStr.length + 1] = ')';
+            
+            let divBefore = divRow.slice(0, offset).join('');
+            let divStrSpan = `<span style="border-top: 2px solid #374151; padding-top: 1px;">${dividendStr.split('').join('')}</span>`;
+            html += `<div>${divBefore}${divStrSpan}</div>`;
+            
+            // 3. 減法步驟與餘數
+            stepRows.forEach(row => {
+                 if (row.color) { // 最終餘數，處理小數點自然落下的效果
+                     let chars = Array(totalCols).fill('&nbsp;');
+                     let currCol = offset + row.endIdx;
+                     for (let i = row.text.length - 1; i >= 0; i--) {
+                         if (currCol === offset + decIndex) currCol--;
+                         chars[currCol] = row.text[i];
+                         currCol--;
+                     }
+                     if (P > 0 && current !== 0n) {
+                         chars[offset + decIndex] = '.';
+                         chars[offset + decIndex - 1] = '0';
+                     }
+                     html += `<div style="color: ${row.color}; font-weight: bold;">${chars.join('')}</div>`;
+                 } else {
+                     html += buildLine(row.text, row.endIdx, row.border);
+                 }
+            });
+            
+            html += `</div>`;
+            return html;
+        }
+
+        // 渲染網頁畫面上的題目
+        function renderQuestionsForWeb() {
+            questionsContainer.innerHTML = ''; 
+
+            currentQuestions.forEach((q, index) => {
+                const card = document.createElement('div');
+                card.className = 'bg-white border-2 border-gray-100 p-5 rounded-xl shadow-sm hover:shadow-md transition-shadow flex flex-col h-full';
+
+                const header = document.createElement('div');
+                header.className = 'text-lg font-semibold text-gray-700 mb-4 border-b-2 border-gray-50 pb-2 truncate';
+                
+                let displayAns = answersShown ? formatAnswer(q.num1, q.num2, q.precision) : '';
+                // 題目模式下隱藏問號，解答模式下顯示答案
+                header.innerHTML = `<span class="text-indigo-500 mr-2 text-xl">(${index + 1})</span> ${q.num1.toString()} &divide; ${q.num2.toString()} = <span class="text-blue-600 font-bold ml-1">${displayAns}</span>`;
+                card.appendChild(header);
+
+                const answerDiv = document.createElement('div');
+                answerDiv.className = `mt-auto flex justify-center py-2 ${answersShown ? '' : 'hidden'}`;
+                const innerBox = document.createElement('div');
+                innerBox.className = 'vertical-math shadow-inner';
+                innerBox.innerHTML = generateVerticalDivisionHTML(q, false);
+                answerDiv.appendChild(innerBox);
+                card.appendChild(answerDiv);
+                
+                questionsContainer.appendChild(card);
+            });
+            
+            btnShowAnswer.innerHTML = answersShown ? "🙈 隱藏解答" : "👀 顯示解答";
+            if(answersShown) {
+                btnShowAnswer.className = "bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-8 rounded-lg shadow-md transition duration-200 transform hover:-translate-y-0.5 text-lg";
+            } else {
+                btnShowAnswer.className = "bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-8 rounded-lg shadow-md transition duration-200 transform hover:-translate-y-0.5 text-lg";
+            }
+        }
+
+        // 動態建構供 PDF 匯出的特殊排版 (A4 橫向、左右對稱雙欄)
+        function buildPDFLayout(isAnswerMode) {
+            const container = document.createElement('div');
+            container.style.width = '1123px';
+            container.style.height = '794px';
+            container.style.backgroundColor = 'white';
+            container.style.display = 'flex';
+            container.style.flexDirection = 'row';
+            container.style.padding = '25px 15px'; 
+            container.style.boxSizing = 'border-box';
+
+            let titleText = '除法練習題' + (isAnswerMode ? ' (解答卷)' : ' (題目卷)');
+
+            const buildHalfPage = () => {
+                const half = document.createElement('div');
+                half.style.width = '50%';
+                half.style.height = '100%';
+                half.style.display = 'flex';
+                half.style.flexDirection = 'column';
+                half.style.padding = '0 30px';
+                half.style.boxSizing = 'border-box';
+
+                const title = document.createElement('h2');
+                title.style.textAlign = 'center';
+                title.style.fontSize = '26px';
+                title.style.fontWeight = 'bold';
+                title.style.marginBottom = '25px';
+                title.style.color = '#1f2937';
+                title.style.letterSpacing = '2px';
+                title.innerText = titleText;
+                half.appendChild(title);
+
+                const grid = document.createElement('div');
+                grid.style.display = 'grid';
+                grid.style.gridTemplateColumns = '1fr 1fr'; 
+                grid.style.gridTemplateRows = 'repeat(4, 1fr)'; 
+                grid.style.gap = '20px 15px'; 
+                grid.style.flexGrow = '1'; 
+
+                currentQuestions.forEach((q, index) => {
+                    const card = document.createElement('div');
+                    card.style.border = '2px solid #e5e7eb';
+                    card.style.borderRadius = '10px';
+                    card.style.padding = '12px 15px';
+                    card.style.display = 'flex';
+                    card.style.flexDirection = 'column';
+
+                    const header = document.createElement('div');
+                    header.style.fontSize = '16px';
+                    header.style.fontWeight = 'bold';
+                    header.style.borderBottom = '1.5px solid #f3f4f6';
+                    header.style.paddingBottom = '8px';
+                    header.style.marginBottom = '12px';
+                    
+                    let answerStr = isAnswerMode ? formatAnswer(q.num1, q.num2, q.precision) : '';
+                    header.innerHTML = `<span style="color: #6366f1; margin-right: 6px; font-size: 18px;">(${index + 1})</span> ${q.num1.toString()} &divide; ${q.num2.toString()} = <span style="color: #2563eb; margin-left: 2px;">${answerStr}</span>`;
+                    card.appendChild(header);
+
+                    if (isAnswerMode) {
+                        const answerDiv = document.createElement('div');
+                        answerDiv.style.display = 'flex';
+                        answerDiv.style.justifyContent = 'center';
+                        answerDiv.style.alignItems = 'center';
+                        answerDiv.style.flexGrow = '1';
+                        answerDiv.innerHTML = generateVerticalDivisionHTML(q, true);
+                        card.appendChild(answerDiv);
+                    }
+
+                    grid.appendChild(card);
+                });
+
+                half.appendChild(grid);
+                return half;
+            };
+
+            const leftHalf = buildHalfPage();
+            const rightHalf = buildHalfPage();
+            rightHalf.style.borderLeft = '2px dashed #9ca3af';
+
+            container.appendChild(leftHalf);
+            container.appendChild(rightHalf);
+
+            return container;
+        }
+
+        function exportToPDF(isAnswerMode) {
+            const btn = isAnswerMode ? btnExportA : btnExportQ;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `<span class="animate-pulse">⏳ 產生PDF中...</span>`;
+            btn.disabled = true;
+
+            pdfExportContainer.innerHTML = '';
+            const layout = buildPDFLayout(isAnswerMode);
+            pdfExportContainer.appendChild(layout);
+
+            const opt = {
+                margin:       0, 
+                filename:     isAnswerMode ? '除法練習題_解答版.pdf' : '除法練習題_題目版.pdf',
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true, logging: false },
+                jsPDF:        { unit: 'px', format: [1123, 794], orientation: 'landscape' } 
+            };
+
+            setTimeout(() => {
+                html2pdf().set(opt).from(layout).save().then(() => {
+                    pdfExportContainer.innerHTML = '';
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }).catch(err => {
+                    console.error("PDF Generate Error", err);
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    alert("匯出 PDF 時發生錯誤，請重試。");
+                });
+            }, 300);
+        }
+
+        // 綁定事件
+        btnGenerate.addEventListener('click', generateQuestions);
+        
+        btnShowAnswer.addEventListener('click', () => {
+            answersShown = !answersShown;
+            renderQuestionsForWeb();
+        });
+
+        btnExportQ.addEventListener('click', () => exportToPDF(false));
+        btnExportA.addEventListener('click', () => exportToPDF(true));
+
+        // 初始執行一次
+        window.onload = () => {
+            updateUIConstraints();
+            generateQuestions();
+        };
+    </script>
+</body>
+</html>
