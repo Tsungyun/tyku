@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教室座位表安排系統 - 行列版</title>
+    <!-- 引入 Tailwind CSS 以便快速排版 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 html2canvas 負責將網頁轉成圖檔下載 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <style>
+        /* 列印模式隱藏控制列 */
+        @media print {
+            body { background-color: white !important; }
+            .no-print { display: none !important; }
+            .print-shadow-none { box-shadow: none !important; }
+            .print-p-0 { padding: 0 !important; }
+            .print-m-0 { margin: 0 !important; }
+            .print-mb-8 { margin-bottom: 2rem !important; }
+        }
+        
+        /* 匯出成圖檔時的專屬隱藏樣式 (透過 JS 觸發) */
+        body.exporting-image .no-print { display: none !important; }
+        body.exporting-image .print-shadow-none { box-shadow: none !important; border: 1px solid #e5e7eb; }
+        body.exporting-image { background-color: white !important; }
+
+        /* 座位基本樣式與互動 */
+        .seat {
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .seat.dragging {
+            opacity: 0.5;
+            border-color: #3b82f6;
+        }
+        .seat:hover {
+            border-color: #3b82f6;
+        }
+        .seat-empty { background-color: #f8fafc; }
+        .seat-empty:hover { background-color: #f1f5f9; }
+        
+        /* 直式座位的長寬比 (統一) */
+        .aspect-portrait { aspect-ratio: 3 / 4; }
+        
+        .drag-over {
+            background-color: #e0f2fe !important;
+            border-style: dashed;
+        }
+
+        /* 教室本體旋轉動畫 (老師/學生視角切換) */
+        #classroom { transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
+        .teacher-view #classroom { transform: rotate(180deg); }
+        
+        /* 文字反向轉正動畫 (確保名字與黑板不會倒著) */
+        .rotatable-text {
+            display: inline-block;
+            transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .teacher-view .rotatable-text { transform: rotate(180deg); }
+
+        /* 每一行(直列)底部的加號按鈕懸停效果 */
+        .column-action-btn {
+            transition: opacity 0.2s;
+            opacity: 0;
+        }
+        .column-container:hover .column-action-btn { opacity: 1; }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans min-h-screen">
+
+    <div id="app" class="pb-10">
+        <!-- 控制面板 (列印時隱藏) -->
+        <div class="no-print p-6 bg-white shadow-md mb-6 max-w-7xl mx-auto rounded-b-xl border-t-4 border-blue-500 flex flex-col lg:flex-row gap-8">
+            
+            <!-- 左側：名單輸入 -->
+            <div class="flex-1">
+                <h2 class="text-lg font-bold mb-2 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                    1. 匯入學生名單
+                </h2>
+                <p class="text-sm text-gray-500 mb-2">貼上名單，一行一人。格式：「姓名 性別」(空白隔開)。</p>
+                <textarea id="inputText" class="w-full h-48 p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-400 focus:outline-none resize-none">
+王大明 男
+李小美 女
+陳阿呆 男
+林小花 女
+張三 男
+李四 男
+王五 男
+趙六 女
+孫七 女
+周八 女
+吳九 男
+鄭十 女
+錢一 男
+孫二 男
+張三三 女
+李四四 女
+王五五 男
+趙六六 男
+林七七 女
+陳八八 女
+黃九九 男
+劉十十 男
+郭一一 女
+宋二二 女</textarea>
+                <button onclick="handleImport()" class="mt-2 w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition font-medium">
+                    解析並匯入名單
+                </button>
+            </div>
+
+            <!-- 右側：控制選項 -->
+            <div class="flex-[2] flex flex-col gap-4">
+                <div>
+                    <h2 class="text-lg font-bold mb-2 flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        2. 教室佈局與排座
+                    </h2>
+                    
+                    <!-- 行列基礎設定 -->
+                    <div class="flex flex-wrap items-center gap-4 mb-4 bg-indigo-50 border-indigo-200 p-3 rounded border">
+                        <label class="font-bold text-indigo-800">重設基本網格：</label>
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm">行(左右排數):</span>
+                            <input type="number" id="colCountInput" value="6" min="1" max="15" class="w-16 p-1 border rounded text-center">
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm">列(每排人數):</span>
+                            <input type="number" id="rowCountInput" value="4" min="1" max="15" class="w-16 p-1 border rounded text-center">
+                        </div>
+                        <button onclick="handleRegenerateGrid()" class="bg-indigo-600 text-white px-4 py-1.5 rounded hover:bg-indigo-700 text-sm font-medium shadow">
+                            套用新網格 (會清空目前座位)
+                        </button>
+                    </div>
+
+                    <!-- 動作按鈕 -->
+                    <div class="flex gap-2 mb-4">
+                        <button onclick="handleRandomSeating()" class="flex-1 bg-purple-600 text-white py-2 rounded flex items-center justify-center gap-2 hover:bg-purple-700 shadow font-medium">
+                            隨機排座
+                        </button>
+                        <button onclick="handleBalancedSeating()" class="flex-1 bg-green-600 text-white py-2 rounded flex items-center justify-center gap-2 hover:bg-green-700 shadow font-medium" title="盡量以男女男女的棋盤格方式交錯排列">
+                            男女梅花座 (交錯排列)
+                        </button>
+                        <button onclick="handleClearSeats()" class="bg-red-500 text-white py-2 px-4 rounded hover:bg-red-600 shadow" title="清空所有學生至未分配區">
+                            清空
+                        </button>
+                    </div>
+
+                    <!-- 視角與外觀設定 -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div class="bg-yellow-50 border-yellow-200 p-3 rounded border flex flex-col justify-center">
+                            <label class="font-bold text-gray-700 block mb-2">3. 視角切換 (觀看方向):</label>
+                            <div class="flex flex-col xl:flex-row gap-2 xl:gap-6">
+                                <label class="flex items-center gap-2 cursor-pointer hover:opacity-80">
+                                    <input type="radio" name="viewMode" value="student" checked onchange="changeView(this.value)" class="w-4 h-4 text-blue-600">
+                                    <span class="text-sm font-medium text-slate-800">黑板在上方(學生視角)</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer hover:opacity-80">
+                                    <input type="radio" name="viewMode" value="teacher" onchange="changeView(this.value)" class="w-4 h-4 text-blue-600">
+                                    <span class="text-sm font-medium text-slate-800">黑板在下方(老師視角)</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="bg-gray-50 p-3 rounded border flex flex-col gap-3">
+                            <div class="flex items-center gap-2">
+                                <label class="font-medium text-sm whitespace-nowrap min-w-[70px]">字體縮放:</label>
+                                <input type="range" min="12" max="36" id="fontSizeSlider" value="20" class="w-full accent-blue-600" oninput="updateFontSize()">
+                                <span id="fontSizeDisplay" class="text-sm w-10 text-right">20px</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <label class="font-medium text-sm whitespace-nowrap min-w-[70px]">日期標題:</label>
+                                <input type="date" id="chartDateInput" class="border p-1 rounded text-sm flex-1" onchange="updateDate()">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 匯出按鈕 -->
+                    <div class="flex gap-3 mt-auto">
+                        <button onclick="downloadImage()" class="flex-1 border-2 border-blue-600 text-blue-700 font-bold py-2 rounded flex items-center justify-center gap-2 hover:bg-blue-50 transition">
+                            下載圖檔 (PNG)
+                        </button>
+                        <button onclick="window.print()" class="flex-1 border-2 border-slate-800 text-slate-800 font-bold py-2 rounded flex items-center justify-center gap-2 hover:bg-slate-100 transition">
+                            列印 (PDF)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 外層加入 overflow-x-auto，如果放大比例使得座位表超出螢幕寬度，可以左右滑動 -->
+        <div class="w-full overflow-x-auto pb-6 px-4">
+            <!-- 透過控制此 Wrapper 的寬度，達成字體與格子同步縮放 -->
+            <div id="printAreaWrapper" class="mx-auto transition-all duration-300" style="width: 1000px;">
+                <div class="bg-white p-8 rounded-xl shadow-lg print-shadow-none print-p-0" id="printArea">
+                    
+                    <!-- 標題 (固定不旋轉) -->
+                    <div class="text-center mb-8 print-mb-4">
+                        <h2 class="text-3xl font-bold text-gray-800" id="chartTitle">教室座位表</h2>
+                    </div>
+
+                    <!-- 教室實體區域 (透過 CSS 旋轉來達成視角切換) -->
+                    <div id="classroom">
+                        
+                        <!-- 黑板 -->
+                        <div class="text-center mb-10 print-mb-8">
+                            <div class="bg-slate-800 text-white py-4 px-8 rounded-lg inline-block shadow-inner w-2/3 min-w-[300px] border-b-8 border-slate-900">
+                                <h1 class="text-2xl font-bold tracking-widest text-slate-200 rotatable-text">黑 板</h1>
+                            </div>
+                        </div>
+
+                        <!-- 座位區塊容器，由 JavaScript 動態生成直式行列 -->
+                        <div id="seatingArea" class="flex justify-center gap-4 md:gap-8 mx-auto w-full">
+                            <!-- 直排將會渲染在這裡 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+
+
+        <!-- 底部未分配名單區塊 (列印時隱藏) -->
+        <div class="no-print max-w-7xl mx-auto mt-2 p-4">
+            <div id="unseatedArea" class="bg-white p-4 rounded-xl shadow border-2 border-dashed border-gray-300 min-h-[120px]">
+                <h3 class="font-bold text-gray-600 mb-3 flex items-center gap-2">
+                    未入座學生名單 (<span id="unseatedCount">0</span> 人)
+                    <span class="text-sm font-normal text-gray-400 ml-2">※ 可將學生拖曳至上方空位，或點擊每行底部的按鈕新增空位。</span>
+                </h3>
+                <div id="unseatedList" class="flex flex-wrap gap-2">
+                    <!-- 未入座學生將會渲染在這裡 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+<!-- 專屬版權宣告頁尾 (乾淨、單行設計) -->
+    <div class="text-center text-gray-400 text-sm mt-8 mb-4 tracking-wider">
+        &copy; 谷宗芸老師設計 / AI 輔助生成
+    </div>
+
+
+
+    <script>
+        let allStudents = [];
+        // 動態 2D 陣列：seatColumns[行(左右)][列(前後)]
+        // 預設 6 行，每行 4 列 (共 24 個位置)
+        let seatColumns = []; 
+        let unseated = [];
+        let fontSize = 20;
+        
+        // 拖拉狀態記錄
+        let draggedSource = null;
+        let draggedStudentId = null;
+        let draggedColIndex = null;
+        let draggedRowIndex = null;
+
+        window.onload = function() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('chartDateInput').value = today;
+            updateDate();
+            
+            // 綁定未分配區塊的拖放事件
+            const unseatedArea = document.getElementById('unseatedArea');
+            unseatedArea.addEventListener('dragover', allowDrop);
+            unseatedArea.addEventListener('drop', dropToUnseated);
+            
+            // 初始建立 6行 x 4列 網格並載入名單
+            initializeGrid(6, 4);
+            handleImport();
+        };
+
+        // 初始化網格資料結構
+        function initializeGrid(cols, rows) {
+            seatColumns = Array.from({length: cols}, () => Array(rows).fill(null));
+        }
+
+        // 使用者點擊「套用新網格」
+        function handleRegenerateGrid() {
+            if(confirm("重設網格將會清空目前已排好的座位，並把所有學生退回未分配區。是否繼續？")) {
+                const c = parseInt(document.getElementById('colCountInput').value) || 6;
+                const r = parseInt(document.getElementById('rowCountInput').value) || 4;
+                initializeGrid(c, r);
+                unseated = [...allStudents]; // 全員退回未分配
+                renderSeats();
+                renderUnseated();
+                updateDynamicWidth();
+            }
+        }
+
+        // 視角切換功能
+        function changeView(mode) {
+            const printArea = document.getElementById('printArea');
+            if (mode === 'teacher') {
+                printArea.classList.add('teacher-view');
+            } else {
+                printArea.classList.remove('teacher-view');
+            }
+        }
+
+        // 解析名單輸入
+        function handleImport() {
+            const inputText = document.getElementById('inputText').value;
+            const lines = inputText.split('\n').filter(line => line.trim() !== '');
+            
+            const parsedStudents = lines.map((line, index) => {
+                const parts = line.trim().split(/\s+/);
+                const name = parts[0];
+                const genderStr = parts.length > 1 ? parts[1].toLowerCase() : '未知';
+                
+                let gender = 'U';
+                if (['男', 'm', 'boy'].includes(genderStr)) gender = 'M';
+                if (['女', 'f', 'girl'].includes(genderStr)) gender = 'F';
+                
+                return { id: 'stu_' + Date.now() + '_' + index, name: name, gender: gender };
+            });
+
+            allStudents = [...parsedStudents];
+            
+            // 保留座位結構，清空原本座位上的人，將新名單全放未分配區
+            for(let c=0; c<seatColumns.length; c++){
+                for(let r=0; r<seatColumns[c].length; r++){
+                    seatColumns[c][r] = null;
+                }
+            }
+            unseated = [...parsedStudents];
+            
+            renderSeats();
+            renderUnseated();
+            updateDynamicWidth();
+        }
+
+        // 完全隨機排座
+        function handleRandomSeating() {
+            if (allStudents.length === 0) return alert("請先匯入學生名單！");
+            let shuffled = [...allStudents].sort(() => 0.5 - Math.random());
+            
+            // 清空所有座位
+            for(let c=0; c<seatColumns.length; c++) seatColumns[c].fill(null);
+            unseated = [];
+            
+            let studentIndex = 0;
+            // 由前到後，由左到右依序填入
+            for(let c=0; c<seatColumns.length; c++) {
+                for(let r=0; r<seatColumns[c].length; r++) {
+                    if(studentIndex < shuffled.length) {
+                        seatColumns[c][r] = shuffled[studentIndex++];
+                    }
+                }
+            }
+            // 剩下的放回未分配區
+            while(studentIndex < shuffled.length) unseated.push(shuffled[studentIndex++]);
+            renderSeats(); renderUnseated();
+        }
+
+        // 棋盤格(梅花座) 性別均衡排座
+        function handleBalancedSeating() {
+            if (allStudents.length === 0) return alert("請先匯入學生名單！");
+
+            let males = allStudents.filter(s => s.gender === 'M').sort(() => 0.5 - Math.random());
+            let females = allStudents.filter(s => s.gender === 'F').sort(() => 0.5 - Math.random());
+            let others = allStudents.filter(s => s.gender === 'U').sort(() => 0.5 - Math.random());
+
+            // 清空座位
+            for(let c=0; c<seatColumns.length; c++) seatColumns[c].fill(null);
+
+            seatColumns.forEach((col, colIndex) => {
+                col.forEach((_, rowIndex) => {
+                    // 核心邏輯：利用 (行索引 + 列索引) 的奇偶數來決定偏好性別，形成交錯的棋盤格
+                    let preferMale = (colIndex + rowIndex) % 2 === 0;
+                    let selectedStudent = null;
+
+                    if (preferMale) {
+                        if (males.length > 0) selectedStudent = males.pop();
+                        else if (females.length > 0) selectedStudent = females.pop(); // 男生不夠用女生補
+                        else if (others.length > 0) selectedStudent = others.pop();
+                    } else {
+                        if (females.length > 0) selectedStudent = females.pop();
+                        else if (males.length > 0) selectedStudent = males.pop(); // 女生不夠用男生補
+                        else if (others.length > 0) selectedStudent = others.pop();
+                    }
+
+                    if (selectedStudent) {
+                        seatColumns[colIndex][rowIndex] = selectedStudent;
+                    }
+                });
+            });
+
+            unseated = [...males, ...females, ...others];
+            renderSeats(); renderUnseated();
+        }
+
+        function handleClearSeats() {
+            for(let c=0; c<seatColumns.length; c++) seatColumns[c].fill(null);
+            unseated = [...allStudents];
+            renderSeats(); renderUnseated();
+        }
+
+        // 更新日期標題
+        function updateDate() {
+            const dateVal = document.getElementById('chartDateInput').value;
+            document.getElementById('chartTitle').innerText = `教室座位表 (${dateVal})`;
+        }
+
+        // 更新字體大小，同時動態計算所需的總寬度以確保排版不會擠成一團
+        function updateFontSize() {
+            fontSize = document.getElementById('fontSizeSlider').value;
+            document.getElementById('fontSizeDisplay').innerText = fontSize + 'px';
+            updateDynamicWidth();
+            renderSeats();
+        }
+
+        function updateDynamicWidth() {
+            const colCount = seatColumns.length;
+            // 根據字體大小與「直列數量」動態估算所需寬度
+            // 每行大約佔用字體寬度的某個倍數，再加上間距
+            const estimatedWidth = colCount * (fontSize * 6) + 100;
+            // 至少維持 800px 確保版面完整
+            const finalWidth = Math.max(800, estimatedWidth);
+            document.getElementById('printAreaWrapper').style.width = finalWidth + 'px';
+        }
+
+        // 針對特定「直行」增加最尾端的位子
+        function addSeat(colIndex) {
+            seatColumns[colIndex].push(null);
+            renderSeats();
+        }
+        
+        // 刪除特定位子
+        function removeSeat(colIndex, rowIndex) {
+            const student = seatColumns[colIndex][rowIndex];
+            seatColumns[colIndex].splice(rowIndex, 1);
+            if (student) unseated.push(student);
+            renderSeats(); renderUnseated();
+        }
+        
+        // 匯出圖檔功能 (PNG)
+        function downloadImage() {
+            const printArea = document.getElementById('printArea');
+            document.body.classList.add('exporting-image');
+            
+            setTimeout(() => {
+                html2canvas(printArea, {
+                    scale: 2, 
+                    backgroundColor: "#ffffff",
+                    useCORS: true
+                }).then(canvas => {
+                    document.body.classList.remove('exporting-image');
+                    const link = document.createElement('a');
+                    const dateVal = document.getElementById('chartDateInput').value;
+                    link.download = `直式座位表_${dateVal}.png`;
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                }).catch(err => {
+                    document.body.classList.remove('exporting-image');
+                    alert("匯出圖片失敗，請稍後再試。");
+                    console.error(err);
+                });
+            }, 100);
+        }
+
+        // --- 拖拉事件 ---
+        function dragStart(ev, source, studentId, colIdx = null, rowIdx = null) {
+            draggedSource = source; draggedStudentId = studentId; draggedColIndex = colIdx; draggedRowIndex = rowIdx;
+            ev.dataTransfer.setData("text/plain", studentId);
+            ev.currentTarget.classList.add('dragging');
+        }
+
+        function allowDrop(ev) {
+            ev.preventDefault();
+            if (ev.currentTarget.classList.contains('seat')) ev.currentTarget.classList.add('drag-over');
+        }
+        
+        function dragLeave(ev) {
+            if (ev.currentTarget.classList.contains('seat')) ev.currentTarget.classList.remove('drag-over');
+        }
+
+        function dragEnd(ev) { ev.currentTarget.classList.remove('dragging'); }
+
+        function dropToSeat(ev, targetCol, targetRow) {
+            ev.preventDefault();
+            ev.currentTarget.classList.remove('drag-over');
+            if (!draggedStudentId) return;
+
+            if (draggedSource === 'unseated') {
+                const studentIdx = unseated.findIndex(s => s.id === draggedStudentId);
+                if (studentIdx === -1) return;
+                const student = unseated[studentIdx];
+                // 若目標座位有人，退回未分配區
+                if (seatColumns[targetCol][targetRow]) unseated.push(seatColumns[targetCol][targetRow]);
+                seatColumns[targetCol][targetRow] = student;
+                unseated.splice(studentIdx, 1);
+            } else if (draggedSource === 'seat') {
+                // 座位之間對調
+                if (draggedColIndex === targetCol && draggedRowIndex === targetRow) return;
+                const temp = seatColumns[targetCol][targetRow];
+                seatColumns[targetCol][targetRow] = seatColumns[draggedColIndex][draggedRowIndex];
+                seatColumns[draggedColIndex][draggedRowIndex] = temp;
+            }
+            draggedSource = null; draggedStudentId = null; draggedColIndex = null; draggedRowIndex = null;
+            renderSeats(); renderUnseated();
+        }
+
+        function dropToUnseated(ev) {
+            ev.preventDefault();
+            if (draggedSource === 'seat' && draggedColIndex !== null) {
+                const student = seatColumns[draggedColIndex][draggedRowIndex];
+                if (student) {
+                    seatColumns[draggedColIndex][draggedRowIndex] = null;
+                    unseated.push(student);
+                    renderSeats(); renderUnseated();
+                }
+            }
+            draggedSource = null; draggedStudentId = null; draggedColIndex = null; draggedRowIndex = null;
+        }
+
+        function renderSeats() {
+            const seatingArea = document.getElementById('seatingArea');
+            let html = '';
+
+            // 遍歷每一行 (直列)
+            seatColumns.forEach((column, colIndex) => {
+                // 使用 flex-col 來讓座位從上到下(由前到後)排列
+                html += `<div class="flex flex-col gap-3 relative column-container border-2 border-transparent hover:border-gray-200 rounded-lg p-2 transition-colors">`;
+                
+                // 遍歷此行的每一個座位
+                column.forEach((student, rowIndex) => {
+                    let seatContent = '';
+                    let dragAttrs = '';
+                    // 統一使用直式長寬比 aspect-portrait
+                    let styleClass = `border-2 border-slate-700 rounded flex items-center justify-center p-2 seat relative aspect-portrait w-full transition-colors duration-200`;
+                    
+                    if (student) {
+                        const colorClass = student.gender === 'M' ? 'text-blue-700' : (student.gender === 'F' ? 'text-pink-600' : 'text-gray-700');
+                        styleClass += ' bg-white group shadow-sm hover:border-blue-500';
+                        seatContent = `<span class="rotatable-text select-none pointer-events-none ${colorClass}">${student.name}</span>`;
+                        dragAttrs = `draggable="true" ondragstart="dragStart(event, 'seat', '${student.id}', ${colIndex}, ${rowIndex})" ondragend="dragEnd(event)"`;
+                        
+                        seatContent += `
+                            <button onclick="removeSeat(${colIndex}, ${rowIndex})" class="absolute -top-2 -right-2 bg-red-100 hover:bg-red-500 hover:text-white text-red-500 rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity no-print shadow border border-red-200 z-10" title="刪除此座位(學生將退回未分配)">✕</button>
+                        `;
+                    } else {
+                        styleClass += ' seat-empty group'; 
+                        const smallFontSize = Math.max(12, fontSize * 0.5);
+                        seatContent = `<span class="rotatable-text text-gray-300 select-none pointer-events-none font-normal" style="font-size: ${smallFontSize}px">空位</span>`;
+                        
+                        seatContent += `
+                            <button onclick="removeSeat(${colIndex}, ${rowIndex})" class="absolute -top-2 -right-2 bg-red-100 hover:bg-red-500 hover:text-white text-red-500 rounded-full w-6 h-6 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity no-print shadow border border-red-200 z-10" title="刪除此空位">✕</button>
+                        `;
+                    }
+
+                    html += `
+                        <div class="${styleClass}" 
+                             style="font-size: ${fontSize}px; font-weight: bold;"
+                             ondragover="allowDrop(event)" 
+                             ondragleave="dragLeave(event)"
+                             ondrop="dropToSeat(event, ${colIndex}, ${rowIndex})"
+                             ${dragAttrs}>
+                            ${seatContent}
+                        </div>
+                    `;
+                });
+
+                // 在該行的最底下，加上「+ 新增座位」的按鈕 (列印時隱藏)
+                // 為了讓老師視角旋轉時按鈕位置仍然合理，文字也加上 rotatable-text
+                html += `
+                    <div class="flex justify-center mt-2 no-print column-action-btn">
+                        <button onclick="addSeat(${colIndex})" class="bg-blue-100 text-blue-700 hover:bg-blue-600 hover:text-white border border-blue-200 text-xs px-3 py-1 rounded-full shadow-sm transition-colors flex items-center justify-center w-full rotatable-text font-bold">
+                            + 補位子
+                        </button>
+                    </div>
+                `;
+
+                html += `</div>`;
+            });
+            seatingArea.innerHTML = html;
+        }
+
+        function renderUnseated() {
+            const listDiv = document.getElementById('unseatedList');
+            document.getElementById('unseatedCount').innerText = unseated.length;
+            
+            if (unseated.length === 0) {
+                listDiv.innerHTML = '<p class="text-gray-400 italic">目前所有學生皆已入座</p>';
+                return;
+            }
+
+            let html = '';
+            unseated.forEach(student => {
+                let bgClass = 'bg-gray-100 border-gray-300 text-gray-700';
+                if (student.gender === 'M') bgClass = 'bg-blue-50 border-blue-200 text-blue-700';
+                if (student.gender === 'F') bgClass = 'bg-pink-50 border-pink-200 text-pink-700';
+                
+                html += `
+                    <div draggable="true" 
+                         ondragstart="dragStart(event, 'unseated', '${student.id}')"
+                         ondragend="dragEnd(event)"
+                         class="px-4 py-2 rounded-full border cursor-grab text-base font-bold shadow-sm transition hover:shadow ${bgClass} seat">
+                        ${student.name}
+                    </div>
+                `;
+            });
+            listDiv.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
