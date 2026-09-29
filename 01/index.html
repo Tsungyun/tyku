@@ -150,6 +150,15 @@
 <body>
 
 <div id="app-container">
+    <!-- 學生測驗超大獨立倒數計時器 (獨立懸浮於左上方，視野極佳且絕不遮擋中央量角器與題圖) -->
+    <div id="large-timer-hud" class="hidden-mode absolute top-5 left-5 z-20 bg-white/95 backdrop-blur-md border-2 border-red-500 rounded-2xl px-5 py-3 shadow-xl flex items-center gap-4 pointer-events-none transition-all duration-300">
+        <span class="text-3xl sm:text-4xl animate-pulse">⏱️</span>
+        <div class="flex flex-col">
+            <span class="text-xs font-bold text-gray-500 tracking-wider">每題作答倒數</span>
+            <span id="large-timer-display" class="font-mono text-4xl sm:text-5xl font-black text-red-600 tracking-wider leading-none">03:00</span>
+        </div>
+    </div>
+
     <!-- 繪圖區 -->
     <div id="canvas-container">
         <canvas id="angle-canvas"></canvas>
@@ -192,6 +201,18 @@
             <p class="text-xs text-gray-500 mt-1 leading-tight">※ 皆為 5的倍數，避開0/180/360度，並且圖形自動隨機傾斜。</p>
         </div>
 
+        <!-- 每題作答倒數時間自訂區域 -->
+        <div class="mb-4 border-t pt-3">
+            <label class="block text-sm font-bold text-gray-700 mb-1">⏱️ 設定每題作答倒數時間：</label>
+            <div class="flex items-center gap-2">
+                <input type="number" id="timer-min-input" min="0" max="59" value="3" class="border border-gray-300 rounded px-2 py-1.5 w-16 text-center font-bold text-gray-800 focus:ring-2 focus:ring-purple-500">
+                <span class="text-sm font-semibold text-gray-700">分</span>
+                <input type="number" id="timer-sec-input" min="0" max="59" value="0" class="border border-gray-300 rounded px-2 py-1.5 w-16 text-center font-bold text-gray-800 focus:ring-2 focus:ring-purple-500">
+                <span class="text-sm font-semibold text-gray-700">秒</span>
+            </div>
+            <p class="text-xs text-gray-400 mt-1">※ 時間結束若未作答，將自動跳至下一題。</p>
+        </div>
+
         <div class="mb-4">
             <h3 class="text-sm font-bold text-gray-700 mb-2">當前題庫清單 (<span id="q-count">0</span>題)：</h3>
             <ul id="q-list" class="text-sm border rounded bg-gray-50 min-h-[80px] max-h-[120px] overflow-y-auto p-2">
@@ -218,42 +239,37 @@
     <div id="student-panel" class="ui-panel hidden-mode flex flex-col h-auto">
         <div class="flex justify-between items-center mb-4 border-b pb-2">
             <h2 class="text-xl font-bold text-gray-800">🎓 角度測量</h2>
-            <div class="flex items-center gap-2">
-                <span class="text-xs font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-1 rounded flex items-center gap-1 shadow-sm">
-                    ⏱️ <span id="timer-display">03:00</span>
-                </span>
-                <span id="score-display" class="text-sm font-semibold text-purple-600 bg-purple-100 px-2 py-1 rounded">第 1 題</span>
-            </div>
+            <span id="score-display" class="text-sm font-semibold text-purple-600 bg-purple-100 px-2.5 py-1 rounded-full">第 1 題</span>
         </div>
         
         <p class="text-sm text-gray-600 mb-4">請拖曳、旋轉並縮放量角器，測量畫面中紅色弧線所標示的夾角。</p>
 
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">輸入測量到的角度 (°):</label>
-            <div class="flex gap-2 mb-3">
+            <div class="flex gap-2 mb-2.5">
                 <!-- 加入 inputmode="none" 避免在手機上點擊時跳出系統原生鍵盤 -->
-                <input type="text" id="student-answer" inputmode="none" class="border border-gray-300 rounded px-3 py-2 w-full text-2xl font-bold text-center text-purple-700 bg-gray-50 focus:ring-2 focus:ring-purple-500 focus:outline-none" placeholder="0" readonly>
+                <input type="text" id="student-answer" inputmode="none" class="border border-gray-300 rounded px-3 py-1.5 w-full text-xl font-bold text-center text-purple-700 bg-gray-50 focus:ring-2 focus:ring-purple-500 focus:outline-none" placeholder="0" readonly>
             </div>
 
-            <!-- 虛擬數字鍵盤 -->
-            <div id="virtual-keypad" class="grid grid-cols-3 gap-2 mb-4">
-                <button class="keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-3 rounded shadow-sm text-xl transition-colors active:bg-gray-200" data-val="1">1</button>
-                <button class="keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-3 rounded shadow-sm text-xl transition-colors active:bg-gray-200" data-val="2">2</button>
-                <button class="keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-3 rounded shadow-sm text-xl transition-colors active:bg-gray-200" data-val="3">3</button>
-                <button class="keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-3 rounded shadow-sm text-xl transition-colors active:bg-gray-200" data-val="4">4</button>
-                <button class="keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-3 rounded shadow-sm text-xl transition-colors active:bg-gray-200" data-val="5">5</button>
-                <button class="keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-3 rounded shadow-sm text-xl transition-colors active:bg-gray-200" data-val="6">6</button>
-                <button class="keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-3 rounded shadow-sm text-xl transition-colors active:bg-gray-200" data-val="7">7</button>
-                <button class="keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-3 rounded shadow-sm text-xl transition-colors active:bg-gray-200" data-val="8">8</button>
-                <button class="keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-3 rounded shadow-sm text-xl transition-colors active:bg-gray-200" data-val="9">9</button>
-                <button class="keypad-btn bg-red-50 border border-red-200 hover:bg-red-100 text-red-600 font-bold py-3 rounded shadow-sm text-lg transition-colors active:bg-red-200" data-val="clear">清除</button>
-                <button class="keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-3 rounded shadow-sm text-xl transition-colors active:bg-gray-200" data-val="0">0</button>
-                <button class="keypad-btn bg-gray-100 border border-gray-300 hover:bg-gray-200 text-gray-700 font-bold py-3 rounded shadow-sm text-xl transition-colors active:bg-gray-300 flex justify-center items-center" data-val="backspace">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"></path><line x1="18" y1="9" x2="12" y2="15"></line><line x1="12" y1="9" x2="18" y2="15"></line></svg>
+            <!-- 虛擬數字鍵盤 (尺寸調小，精巧好點選) -->
+            <div id="virtual-keypad" class="grid grid-cols-3 gap-1.5 mb-3">
+                <button class="keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-2 rounded shadow-sm text-base transition-colors active:bg-gray-200" data-val="1">1</button>
+                <button class="keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-2 rounded shadow-sm text-base transition-colors active:bg-gray-200" data-val="2">2</button>
+                <button class="keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-2 rounded shadow-sm text-base transition-colors active:bg-gray-200" data-val="3">3</button>
+                <button class="keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-2 rounded shadow-sm text-base transition-colors active:bg-gray-200" data-val="4">4</button>
+                <button class="keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-2 rounded shadow-sm text-base transition-colors active:bg-gray-200" data-val="5">5</button>
+                <button class="keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-2 rounded shadow-sm text-base transition-colors active:bg-gray-200" data-val="6">6</button>
+                <button class="keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-2 rounded shadow-sm text-base transition-colors active:bg-gray-200" data-val="7">7</button>
+                <button class="keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-2 rounded shadow-sm text-base transition-colors active:bg-gray-200" data-val="8">8</button>
+                <button class="keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-2 rounded shadow-sm text-base transition-colors active:bg-gray-200" data-val="9">9</button>
+                <button class="keypad-btn bg-red-50 border border-red-200 hover:bg-red-100 text-red-600 font-bold py-2 rounded shadow-sm text-sm transition-colors active:bg-red-200" data-val="clear">清除</button>
+                <button class="keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-2 rounded shadow-sm text-base transition-colors active:bg-gray-200" data-val="0">0</button>
+                <button class="keypad-btn bg-gray-100 border border-gray-300 hover:bg-gray-200 text-gray-700 font-bold py-2 rounded shadow-sm text-base transition-colors active:bg-gray-300 flex justify-center items-center" data-val="backspace">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"></path><line x1="18" y1="9" x2="12" y2="15"></line><line x1="12" y1="9" x2="18" y2="15"></line></svg>
                 </button>
             </div>
 
-            <button id="check-btn" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded transition-colors shadow text-lg">
+            <button id="check-btn" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded transition-colors shadow text-base">
                 送出答案
             </button>
             
@@ -262,7 +278,7 @@
         </div>
         
         <!-- 下一題按鈕 -->
-        <button id="next-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded transition-colors hidden shadow mt-4 text-lg">
+        <button id="next-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2.5 px-4 rounded transition-colors hidden shadow mt-3 text-base">
             下一題 ➔
         </button>
     </div>
@@ -300,6 +316,8 @@
     const startTestBtn = document.getElementById('start-test-btn');
     const exportQBtn = document.getElementById('export-q-btn');
     const exportABtn = document.getElementById('export-a-btn');
+    const timerMinInput = document.getElementById('timer-min-input');
+    const timerSecInput = document.getElementById('timer-sec-input');
     
     // 學生端控制項
     const studentAnswerInput = document.getElementById('student-answer');
@@ -308,11 +326,12 @@
     const nextBtn = document.getElementById('next-btn');
     const feedbackMsg = document.getElementById('feedback-msg');
     const scoreDisplay = document.getElementById('score-display');
-    const timerDisplay = document.getElementById('timer-display');
+    const largeTimerHud = document.getElementById('large-timer-hud');
+    const largeTimerDisplay = document.getElementById('large-timer-display');
 
-    // 倒數計時器狀態 (每題 3 分鐘 = 180 秒)
-    const QUESTION_TIME_LIMIT = 180;
-    let timeLeft = QUESTION_TIME_LIMIT;
+    // 自訂倒數計時器狀態 (預設每題 180 秒)
+    let questionTimeLimit = 180;
+    let timeLeft = questionTimeLimit;
     let timerInterval = null;
 
     function formatTime(seconds) {
@@ -323,7 +342,7 @@
 
     function startQuestionTimer() {
         clearInterval(timerInterval);
-        timeLeft = QUESTION_TIME_LIMIT;
+        timeLeft = questionTimeLimit;
         updateTimerDisplay();
         timerInterval = setInterval(() => {
             timeLeft--;
@@ -336,8 +355,14 @@
     }
 
     function updateTimerDisplay() {
-        if (timerDisplay) {
-            timerDisplay.textContent = formatTime(timeLeft);
+        if (largeTimerDisplay) {
+            largeTimerDisplay.textContent = formatTime(timeLeft);
+            // 當剩餘時間少於 10 秒時，文字加深強化警示感
+            if (timeLeft <= 10) {
+                largeTimerDisplay.classList.add('text-red-700');
+            } else {
+                largeTimerDisplay.classList.remove('text-red-700');
+            }
         }
     }
 
@@ -349,7 +374,7 @@
         // 如果已經送出答案正在查看解答，則不自動跳題
         if (checkBtn.classList.contains('hidden')) return;
 
-        // 3 分鐘時間到，直接跳至下一題或結束測驗
+        // 時間到直接跳至下一題或結束測驗
         if (currentProblemIndex < questions.length - 1) {
             currentProblemIndex++;
             loadProblemForStudent();
@@ -534,9 +559,16 @@
         if (questions.length === 0) return;
         isTeacherMode = false;
         
+        // 讀取老師自訂的每題測驗倒數時間 (分 + 秒)
+        const mins = parseInt(timerMinInput.value) || 0;
+        const secs = parseInt(timerSecInput.value) || 0;
+        const total = mins * 60 + secs;
+        questionTimeLimit = total > 0 ? total : 180; // 若設定為0則防呆回退為180秒
+
         // 切換面板顯示
         teacherPanel.classList.add('hidden-mode');
         studentPanel.classList.remove('hidden-mode');
+        largeTimerHud.classList.remove('hidden-mode'); // 顯示大型顯眼倒數計時器
         
         // 顯示並重置量角器
         protractorContainer.style.display = 'block';
@@ -637,9 +669,10 @@
         updateQList();
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        // 畫面切回老師模式
+        // 畫面切回老師模式並隱藏計時與量角器
         teacherPanel.classList.remove('hidden-mode');
         studentPanel.classList.add('hidden-mode');
+        largeTimerHud.classList.add('hidden-mode');
         protractorContainer.style.display = 'none';
     }
 
