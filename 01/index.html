@@ -159,7 +159,7 @@
     <div id="protractor-container">
         <div id="rotate-wrapper">
             <!-- 量角器圖片 -->
-            <img id="protractor-img" src="量角器_2.png" alt="量角器" draggable="false" onerror="this.src='https://placehold.co/400x200/transparent/333?text=Protractor'">
+            <img id="protractor-img" src="https://i.imgur.com/3Yg5c7U.png" alt="量角器" draggable="false" onerror="this.src='https://placehold.co/400x200/transparent/333?text=Protractor'">
             <div id="rotate-handle" title="拖曳旋轉">↻</div>
             <div id="scale-handle" title="拖曳縮放">⤡</div>
             <div id="pivot-anchor"></div>
@@ -218,7 +218,12 @@
     <div id="student-panel" class="ui-panel hidden-mode flex flex-col h-auto">
         <div class="flex justify-between items-center mb-4 border-b pb-2">
             <h2 class="text-xl font-bold text-gray-800">🎓 角度測量</h2>
-            <span id="score-display" class="text-sm font-semibold text-purple-600 bg-purple-100 px-2 py-1 rounded">第 1 題</span>
+            <div class="flex items-center gap-2">
+                <span class="text-xs font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-1 rounded flex items-center gap-1 shadow-sm">
+                    ⏱️ <span id="timer-display">03:00</span>
+                </span>
+                <span id="score-display" class="text-sm font-semibold text-purple-600 bg-purple-100 px-2 py-1 rounded">第 1 題</span>
+            </div>
         </div>
         
         <p class="text-sm text-gray-600 mb-4">請拖曳、旋轉並縮放量角器，測量畫面中紅色弧線所標示的夾角。</p>
@@ -303,6 +308,55 @@
     const nextBtn = document.getElementById('next-btn');
     const feedbackMsg = document.getElementById('feedback-msg');
     const scoreDisplay = document.getElementById('score-display');
+    const timerDisplay = document.getElementById('timer-display');
+
+    // 倒數計時器狀態 (每題 3 分鐘 = 180 秒)
+    const QUESTION_TIME_LIMIT = 180;
+    let timeLeft = QUESTION_TIME_LIMIT;
+    let timerInterval = null;
+
+    function formatTime(seconds) {
+        const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+        const s = (seconds % 60).toString().padStart(2, '0');
+        return `${m}:${s}`;
+    }
+
+    function startQuestionTimer() {
+        clearInterval(timerInterval);
+        timeLeft = QUESTION_TIME_LIMIT;
+        updateTimerDisplay();
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            updateTimerDisplay();
+            if (timeLeft <= 0) {
+                clearInterval(timerInterval);
+                handleTimeOut();
+            }
+        }, 1000);
+    }
+
+    function updateTimerDisplay() {
+        if (timerDisplay) {
+            timerDisplay.textContent = formatTime(timeLeft);
+        }
+    }
+
+    function stopQuestionTimer() {
+        clearInterval(timerInterval);
+    }
+
+    function handleTimeOut() {
+        // 如果已經送出答案正在查看解答，則不自動跳題
+        if (checkBtn.classList.contains('hidden')) return;
+
+        // 3 分鐘時間到，直接跳至下一題或結束測驗
+        if (currentProblemIndex < questions.length - 1) {
+            currentProblemIndex++;
+            loadProblemForStudent();
+        } else {
+            finishTest();
+        }
+    }
     
     // 量角器控制項
     const protractorContainer = document.getElementById('protractor-container');
@@ -497,8 +551,9 @@
         const q = questions[currentProblemIndex];
         drawAngle(q.angle, q.rotation);
         
-        // 更新標題
+        // 更新標題與重新啟動 3 分鐘倒數計時
         scoreDisplay.textContent = `第 ${currentProblemIndex + 1} / ${questions.length} 題`;
+        startQuestionTimer();
         
         // 重置輸入框與鍵盤狀態
         studentAnswerInput.value = '';
@@ -543,6 +598,9 @@
             feedbackMsg.className = 'mt-3 text-sm font-bold text-red-700 bg-red-100 p-3 rounded';
         }
 
+        // 學生送出答案後立即停止計時
+        stopQuestionTimer();
+
         // --- 狀態切換：無論對錯，都開放前往下一題 ---
         checkBtn.classList.add('hidden');          // 隱藏「送出」
         keypad.classList.add('opacity-50', 'grayscale'); // 變淡虛擬鍵盤示意鎖定
@@ -568,17 +626,22 @@
             loadProblemForStudent();
         } else {
             // 已經是最後一題，結束測驗
-            isTeacherMode = true;
-            questions = []; // 清空題庫
-            updateQList();
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // 畫面切回老師模式
-            teacherPanel.classList.remove('hidden-mode');
-            studentPanel.classList.add('hidden-mode');
-            protractorContainer.style.display = 'none';
+            finishTest();
         }
     });
+
+    function finishTest() {
+        stopQuestionTimer();
+        isTeacherMode = true;
+        questions = []; // 清空題庫
+        updateQList();
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // 畫面切回老師模式
+        teacherPanel.classList.remove('hidden-mode');
+        studentPanel.classList.add('hidden-mode');
+        protractorContainer.style.display = 'none';
+    }
 
     // 鍵盤支援 (Enter鍵快速送出或換題 - 考量實體鍵盤使用者)
     document.addEventListener('keydown', (e) => {
@@ -793,15 +856,15 @@
                 const textX = baseX + 8;
                 const textY = baseY + 12;
 
-                // 填上題號與橫式等於 (為了 PDF 不發生中文字型亂碼，統一用英文與符號構成橫式)
+                // 填上題號與 A: (無底線，供學生作答)
                 doc.setFontSize(12);
                 doc.setTextColor(0, 0, 0);
-                doc.text(`Q ${displayNum}. _______ = `, textX, textY);
+                doc.text(`Q ${displayNum}.  A:`, textX, textY);
                 
-                // 解答模式：在等號後面印出紅色答案字樣（量角器測量無額外算式，直接給出角度即可）
+                // 解答模式：在 A: 後面直接印出紅色答案字樣與數學度數符號 (°)
                 if (isAnswerMode) {
                     doc.setTextColor(220, 38, 38); 
-                    doc.text(`${q.angle}°`, textX + 27, textY);
+                    doc.text(`${q.angle}°`, textX + 18, textY);
                 }
 
                 // 夾角中心點
