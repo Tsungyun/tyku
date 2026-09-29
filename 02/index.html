@@ -39,12 +39,13 @@
             letter-spacing: 0.4em;
         }
 
-        /* 隱藏區塊，專門用於在背景建構 PDF 排版 */
+        /* 修正 PDF 容器定位：固定於原點並置於背景底層，防止 html2canvas 座標偏移導致裁切 */
         #pdf-export-container {
-            position: absolute;
-            top: -9999px;
-            left: -9999px;
-            opacity: 0;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: -9999;
+            opacity: 0.01;
             pointer-events: none;
         }
     </style>
@@ -168,22 +169,37 @@
             if (isCompact) {
                 // =============== PDF 專用的緊湊版 =================
                 const multiplierLen = strNum2.length;
-                const fontSize = multiplierLen >= 4 ? '9.5px' : '10.5px';
-                const lineMargin = multiplierLen >= 4 ? '1.5px 0' : '2.5px 0';
+                // 根據乘數位數動態計算字體與行距，確保 9位數×9位數 也能完整容納在卡片高度內不被裁切
+                let fontSize = '10px';
+                let lineMargin = '2px 0';
+                let lineHeight = '1.12';
+                if (multiplierLen >= 7) {
+                    fontSize = '7.5px';
+                    lineMargin = '1px 0';
+                    lineHeight = '1.02';
+                } else if (multiplierLen >= 5) {
+                    fontSize = '8.5px';
+                    lineMargin = '1.2px 0';
+                    lineHeight = '1.08';
+                } else if (multiplierLen >= 3) {
+                    fontSize = '9px';
+                    lineMargin = '1.5px 0';
+                    lineHeight = '1.1';
+                }
 
-                let html = `<div style="font-family: 'Courier New', Courier, monospace; text-align: right; font-size: ${fontSize}; line-height: 1.15; white-space: nowrap; width: 100%; display: flex; flex-direction: column; align-items: flex-end;">`;
+                let html = `<div style="font-family: 'Courier New', Courier, monospace; text-align: right; font-size: ${fontSize}; line-height: ${lineHeight}; white-space: nowrap; width: 100%; display: flex; flex-direction: column; align-items: flex-end;">`;
                 
-                html += `<div style="display: flex; justify-content: flex-end; letter-spacing: 0.15em;">${strNum1}</div>`;
+                html += `<div style="display: flex; justify-content: flex-end; letter-spacing: 0.12em;">${strNum1}</div>`;
                 
                 html += `<div style="display: flex; justify-content: flex-end; position: relative; width: 100%; align-items: center;">`;
-                html += `<span style="position: absolute; left: 6px; color: #6b7280; font-size: 10px;">×</span>`;
-                html += `<span style="letter-spacing: 0.15em;">${strNum2}</span>`;
+                html += `<span style="position: absolute; left: 4px; color: #6b7280; font-size: 9px;">×</span>`;
+                html += `<span style="letter-spacing: 0.12em;">${strNum2}</span>`;
                 html += `</div>`;
                 
                 html += `<div style="border-bottom: 1.5px solid #374151; margin: ${lineMargin}; width: 100%;"></div>`;
 
                 if (strNum2.length === 1) {
-                    html += `<div style="display: flex; justify-content: flex-end; letter-spacing: 0.15em; font-weight: bold; color: #2563eb;">${finalProduct.toString()}</div></div>`;
+                    html += `<div style="display: flex; justify-content: flex-end; letter-spacing: 0.12em; font-weight: bold; color: #2563eb;">${finalProduct.toString()}</div></div>`;
                     return html;
                 }
 
@@ -193,11 +209,11 @@
                     const shift = strNum2.length - 1 - i;
                     let spaces = '';
                     for(let s = 0; s < shift; s++) spaces += '&nbsp;';
-                    html += `<div style="display: flex; justify-content: flex-end; letter-spacing: 0.15em;">${partialProduct.toString()}${spaces}</div>`;
+                    html += `<div style="display: flex; justify-content: flex-end; letter-spacing: 0.12em;">${partialProduct.toString()}${spaces}</div>`;
                 }
                 
                 html += `<div style="border-bottom: 1.5px solid #374151; margin: ${lineMargin}; width: 100%;"></div>`;
-                html += `<div style="display: flex; justify-content: flex-end; letter-spacing: 0.15em; font-weight: bold; color: #2563eb;">${finalProduct.toString()}</div></div>`;
+                html += `<div style="display: flex; justify-content: flex-end; letter-spacing: 0.12em; font-weight: bold; color: #2563eb;">${finalProduct.toString()}</div></div>`;
                 
                 return html;
             } else {
@@ -264,13 +280,13 @@
         // 動態建構供 PDF 匯出的特殊排版 (A4 橫向、左右對稱)
         function buildPDFLayout(isAnswerMode) {
             const container = document.createElement('div');
-            // 設定略低於 A4 橫向最大高度 (794px)，預留安全邊距保證不換頁、不截斷
-            container.style.width = '1120px';
-            container.style.height = '784px';
+            // 將長寬比壓至 0.655 (1060px × 695px)，遠低於 A4 頁面比例極限 0.696，確保 100% 不換頁、不截斷
+            container.style.width = '1060px';
+            container.style.height = '695px';
             container.style.backgroundColor = 'white';
             container.style.display = 'flex';
             container.style.flexDirection = 'row';
-            container.style.padding = '8px 12px'; // 精簡外圍邊距
+            container.style.padding = '6px 10px';
             container.style.boxSizing = 'border-box';
             container.style.overflow = 'hidden';
 
@@ -281,53 +297,54 @@
                 half.style.height = '100%';
                 half.style.display = 'flex';
                 half.style.flexDirection = 'column';
-                half.style.padding = '0 10px';
+                half.style.padding = '0 8px';
                 half.style.boxSizing = 'border-box';
                 half.style.overflow = 'hidden';
 
-                // 標題字體縮小並精簡邊距，將垂直空間完全留給 8 個題目框
+                // 極簡單行標題，僅佔用極小空間，完整釋放垂直高度給第 7、8 題
                 const title = document.createElement('div');
                 title.style.textAlign = 'center';
-                title.style.fontSize = '14px';
+                title.style.fontSize = '12px';
                 title.style.fontWeight = 'bold';
-                title.style.color = '#374151';
+                title.style.color = '#4b5563';
                 title.style.letterSpacing = '1px';
-                title.style.lineHeight = '1.2';
-                title.style.margin = '2px 0 6px 0';
+                title.style.lineHeight = '1';
+                title.style.margin = '2px 0 5px 0';
                 title.innerText = isAnswerMode ? '乘法練習題 (解答卷)' : '乘法練習題 (題目卷)';
                 half.appendChild(title);
 
-                // 8 題網格 (2欄 x 4列)，使用 minmax(0, 1fr) 確保每列精準分配高度不溢出
+                // 8 題網格 (2欄 x 4列)
                 const grid = document.createElement('div');
                 grid.style.display = 'grid';
                 grid.style.gridTemplateColumns = 'repeat(2, 1fr)';
                 grid.style.gridTemplateRows = 'repeat(4, minmax(0, 1fr))';
-                grid.style.gap = '8px'; // 適度縮小題目間距，留出更多空間
+                grid.style.gap = '6px';
                 grid.style.flex = '1 1 0%';
                 grid.style.minHeight = '0';
 
                 currentQuestions.forEach((q, index) => {
                     const card = document.createElement('div');
                     card.style.border = '1.5px solid #cbd5e1';
-                    card.style.borderRadius = '6px';
-                    card.style.padding = '6px 8px';
+                    card.style.borderRadius = '5px';
+                    card.style.padding = '4px 6px';
                     card.style.display = 'flex';
                     card.style.flexDirection = 'column';
                     card.style.boxSizing = 'border-box';
                     card.style.overflow = 'hidden';
 
                     const header = document.createElement('div');
-                    header.style.fontSize = '13px';
+                    header.style.fontSize = '12px';
                     header.style.fontWeight = 'bold';
                     header.style.color = '#1f2937';
                     header.style.borderBottom = '1px solid #e2e8f0';
-                    header.style.paddingBottom = '3px';
-                    header.style.marginBottom = isAnswerMode ? '3px' : '0px';
+                    header.style.paddingBottom = '2px';
+                    header.style.marginBottom = isAnswerMode ? '2px' : '0px';
                     header.style.lineHeight = '1.2';
+                    header.style.whiteSpace = 'nowrap';
                     
-                    // 橫式呈現：題目版等號右邊無問號，解答版直接呈現答案
+                    // 題目版等號後無問號，解答版等號後直接呈現答案
                     const equationAnswer = isAnswerMode ? (q.num1 * q.num2).toString() : '';
-                    header.innerHTML = `<span style="color: #4f46e5; margin-right: 4px;">(${index + 1})</span> ${q.num1.toString()} &times; ${q.num2.toString()} = ${equationAnswer}`;
+                    header.innerHTML = `<span style="color: #4f46e5; margin-right: 3px;">(${index + 1})</span> ${q.num1.toString()} &times; ${q.num2.toString()} = ${equationAnswer}`;
                     card.appendChild(header);
 
                     if (isAnswerMode) {
@@ -376,13 +393,14 @@
             const layout = buildPDFLayout(isAnswerMode);
             pdfExportContainer.appendChild(layout);
 
-            // 設定 PDF 匯出參數 (強制 A4 橫向)
+            // 設定 PDF 匯出參數 (精確對應 A4 橫向毫米尺寸)
             const opt = {
-                margin:       0,
+                margin:       [5, 5, 5, 5],
                 filename:     isAnswerMode ? '乘法練習題_解答版_雙欄.pdf' : '乘法練習題_題目版_雙欄.pdf',
                 image:        { type: 'jpeg', quality: 0.98 },
-                html2canvas:  { scale: 2, useCORS: true, logging: false },
-                jsPDF:        { unit: 'px', format: [1123, 794], orientation: 'landscape' } 
+                html2canvas:  { scale: 2, useCORS: true, logging: false, scrollY: 0, scrollX: 0 },
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' },
+                pagebreak:    { mode: 'avoid-all' }
             };
 
             // 稍微延遲以確保 DOM 已確實被加入
