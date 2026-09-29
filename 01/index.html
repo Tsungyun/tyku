@@ -889,15 +889,17 @@
                 const textX = baseX + 8;
                 const textY = baseY + 12;
 
-                // 填上題號與 A: (無底線，供學生作答)
+                // 題目模式：印出題號與 A: (完全無底線，供學生作答填寫)
                 doc.setFontSize(12);
                 doc.setTextColor(0, 0, 0);
-                doc.text(`Q ${displayNum}.  A:`, textX, textY);
+                const qLabel = `Q ${displayNum}.  A: `;
+                doc.text(qLabel, textX, textY);
                 
-                // 解答模式：在 A: 後面直接印出紅色答案字樣與數學度數符號 (°)
+                // 解答模式：動態計算字寬，直接緊接在 A: 後方印出紅色答案度數，如 Q 1.  A: 45°
                 if (isAnswerMode) {
                     doc.setTextColor(220, 38, 38); 
-                    doc.text(`${q.angle}°`, textX + 18, textY);
+                    const labelWidth = doc.getTextWidth(qLabel);
+                    doc.text(`${q.angle}°`, textX + labelWidth, textY);
                 }
 
                 // 夾角中心點
