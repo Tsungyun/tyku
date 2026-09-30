@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>求角度練習</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #f3f4f6;
+        }
+        /* PDF 匯出容器設定 (A4 橫向嚴格鎖定) */
+        .print-container {
+            display: none; /* 網頁上隱藏，只有匯出時短暫顯示 */
+            width: 297mm; /* A4 橫向寬度 */
+            height: 210mm; /* A4 橫向高度 */
+            max-height: 210mm;
+            background-color: white;
+            box-sizing: border-box;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: -1000;
+            flex-direction: row; 
+            overflow: hidden; /* 強制不准超出 A4 範圍 */
+        }
+        /* 單半邊 (一張 A5 範圍) */
+        .print-half {
+            width: 50%;
+            height: 100%;
+            padding: 5mm 8mm; /* 縮小邊距，把空間留給題目 */
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px dashed #999;
+        }
+        .print-half:last-child {
+            border-right: none;
+        }
+        /* 列印版標題 */
+        .print-header {
+            text-align: left; /* 改為靠左對齊以容納較長文字 */
+            font-size: 1.05rem; /* 稍微縮小字體以容納文字 */
+            font-weight: bold;
+            margin-bottom: 2mm;
+            border-bottom: 2px solid #333;
+            padding-bottom: 1mm;
+            letter-spacing: 1px;
+            flex-shrink: 0;
+            display: flex;
+            justify-content: space-between; /* 讓標題與括號分散兩端 */
+            align-items: flex-end;
+        }
+        .print-header-title {
+            /* 標題文字本身 */
+        }
+        /* 列印版題目網格 (絕對平分 2欄 x 4列) */
+        .print-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr; 
+            grid-template-rows: repeat(4, 1fr); 
+            gap: 1mm 4mm;
+            flex-grow: 1;
+            height: 100%;
+            min-height: 0;
+            overflow: hidden;
+        }
+        /* 每個題目的框框 */
+        .print-item {
+            display: flex;
+            flex-direction: column;
+            padding: 1mm 0;
+            overflow: hidden; /* 確保內容不爆版 */
+        }
+        .print-item-header {
+            display: flex;
+            justify-content: flex-start;
+            font-size: 1rem;
+            margin-bottom: 0.5mm;
+            gap: 2mm;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        .print-item-number {
+            font-weight: bold;
+            font-size: 1.1rem;
+            color: #000;
+        }
+        /* 畫布容器：自動填滿剩下的高度 */
+        .print-item-canvas-container {
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 0;
+            width: 100%;
+        }
+        .print-item-canvas {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        /* 解答區 */
+        .print-item-answer-area {
+            height: 5mm;
+            display: flex;
+            align-items: flex-end;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+        }
+        .print-item-answer-text {
+            color: black;
+            font-weight: bold;
+            display: none;
+        }
+        
+        /* 網頁版網格 (強制2欄4列) */
+        .web-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+        }
+        @media (max-width: 768px) {
+            .web-grid { grid-template-columns: 1fr; }
+        }
+        .correct { border-color: #10b981 !important; background-color: #ecfdf5 !important; }
+        .incorrect { border-color: #ef4444 !important; background-color: #fef2f2 !important; }
+    </style>
+</head>
+<body class="p-4 md:p-6 text-gray-800">
+
+<div class="max-w-5xl mx-auto bg-white rounded-xl shadow-lg p-6">
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b pb-4 gap-4">
+        <div>
+            <h1 class="text-2xl md:text-3xl font-bold flex items-center gap-2">
+                求以下圖形中的 ∠A 是幾度？寫成算式做做看。
+            </h1>
+        </div>
+        <div class="flex gap-2 flex-wrap">
+            <button onclick="generateQuestions()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow flex items-center gap-1 font-bold">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
+                </svg>
+                重新隨機出題
+            </button>
+            <button onclick="exportPDF('question')" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition shadow flex items-center gap-1">
+                匯出題目
+            </button>
+            <button onclick="exportPDF('answer')" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition shadow flex items-center gap-1">
+                匯出解答
+            </button>
+        </div>
+    </div>
+
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <p class="text-gray-600 text-sm md:text-base bg-gray-50 p-3 rounded-lg border border-gray-200">
+            💡 每次點擊「重新隨機出題」將產生 8 題新題目。<br>
+            可直接於下方線上作答，或匯出成 A4 雙欄學習單（裁半即可發給兩位學生）。
+        </p>
+        <button onclick="checkAnswers()" class="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition shadow font-bold text-lg whitespace-nowrap">
+            批改全部
+        </button>
+    </div>
+    
+    <div id="web-questions-container" class="web-grid"></div>
+</div>
+
+<div id="pdf-export-container" class="print-container">
+    <div class="print-half">
+        <div class="print-header">
+            <span class="print-header-title">求以下圖形中的 ∠A 是幾度？寫成算式做做看。</span>
+            <span class="pdf-title-type"></span>
+        </div>
+        <div id="print-grid-left" class="print-grid"></div>
+    </div>
+    <div class="print-half">
+        <div class="print-header">
+            <span class="print-header-title">求以下圖形中的 ∠A 是幾度？寫成算式做做看。</span>
+            <span class="pdf-title-type"></span>
+        </div>
+        <div id="print-grid-right" class="print-grid"></div>
+    </div>
+</div>
+
+<script>
+    let currentQuestions = [];
+    const NUM_QUESTIONS = 8;
+
+    function randInt(min, max) {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    // 產生題目資料邏輯，確保角度與文字完全吻合
+    function generateQuestionData() {
+        const types = ['right_angle', 'line_2', 'line_3', 'circle_right', 'circle'];
+        const type = types[randInt(0, 4)];
+        let angles = {};
+        
+        switch (type) {
+            case 'right_angle': 
+                angles.A = randInt(25, 65);
+                angles.B = 90 - angles.A;
+                break;
+            case 'line_2': 
+                angles.A = randInt(110, 150);
+                angles.B = 180 - angles.A;
+                // 在確定答案前先隨機交換，確保畫出的圖和文字相符
+                if (Math.random() > 0.5) [angles.A, angles.B] = [angles.B, angles.A];
+                break;
+            case 'line_3':
+                angles.B = randInt(35, 70);
+                angles.C = randInt(35, 70);
+                angles.A = 180 - angles.B - angles.C;
+                break;
+            case 'circle':
+                angles.B = randInt(110, 150);
+                angles.C = randInt(110, 150);
+                angles.A = 360 - angles.B - angles.C;
+                break;
+            case 'circle_right':
+                angles.B = randInt(110, 160);
+                angles.A = 360 - 90 - angles.B;
+                break;
+        }
+
+        // 統一在最後生成條件字串與答案，保證不會有圖文矛盾
+        let conditions = [];
+        if (type === 'right_angle' || type === 'line_2' || type === 'circle_right') {
+            conditions = [`∠B = ${angles.B}°`];
+        } else if (type === 'line_3' || type === 'circle') {
+            conditions = [`∠B = ${angles.B}°`, `∠C = ${angles.C}°`];
+        }
+
+        return { type, angles, conditions, ans: angles.A };
+    }
+
+    // 超高畫質繪圖函數 (High-DPI 渲染)
+    function drawAngleProblem(canvas, qData) {
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width;  // 將會是 900
+        const h = canvas.height; // 將會是 600
+        const minDim = Math.min(w, h);
+        ctx.clearRect(0, 0, w, h);
+        
+        let cx = w / 2;
+        let cy = h / 2;
+        let r = minDim * 0.45; // 基礎半徑
+
+        // 依據圖形將圖案極大化撐滿畫布
+        if (qData.type === 'right_angle') {
+            cx = w * 0.3;
+            cy = h * 0.75;
+            r = minDim * 0.65; // 直角題可以畫很大
+        } else if (qData.type === 'line_2' || qData.type === 'line_3') {
+            cy = h * 0.75;
+            r = minDim * 0.65; // 平角題也可以畫很大
+        }
+
+        // 動態計算極度清晰的線條粗細與字體大小
+        const baseLineWidth = minDim * 0.008; // 600 * 0.008 = 4.8px
+        const fontSize = Math.floor(minDim * 0.08); // 600 * 0.08 = 48px
+
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.font = `bold ${fontSize}px "Noto Sans TC", sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        // 畫實心黑色射線 (最粗)
+        const drawRay = (angleDeg) => {
+            const rad = -angleDeg * Math.PI / 180;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + r * Math.cos(rad), cy + r * Math.sin(rad)); 
+            ctx.strokeStyle = '#000'; 
+            ctx.lineWidth = baseLineWidth * 1.5; 
+            ctx.stroke();
+        };
+
+        // 畫黑白弧線與斷字標記
+        const drawMark = (startDeg, endDeg, radiusRatio, label, isRight = false) => {
+            let s = startDeg;
+            let e = endDeg;
+            if (s > e) e += 360;
+            
+            let sRad = -s * Math.PI / 180;
+            let eRad = -e * Math.PI / 180;
+            let midDeg = (s + e) / 2;
+            let midRad = -midDeg * Math.PI / 180;
+            
+            let arcRadius = r * radiusRatio;
+
+            // 教科書標準直角方形標記
+            if (isRight) {
+                const size = r * 0.12;
+                const p1x = cx + size * Math.cos(sRad);
+                const p1y = cy + size * Math.sin(sRad);
+                const p2x = cx + size * Math.sqrt(2) * Math.cos(midRad);
+                const p2y = cy + size * Math.sqrt(2) * Math.sin(midRad);
+                const p3x = cx + size * Math.cos(eRad);
+                const p3y = cy + size * Math.sin(eRad);
+                ctx.beginPath();
+                ctx.moveTo(p1x, p1y);
+                ctx.lineTo(p2x, p2y);
+                ctx.lineTo(p3x, p3y);
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = baseLineWidth;
+                ctx.stroke();
+                return;
+            }
+
+            // 畫弧線
+            ctx.beginPath();
+            ctx.arc(cx, cy, arcRadius, sRad, eRad, true); 
+            ctx.strokeStyle = '#000'; 
+            ctx.lineWidth = baseLineWidth;
+            ctx.stroke();
+
+            // 畫壓在弧線上的文字，並利用白底切斷弧線，絕不看錯
+            if (label) {
+                const lx = cx + arcRadius * Math.cos(midRad);
+                const ly = cy + arcRadius * Math.sin(midRad);
+                
+                ctx.fillStyle = '#fff';
+                const textWidth = ctx.measureText(label).width;
+                const padX = minDim * 0.015;
+                const padY = minDim * 0.035;
+                ctx.fillRect(lx - textWidth/2 - padX, ly - padY, textWidth + padX*2, padY*2);
+
+                ctx.fillStyle = '#000';
+                ctx.fillText(label, lx, ly);
+            }
+        };
+
+        // 依照題型結構依序畫圖，錯開不同弧線的半徑比例
+        switch(qData.type) {
+            case 'right_angle': 
+                drawRay(0); drawRay(90); drawRay(qData.angles.B);
+                drawMark(0, 90, 0, '', true); 
+                drawMark(0, qData.angles.B, 0.45, 'B');
+                drawMark(qData.angles.B, 90, 0.75, 'A');
+                break;
+            case 'line_2': 
+                drawRay(0); drawRay(180); drawRay(qData.angles.B);
+                drawMark(0, qData.angles.B, 0.45, 'B');
+                drawMark(qData.angles.B, 180, 0.75, 'A');
+                break;
+            case 'line_3': 
+                drawRay(0); drawRay(180); drawRay(qData.angles.B); drawRay(qData.angles.B + qData.angles.C);
+                drawMark(0, qData.angles.B, 0.35, 'B');
+                drawMark(qData.angles.B, qData.angles.B + qData.angles.C, 0.55, 'C');
+                drawMark(qData.angles.B + qData.angles.C, 180, 0.8, 'A');
+                break;
+            case 'circle': 
+                let a1 = randInt(20, 60); 
+                let a2 = a1 + qData.angles.B;
+                let a3 = a2 + qData.angles.C;
+                drawRay(a1); drawRay(a2); drawRay(a3);
+                drawMark(a1, a2, 0.4, 'B');
+                drawMark(a2, a3, 0.65, 'C');
+                drawMark(a3, a1 + 360, 0.9, 'A');
+                break;
+            case 'circle_right': 
+                let br = randInt(0, 45); 
+                drawRay(br); drawRay(br + 90); drawRay(br + 90 + qData.angles.B);
+                drawMark(br, br + 90, 0, '', true); 
+                drawMark(br + 90, br + 90 + qData.angles.B, 0.45, 'B');
+                drawMark(br + 90 + qData.angles.B, br + 360, 0.75, 'A');
+                break;
+        }
+    }
+
+    function generateQuestions() {
+        currentQuestions = [];
+        const webContainer = document.getElementById('web-questions-container');
+        const printLeft = document.getElementById('print-grid-left');
+        const printRight = document.getElementById('print-grid-right');
+        
+        webContainer.innerHTML = '';
+        printLeft.innerHTML = '';
+        printRight.innerHTML = '';
+
+        for (let i = 0; i < NUM_QUESTIONS; i++) {
+            const qData = generateQuestionData();
+            currentQuestions.push(qData);
+            
+            let conditionsStr = qData.conditions.join('，');
+            
+            // 網頁版 HTML (使用 width 900 的超大畫布，靠 CSS 縮小顯示)
+            const webItem = document.createElement('div');
+            webItem.className = 'bg-white border-2 border-gray-100 rounded-xl p-5 shadow-sm relative overflow-hidden transition-all duration-300 flex flex-col';
+            webItem.id = `web-q-${i}`;
+            webItem.innerHTML = `
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="font-bold text-gray-800 text-lg">${i+1}.</span>
+                    <span class="font-bold text-gray-800 text-lg tracking-wider">${conditionsStr}</span>
+                </div>
+                <div class="flex-grow flex justify-center items-center my-2 h-48 overflow-hidden">
+                    <canvas id="web-canvas-${i}" width="900" height="600" class="max-w-full max-h-full w-auto h-auto object-contain"></canvas>
+                </div>
+                <div class="mt-2 flex justify-between items-end bg-gray-50 p-3 rounded-lg flex-shrink-0">
+                    <div class="flex items-center gap-2">
+                        <label class="font-bold text-gray-700 text-lg">∠A =</label>
+                        <input type="number" id="web-ans-${i}" class="border-b-2 border-gray-400 focus:border-blue-600 outline-none w-16 text-center text-xl py-1 bg-transparent transition-colors font-bold" placeholder="?">
+                        <span class="text-gray-600 font-bold text-lg">°</span>
+                    </div>
+                    <div class="flex flex-col items-end gap-2">
+                        <div id="web-feedback-${i}" class="font-bold text-sm hidden"></div>
+                        <button onclick="checkSingleAnswer(${i})" class="px-4 py-1.5 bg-teal-500 text-white rounded hover:bg-teal-600 transition shadow text-sm font-bold tracking-wide">對這題</button>
+                    </div>
+                </div>
+            `;
+            webContainer.appendChild(webItem);
+            
+            // 列印版 HTML (一樣使用 900x600 巨型畫布，確保 PDF 極度清晰)
+            const createPrintItem = (idSuffix) => {
+                const pItem = document.createElement('div');
+                pItem.className = 'print-item';
+                pItem.innerHTML = `
+                    <div class="print-item-header">
+                        <span class="print-item-number">${i+1}. </span>
+                        <span>${conditionsStr}</span>
+                    </div>
+                    <div class="print-item-canvas-container">
+                        <canvas id="print-canvas-${i}-${idSuffix}" width="900" height="600" class="print-item-canvas"></canvas>
+                    </div>
+                    <div class="print-item-answer-area">
+                        <span>算式/答：<span id="print-ans-${i}-${idSuffix}" class="print-item-answer-text ml-1">∠A = ${qData.ans}°</span></span>
+                    </div>
+                `;
+                return pItem;
+            };
+
+            printLeft.appendChild(createPrintItem('left'));
+            printRight.appendChild(createPrintItem('right'));
+
+            setTimeout(() => {
+                const cWeb = document.getElementById(`web-canvas-${i}`);
+                const cLeft = document.getElementById(`print-canvas-${i}-left`);
+                const cRight = document.getElementById(`print-canvas-${i}-right`);
+                if(cWeb) drawAngleProblem(cWeb, qData);
+                if(cLeft) drawAngleProblem(cLeft, qData);
+                if(cRight) drawAngleProblem(cRight, qData);
+            }, 0);
+        }
+    }
+
+    function checkSingleAnswer(i) {
+        const q = currentQuestions[i];
+        const input = document.getElementById(`web-ans-${i}`);
+        const itemDiv = document.getElementById(`web-q-${i}`);
+        const feedback = document.getElementById(`web-feedback-${i}`);
+        const userAns = parseInt(input.value);
+        
+        itemDiv.classList.remove('correct', 'incorrect');
+        feedback.classList.remove('hidden', 'text-green-600', 'text-red-600');
+        
+        if (isNaN(userAns)) {
+            feedback.textContent = '請輸入數字';
+            feedback.classList.add('text-red-600');
+            return;
+        }
+
+        if (userAns === q.ans) {
+            itemDiv.classList.add('correct');
+            feedback.textContent = '✔ 答對了！';
+            feedback.classList.add('text-green-600');
+        } else {
+            itemDiv.classList.add('incorrect');
+            feedback.textContent = '✘ 正解: ' + q.ans + '°';
+            feedback.classList.add('text-red-600');
+        }
+    }
+
+    function checkAnswers() {
+        currentQuestions.forEach((_, i) => checkSingleAnswer(i));
+    }
+
+    async function exportPDF(type) {
+        const container = document.getElementById('pdf-export-container');
+        const ansTexts = document.querySelectorAll('.print-item-answer-text');
+        const titleTypes = document.querySelectorAll('.pdf-title-type');
+        
+        titleTypes.forEach(el => el.textContent = type === 'answer' ? '(解答)' : '(題目)');
+        ansTexts.forEach(el => el.style.display = type === 'answer' ? 'inline' : 'none');
+
+        container.style.display = 'flex';
+
+        try {
+            // 使用 scale: 3 獲取超清晰擷取畫面，搭配原本 900x600 畫布，清晰度頂滿
+            const canvas = await html2canvas(container, {
+                scale: 3, 
+                useCORS: true,
+                logging: false,
+                backgroundColor: '#ffffff'
+            });
+
+            container.style.display = 'none';
+
+            const imgData = canvas.toDataURL('image/jpeg', 0.98);
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('l', 'mm', 'a4'); 
+            
+            // 強制設定為 A4 精確尺寸 (297x210)，確保完全不被切到
+            pdf.addImage(imgData, 'JPEG', 0, 0, 297, 210);
+            
+            const filename = type === 'answer' ? '角度計算練習_解答.pdf' : '角度計算練習_題目.pdf';
+            pdf.save(filename);
+
+        } catch (error) {
+            console.error("PDF 匯出失敗:", error);
+            alert("匯出 PDF 時發生錯誤，請稍後再試。");
+            container.style.display = 'none';
+        }
+    }
+
+    window.onload = () => generateQuestions();
+</script>
+</body>
+</html>
