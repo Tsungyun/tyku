@@ -130,11 +130,38 @@
         }
         .correct { border-color: #10b981 !important; background-color: #ecfdf5 !important; }
         .incorrect { border-color: #ef4444 !important; background-color: #fef2f2 !important; }
+
+        /* 虛擬鍵盤按鈕樣式 */
+        .v-key {
+            background-color: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            padding: 0.75rem 0;
+            font-size: 1.25rem;
+            font-weight: bold;
+            color: #374151;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            transition: all 0.1s;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .v-key:active {
+            background-color: #e5e7eb;
+            transform: scale(0.95);
+        }
+        .v-key-danger { background-color: #fee2e2; color: #dc2626; border-color: #fca5a5; }
+        .v-key-danger:active { background-color: #fecaca; }
+        .v-key-action { background-color: #e5e7eb; color: #4b5563; }
+        .v-key-action:active { background-color: #d1d5db; }
     </style>
 </head>
-<body class="p-4 md:p-6 text-gray-800">
+<body class="p-4 md:p-6 text-gray-800 relative">
 
-<div class="max-w-5xl mx-auto bg-white rounded-xl shadow-lg p-6">
+<div class="max-w-5xl mx-auto bg-white rounded-xl shadow-lg p-6 relative">
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b pb-4 gap-4">
         <div>
             <h1 class="text-2xl md:text-3xl font-bold flex items-center gap-2">
@@ -160,7 +187,8 @@
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <p class="text-gray-600 text-sm md:text-base bg-gray-50 p-3 rounded-lg border border-gray-200">
             💡 每次點擊「重新隨機出題」將產生 8 題新題目。<br>
-            可直接於下方線上作答，或匯出成 A4 雙欄學習單（裁半即可發給兩位學生）。
+            💡 <span class="text-blue-600 font-bold">直接點擊下方題目的「?」空格，會出現數字鍵盤方便作答。</span><br>
+            可直接於下方線上作答，或匯出成 A4 雙欄學習單。
         </p>
         <button onclick="checkAnswers()" class="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition shadow font-bold text-lg whitespace-nowrap">
             批改全部
@@ -187,9 +215,52 @@
     </div>
 </div>
 
+<!-- 虛擬數字鍵盤 -->
+<div id="virtual-keypad" class="hidden absolute z-50 bg-white border border-gray-300 shadow-2xl rounded-xl p-3 w-56 transition-opacity duration-200 opacity-0 transform -translate-x-1/2">
+    <div class="flex justify-between items-center mb-3 px-1">
+        <span class="text-sm font-bold text-blue-600 flex items-center gap-1">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287-.947c.886.539 2.042.06 2.287-.947.379-1.561 2.6-1.561 2.978 0a1.533 1.533 0 012.287.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" />
+            </svg>
+            輸入角度
+        </span>
+        <button onclick="hideKeypad()" class="text-gray-400 hover:text-red-500 bg-gray-100 hover:bg-red-50 rounded-full p-1 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+            </svg>
+        </button>
+    </div>
+    <div class="grid grid-cols-3 gap-2">
+        <button onmousedown="inputKey('1', event)" class="v-key">1</button>
+        <button onmousedown="inputKey('2', event)" class="v-key">2</button>
+        <button onmousedown="inputKey('3', event)" class="v-key">3</button>
+        
+        <button onmousedown="inputKey('4', event)" class="v-key">4</button>
+        <button onmousedown="inputKey('5', event)" class="v-key">5</button>
+        <button onmousedown="inputKey('6', event)" class="v-key">6</button>
+        
+        <button onmousedown="inputKey('7', event)" class="v-key">7</button>
+        <button onmousedown="inputKey('8', event)" class="v-key">8</button>
+        <button onmousedown="inputKey('9', event)" class="v-key">9</button>
+        
+        <button onmousedown="inputKey('C', event)" class="v-key v-key-danger">C</button>
+        <button onmousedown="inputKey('0', event)" class="v-key">0</button>
+        <button onmousedown="inputKey('DEL', event)" class="v-key v-key-action">⌫</button>
+    </div>
+</div>
+
+<!-- 專屬版權宣告頁尾 (乾淨、單行設計) -->
+    <div class="text-center text-gray-400 text-sm mt-8 mb-4 tracking-wider">
+        &copy; 谷宗芸老師設計 / AI 輔助生成
+    </div>
+
 <script>
     let currentQuestions = [];
     const NUM_QUESTIONS = 8;
+    
+    // 虛擬鍵盤狀態
+    let activeInputEl = null;
+    const keypadEl = document.getElementById('virtual-keypad');
 
     function randInt(min, max) {
         return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -384,6 +455,7 @@
         webContainer.innerHTML = '';
         printLeft.innerHTML = '';
         printRight.innerHTML = '';
+        hideKeypad(); // 切換題目時隱藏鍵盤
 
         for (let i = 0; i < NUM_QUESTIONS; i++) {
             const qData = generateQuestionData();
@@ -391,9 +463,9 @@
             
             let conditionsStr = qData.conditions.join('，');
             
-            // 網頁版 HTML (使用 width 900 的超大畫布，靠 CSS 縮小顯示)
+            // 網頁版 HTML：修改 input 為 readonly，並加入 onclick 觸發虛擬鍵盤
             const webItem = document.createElement('div');
-            webItem.className = 'bg-white border-2 border-gray-100 rounded-xl p-5 shadow-sm relative overflow-hidden transition-all duration-300 flex flex-col';
+            webItem.className = 'bg-white border-2 border-gray-100 rounded-xl p-5 shadow-sm relative overflow-hidden transition-all duration-300 flex flex-col hover:shadow-md';
             webItem.id = `web-q-${i}`;
             webItem.innerHTML = `
                 <div class="flex items-center gap-2 mb-3">
@@ -406,7 +478,8 @@
                 <div class="mt-2 flex justify-between items-end bg-gray-50 p-3 rounded-lg flex-shrink-0">
                     <div class="flex items-center gap-2">
                         <label class="font-bold text-gray-700 text-lg">∠A =</label>
-                        <input type="number" id="web-ans-${i}" class="border-b-2 border-gray-400 focus:border-blue-600 outline-none w-16 text-center text-xl py-1 bg-transparent transition-colors font-bold" placeholder="?">
+                        <!-- 使用 text 類型並 readonly 防止原生鍵盤，加入 cursor-pointer 提示可點擊 -->
+                        <input type="text" readonly id="web-ans-${i}" onclick="showKeypad(this, event)" class="border-b-2 border-gray-400 focus:border-blue-600 outline-none w-16 text-center text-xl py-1 bg-white cursor-pointer transition-colors font-bold shadow-sm rounded-t-sm" placeholder="?">
                         <span class="text-gray-600 font-bold text-lg">°</span>
                     </div>
                     <div class="flex flex-col items-end gap-2">
@@ -450,6 +523,119 @@
         }
     }
 
+    // 顯示虛擬鍵盤並定位
+    function showKeypad(inputEl, event) {
+        if (event) event.stopPropagation(); // 防止點擊事件冒泡觸發 document 的關閉機制
+        
+        // 重置舊的輸入框樣式
+        if (activeInputEl) {
+            activeInputEl.classList.remove('border-blue-600', 'bg-blue-50');
+            activeInputEl.classList.add('border-gray-400', 'bg-white');
+        }
+
+        activeInputEl = inputEl;
+        
+        // 標記當前輸入框
+        activeInputEl.classList.remove('border-gray-400', 'bg-white');
+        activeInputEl.classList.add('border-blue-600', 'bg-blue-50');
+
+        keypadEl.classList.remove('hidden');
+        
+        // 給一點點延遲讓 display:block 生效後再執行透明度動畫
+        setTimeout(() => {
+            keypadEl.classList.remove('opacity-0');
+            keypadEl.classList.add('opacity-100');
+        }, 10);
+
+        // 計算定位
+        const rect = inputEl.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+
+        // 計算置中於輸入框的左邊界
+        let leftPos = rect.left + scrollLeft + (rect.width / 2);
+        
+        // 判斷下方空間是否足夠
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const keypadHeight = 220; // 預估鍵盤高度
+
+        if (spaceBelow > keypadHeight) {
+            // 顯示在下方
+            keypadEl.style.top = (rect.bottom + scrollTop + 10) + 'px';
+        } else {
+            // 顯示在上方
+            keypadEl.style.top = (rect.top + scrollTop - keypadHeight - 10) + 'px';
+        }
+
+        // 確保不會超出螢幕左右邊界 (transform -translate-x-1/2 已經處理了一半的位移)
+        // 這裡設定 left 為輸入框中心，若靠太近邊緣則調整
+        const halfWidth = 112; // 224px (w-56) / 2
+        if (leftPos - halfWidth < 10) leftPos = halfWidth + 10;
+        if (leftPos + halfWidth > window.innerWidth) leftPos = window.innerWidth - halfWidth - 10;
+
+        keypadEl.style.left = leftPos + 'px';
+    }
+
+    // 隱藏虛擬鍵盤
+    function hideKeypad() {
+        if (!keypadEl.classList.contains('hidden')) {
+            keypadEl.classList.remove('opacity-100');
+            keypadEl.classList.add('opacity-0');
+            
+            // 恢復輸入框樣式
+            if (activeInputEl) {
+                activeInputEl.classList.remove('border-blue-600', 'bg-blue-50');
+                activeInputEl.classList.add('border-gray-400', 'bg-white');
+            }
+
+            setTimeout(() => {
+                keypadEl.classList.add('hidden');
+                activeInputEl = null;
+            }, 200); // 配合 transition 時間
+        }
+    }
+
+    // 虛擬鍵盤輸入處理
+    function inputKey(val, event) {
+        if (event) event.preventDefault(); // 防止按鈕預設行為導致輸入框失焦
+        
+        if (!activeInputEl) return;
+
+        let currentVal = activeInputEl.value;
+
+        if (val === 'C') {
+            activeInputEl.value = '';
+        } else if (val === 'DEL') {
+            activeInputEl.value = currentVal.slice(0, -1);
+        } else {
+            // 限制最多只能輸入 3 位數 (角度不可能超過 360)
+            if (currentVal.length < 3) {
+                activeInputEl.value += val;
+            }
+        }
+        
+        // 如果輸入框被重置了答題狀態，可以考慮在這裡清空錯誤提示，但目前保留原邏輯
+        const itemId = activeInputEl.id.split('-')[2];
+        const itemDiv = document.getElementById(`web-q-${itemId}`);
+        const feedback = document.getElementById(`web-feedback-${itemId}`);
+        
+        // 重新輸入時清除之前的對錯樣式
+        if (itemDiv.classList.contains('correct') || itemDiv.classList.contains('incorrect')) {
+            itemDiv.classList.remove('correct', 'incorrect');
+            feedback.classList.add('hidden');
+        }
+    }
+
+    // 點擊空白處關閉虛擬鍵盤
+    document.addEventListener('mousedown', function(event) {
+        // 如果點擊的不是鍵盤本身，也不是當前作用中的輸入框，就隱藏
+        if (!keypadEl.classList.contains('hidden')) {
+            if (!keypadEl.contains(event.target) && event.target !== activeInputEl) {
+                hideKeypad();
+            }
+        }
+    });
+
     function checkSingleAnswer(i) {
         const q = currentQuestions[i];
         const input = document.getElementById(`web-ans-${i}`);
@@ -478,10 +664,12 @@
     }
 
     function checkAnswers() {
+        hideKeypad(); // 批改時先收起鍵盤
         currentQuestions.forEach((_, i) => checkSingleAnswer(i));
     }
 
     async function exportPDF(type) {
+        hideKeypad(); // 匯出前確保鍵盤收起
         const container = document.getElementById('pdf-export-container');
         const ansTexts = document.querySelectorAll('.print-item-answer-text');
         const titleTypes = document.querySelectorAll('.pdf-title-type');
@@ -514,7 +702,13 @@
 
         } catch (error) {
             console.error("PDF 匯出失敗:", error);
-            alert("匯出 PDF 時發生錯誤，請稍後再試。");
+            // 替代 alert
+            const errorMsg = document.createElement('div');
+            errorMsg.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded shadow-lg z-50';
+            errorMsg.textContent = "匯出 PDF 時發生錯誤，請稍後再試。";
+            document.body.appendChild(errorMsg);
+            setTimeout(() => errorMsg.remove(), 3000);
+            
             container.style.display = 'none';
         }
     }
