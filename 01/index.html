@@ -66,7 +66,6 @@
             touch-action: none;
         }
 
-        /* 基準錨點，用於數學旋轉計算 */
         #pivot-anchor {
             position: absolute;
             bottom: 0;
@@ -150,7 +149,7 @@
 <body>
 
 <div id="app-container">
-    <!-- 學生測驗超大獨立倒數計時器 (獨立懸浮於左上方，視野極佳且絕不遮擋中央量角器與題圖) -->
+    <!-- 學生測驗超大獨立倒數計時器 -->
     <div id="large-timer-hud" class="hidden-mode absolute top-5 left-5 z-20 bg-white/95 backdrop-blur-md border-2 border-red-500 rounded-2xl px-5 py-3 shadow-xl flex items-center gap-4 pointer-events-none transition-all duration-300">
         <span class="text-3xl sm:text-4xl animate-pulse">⏱️</span>
         <div class="flex flex-col">
@@ -201,15 +200,39 @@
             <p class="text-xs text-gray-500 mt-1 leading-tight">※ 皆為 5的倍數，避開0/180/360度，並且圖形自動隨機傾斜。</p>
         </div>
 
-        <!-- 每題作答倒數時間自訂區域 -->
-        <div class="mb-4 border-t pt-3">
+        <!-- 每題作答倒數時間自訂區域 (已修改為無鍵盤輸入模式) -->
+        <div class="mb-4 border-t pt-3 relative">
             <label class="block text-sm font-bold text-gray-700 mb-1">⏱️ 設定每題作答倒數時間：</label>
             <div class="flex items-center gap-2">
-                <input type="number" id="timer-min-input" min="0" max="59" value="3" class="border border-gray-300 rounded px-2 py-1.5 w-16 text-center font-bold text-gray-800 focus:ring-2 focus:ring-purple-500">
+                <!-- 改為 type="text" 加上 inputmode="none" 與 readonly，避免觸發原生鍵盤 -->
+                <input type="text" id="timer-min-input" inputmode="none" readonly value="3" class="cursor-pointer border border-gray-300 rounded px-2 py-1.5 w-16 text-center font-bold text-gray-800 focus:outline-none transition-all">
                 <span class="text-sm font-semibold text-gray-700">分</span>
-                <input type="number" id="timer-sec-input" min="0" max="59" value="0" class="border border-gray-300 rounded px-2 py-1.5 w-16 text-center font-bold text-gray-800 focus:ring-2 focus:ring-purple-500">
+                <input type="text" id="timer-sec-input" inputmode="none" readonly value="0" class="cursor-pointer border border-gray-300 rounded px-2 py-1.5 w-16 text-center font-bold text-gray-800 focus:outline-none transition-all">
                 <span class="text-sm font-semibold text-gray-700">秒</span>
             </div>
+            
+            <!-- 新增：精巧版計時器設定小鍵盤 (預設隱藏) -->
+            <div id="timer-mini-keypad" class="hidden mt-2 p-1.5 bg-gray-50 rounded border border-gray-200 shadow-md w-44">
+                <div class="text-xs font-bold text-gray-500 mb-1 text-center" id="timer-keypad-title">請輸入分鐘</div>
+                <div class="grid grid-cols-3 gap-1">
+                    <button class="t-keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-bold py-1.5 rounded shadow-sm text-sm" data-val="1">1</button>
+                    <button class="t-keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-bold py-1.5 rounded shadow-sm text-sm" data-val="2">2</button>
+                    <button class="t-keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-bold py-1.5 rounded shadow-sm text-sm" data-val="3">3</button>
+                    <button class="t-keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-bold py-1.5 rounded shadow-sm text-sm" data-val="4">4</button>
+                    <button class="t-keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-bold py-1.5 rounded shadow-sm text-sm" data-val="5">5</button>
+                    <button class="t-keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-bold py-1.5 rounded shadow-sm text-sm" data-val="6">6</button>
+                    <button class="t-keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-bold py-1.5 rounded shadow-sm text-sm" data-val="7">7</button>
+                    <button class="t-keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-bold py-1.5 rounded shadow-sm text-sm" data-val="8">8</button>
+                    <button class="t-keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-bold py-1.5 rounded shadow-sm text-sm" data-val="9">9</button>
+                    <button class="t-keypad-btn bg-red-50 border border-red-200 hover:bg-red-100 text-red-600 font-bold py-1.5 rounded shadow-sm text-xs" data-val="clear">清除</button>
+                    <button class="t-keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-bold py-1.5 rounded shadow-sm text-sm" data-val="0">0</button>
+                    <button class="t-keypad-btn bg-gray-100 border border-gray-300 hover:bg-gray-200 text-gray-700 font-bold py-1.5 rounded shadow-sm text-xs flex justify-center items-center" data-val="back">
+                        ⌫
+                    </button>
+                </div>
+                <button id="timer-keypad-close" class="mt-1 w-full bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 font-bold py-1 rounded text-xs shadow-sm">完成設定</button>
+            </div>
+
             <p class="text-xs text-gray-400 mt-1">※ 時間結束若未作答，將自動跳至下一題。</p>
         </div>
 
@@ -247,11 +270,10 @@
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">輸入測量到的角度 (°):</label>
             <div class="flex gap-2 mb-2.5">
-                <!-- 加入 inputmode="none" 避免在手機上點擊時跳出系統原生鍵盤 -->
                 <input type="text" id="student-answer" inputmode="none" class="border border-gray-300 rounded px-3 py-1.5 w-full text-xl font-bold text-center text-purple-700 bg-gray-50 focus:ring-2 focus:ring-purple-500 focus:outline-none" placeholder="0" readonly>
             </div>
 
-            <!-- 虛擬數字鍵盤 (尺寸調小，精巧好點選) -->
+            <!-- 學生答題用虛擬數字鍵盤 -->
             <div id="virtual-keypad" class="grid grid-cols-3 gap-1.5 mb-3">
                 <button class="keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-2 rounded shadow-sm text-base transition-colors active:bg-gray-200" data-val="1">1</button>
                 <button class="keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-2 rounded shadow-sm text-base transition-colors active:bg-gray-200" data-val="2">2</button>
@@ -273,11 +295,9 @@
                 送出答案
             </button>
             
-            <!-- 顯示對錯與正解的地方 -->
             <p id="feedback-msg" class="mt-3 text-sm font-bold hidden"></p>
         </div>
         
-        <!-- 下一題按鈕 -->
         <button id="next-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2.5 px-4 rounded transition-colors hidden shadow mt-3 text-base">
             下一題 ➔
         </button>
@@ -316,8 +336,14 @@
     const startTestBtn = document.getElementById('start-test-btn');
     const exportQBtn = document.getElementById('export-q-btn');
     const exportABtn = document.getElementById('export-a-btn');
+    
+    // Timer 相關 DOM
     const timerMinInput = document.getElementById('timer-min-input');
     const timerSecInput = document.getElementById('timer-sec-input');
+    const timerMiniKeypad = document.getElementById('timer-mini-keypad');
+    const timerKeypadTitle = document.getElementById('timer-keypad-title');
+    const timerKeypadCloseBtn = document.getElementById('timer-keypad-close');
+    let activeTimerInput = null; // 紀錄目前正在編輯的是分還是秒
     
     // 學生端控制項
     const studentAnswerInput = document.getElementById('student-answer');
@@ -333,6 +359,66 @@
     let questionTimeLimit = 180;
     let timeLeft = questionTimeLimit;
     let timerInterval = null;
+
+    // 初始化教師面板迷你計時鍵盤功能
+    function setupTimerKeypad() {
+        // 點擊「分」輸入框
+        timerMinInput.addEventListener('click', (e) => {
+            activeTimerInput = timerMinInput;
+            timerMiniKeypad.classList.remove('hidden');
+            timerKeypadTitle.textContent = "輸入「分鐘」";
+            // 更新視覺提示
+            timerSecInput.classList.remove('ring-2', 'ring-purple-500', 'border-purple-500');
+            timerMinInput.classList.add('ring-2', 'ring-purple-500', 'border-purple-500');
+        });
+
+        // 點擊「秒」輸入框
+        timerSecInput.addEventListener('click', (e) => {
+            activeTimerInput = timerSecInput;
+            timerMiniKeypad.classList.remove('hidden');
+            timerKeypadTitle.textContent = "輸入「秒數」";
+            // 更新視覺提示
+            timerMinInput.classList.remove('ring-2', 'ring-purple-500', 'border-purple-500');
+            timerSecInput.classList.add('ring-2', 'ring-purple-500', 'border-purple-500');
+        });
+
+        // 處理迷你鍵盤數字點擊
+        const timerBtns = document.querySelectorAll('.t-keypad-btn');
+        timerBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (!activeTimerInput) return;
+
+                const val = btn.getAttribute('data-val');
+                let currentStr = activeTimerInput.value;
+
+                if (val === 'clear') {
+                    activeTimerInput.value = '0';
+                } else if (val === 'back') {
+                    activeTimerInput.value = currentStr.slice(0, -1) || '0';
+                } else {
+                    if (currentStr === '0') currentStr = ''; // 去除預設的0
+                    // 限制只能輸入2位數 (分鐘最大99, 秒數最大59的檢查可於開始測驗時統一處理)
+                    if (currentStr.length < 2) {
+                        activeTimerInput.value = currentStr + val;
+                    }
+                }
+            });
+        });
+
+        // 完成按鈕隱藏小鍵盤
+        timerKeypadCloseBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            timerMiniKeypad.classList.add('hidden');
+            timerMinInput.classList.remove('ring-2', 'ring-purple-500', 'border-purple-500');
+            timerSecInput.classList.remove('ring-2', 'ring-purple-500', 'border-purple-500');
+            activeTimerInput = null;
+            
+            // 防呆處理空值
+            if (timerMinInput.value === '') timerMinInput.value = '0';
+            if (timerSecInput.value === '') timerSecInput.value = '0';
+        });
+    }
 
     function formatTime(seconds) {
         const m = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -396,6 +482,7 @@
         window.addEventListener('resize', resizeCanvas);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         setupKeypad();
+        setupTimerKeypad(); // 啟動迷你計時器小鍵盤設定
     }
 
     function resizeCanvas() {
@@ -559,6 +646,11 @@
         if (questions.length === 0) return;
         isTeacherMode = false;
         
+        // 強制關閉小鍵盤
+        if (!timerMiniKeypad.classList.contains('hidden')) {
+            timerKeypadCloseBtn.click();
+        }
+
         // 讀取老師自訂的每題測驗倒數時間 (分 + 秒)
         const mins = parseInt(timerMinInput.value) || 0;
         const secs = parseInt(timerSecInput.value) || 0;
