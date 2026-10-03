@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>分數轉換互動練習</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0fdf4; 
+            color: #333;
+        }
+
+        .fraction {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            vertical-align: middle;
+            margin: 0 4px;
+        }
+
+        .numerator {
+            border-bottom: 2px solid #333;
+            padding: 0 4px;
+            line-height: 1.2;
+        }
+
+        .denominator {
+            padding: 0 4px;
+            line-height: 1.2;
+        }
+
+        /* 數字輸入框 */
+        .digit-box {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            width: 32px;
+            height: 32px;
+            border: 2px solid #cbd5e1;
+            border-radius: 6px;
+            background-color: white;
+            cursor: pointer;
+            font-size: 1.25rem;
+            font-weight: bold;
+            color: #2563eb; 
+            transition: all 0.2s;
+            margin: 0 2px;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .digit-box:hover {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+        }
+        
+        .digit-box.active {
+            border-color: #ef4444;
+            box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.3);
+        }
+
+        .digit-box.empty {
+            color: transparent;
+        }
+
+        /* 數字選擇盤覆蓋層 */
+        #numpad-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 50;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* 題目區塊樣式 */
+        .question-card {
+            background-color: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            display: flex;
+            align-items: center;
+            font-size: 1.5rem;
+        }
+
+        .question-number {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #000; 
+            margin-right: 0.5rem;
+            flex-shrink: 0;
+        }
+
+        /* 計時器樣式 */
+        .timer-box {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            width: 24px;
+            height: 36px;
+            background-color: #1f2937;
+            color: #10b981;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 1.5rem;
+            font-weight: bold;
+            border-radius: 4px;
+            margin: 0 2px;
+            cursor: pointer;
+        }
+        
+        .timer-box:hover {
+            background-color: #374151;
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+
+    <div class="max-w-5xl mx-auto">
+        <!-- 標頭與控制區 -->
+        <div class="bg-white rounded-2xl shadow-lg p-6 mb-6 flex flex-col lg:flex-row justify-between items-center gap-6">
+            <h1 class="text-3xl font-bold text-gray-800 flex items-center">
+                分數轉換練習
+            </h1>
+            
+            <!-- 計時器 -->
+            <div class="flex flex-col bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-inner max-w-xl">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-gray-600 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        
+                        <div class="flex items-center text-2xl font-bold text-gray-800 mr-4" id="timer-display">
+                            <!-- 分鐘 (十位數, 個位數) -->
+                            <div class="timer-box" onclick="openTimerPad('min10')" id="t-min10">0</div>
+                            <div class="timer-box" onclick="openTimerPad('min1')" id="t-min1">2</div>
+                            <span class="mx-1 text-gray-700">:</span>
+                            <!-- 秒數 (十位數, 個位數) -->
+                            <div class="timer-box" onclick="openTimerPad('sec10')" id="t-sec10">0</div>
+                            <div class="timer-box" onclick="openTimerPad('sec1')" id="t-sec1">0</div>
+                        </div>
+                    </div>
+
+                    <div class="flex space-x-2">
+                        <button id="btn-timer-start" onclick="toggleTimer()" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-bold transition shadow whitespace-nowrap">
+                            開始
+                        </button>
+                        <button onclick="resetTimer()" class="bg-gray-400 hover:bg-gray-500 text-white px-4 py-2 rounded-lg font-bold transition shadow whitespace-nowrap">
+                            重設
+                        </button>
+                    </div>
+                </div>
+                <div class="text-sm text-gray-600 leading-relaxed bg-white/70 p-2.5 rounded-lg">
+                    <span class="font-bold text-blue-600">💡 自我訓練：</span>倒數計時器用來檢視答題速度是否夠快。正式考試有時間限制，若覺得來不及可藉此加快熟悉度。點擊數字可自訂時間，時間設為 0 則不計時直接作答。
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 mb-6">
+            
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-5 mb-5">
+                <div class="flex flex-wrap items-center gap-3">
+                    <span class="font-bold text-gray-700 text-lg mr-1">網頁題型：</span>
+                    <button onclick="setModeAndGenerate('improperToMixed')" id="btn-mode-improper" class="bg-blue-100 text-blue-700 hover:bg-blue-600 hover:text-white px-4 py-2.5 rounded-xl font-bold transition">
+                        假分數換帶分數
+                    </button>
+                    <button onclick="setModeAndGenerate('mixedToImproper')" id="btn-mode-mixed" class="bg-emerald-100 text-emerald-700 hover:bg-emerald-600 hover:text-white px-4 py-2.5 rounded-xl font-bold transition">
+                        帶分數換假分數
+                    </button>
+                    <button onclick="setModeAndGenerate('all')" id="btn-mode-all" class="bg-purple-600 text-white hover:bg-purple-700 px-4 py-2.5 rounded-xl font-bold shadow-md transition">
+                        混合出題
+                    </button>
+                </div>
+                
+                <button onclick="checkAllAnswers()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-bold shadow-md transition transform active:scale-95 text-lg">
+                    全部對答案
+                </button>
+            </div>
+
+            <!-- PDF 匯出區域 -->
+            <div class="flex flex-col md:flex-row items-center gap-4">
+                <div class="flex flex-wrap md:flex-nowrap gap-3">
+                    <button onclick="exportPDF('question')" class="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-md transition transform active:scale-95 flex items-center whitespace-nowrap">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                        </svg>
+                        列印/存PDF題目卷
+                    </button>
+                    <button onclick="exportPDF('answer')" class="bg-red-500 hover:bg-red-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-md transition transform active:scale-95 flex items-center whitespace-nowrap">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2-2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                        </svg>
+                        列印/存PDF解答卷
+                    </button>
+                </div>
+                <div class="text-gray-500 text-sm italic">
+                    ( 每次匯出皆會重新亂數產生 14 題，與網頁題目不同 )
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white p-4 md:p-8 rounded-2xl shadow-lg border border-gray-100 min-h-[500px]">
+            <div id="mode-title-display" class="text-xl font-bold text-gray-700 mb-6 px-2 text-center border-b pb-4">
+                將假分數換成帶分數或整數，帶分數換成假分數。
+            </div>
+
+            <!-- 題目網格 (2欄 x 4列，共 8 題) -->
+            <div id="questions-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4 gap-y-6">
+                <!-- 題目將透過 JavaScript 動態生成於此 -->
+            </div>
+            
+            <!-- 批改結果總結 -->
+            <div id="result-message" class="hidden mt-10 text-center p-5 rounded-xl text-2xl font-bold"></div>
+        </div>
+    </div>
+
+    <!-- 共用的數字選擇盤 -->
+    <div id="numpad-overlay" onclick="closeNumpad(event)">
+        <div class="bg-white p-6 rounded-2xl shadow-2xl transform scale-100 transition-transform">
+            <h3 id="numpad-title" class="text-center text-lg font-bold mb-4 text-gray-700">選擇數字</h3>
+            <div class="grid grid-cols-3 gap-3">
+                <button onclick="selectDigit(1)" class="w-16 h-16 bg-blue-50 hover:bg-blue-100 text-blue-700 text-2xl font-bold rounded-xl shadow-sm border border-blue-200 transition">1</button>
+                <button onclick="selectDigit(2)" class="w-16 h-16 bg-blue-50 hover:bg-blue-100 text-blue-700 text-2xl font-bold rounded-xl shadow-sm border border-blue-200 transition">2</button>
+                <button onclick="selectDigit(3)" class="w-16 h-16 bg-blue-50 hover:bg-blue-100 text-blue-700 text-2xl font-bold rounded-xl shadow-sm border border-blue-200 transition">3</button>
+                
+                <button onclick="selectDigit(4)" class="w-16 h-16 bg-blue-50 hover:bg-blue-100 text-blue-700 text-2xl font-bold rounded-xl shadow-sm border border-blue-200 transition">4</button>
+                <button onclick="selectDigit(5)" class="w-16 h-16 bg-blue-50 hover:bg-blue-100 text-blue-700 text-2xl font-bold rounded-xl shadow-sm border border-blue-200 transition">5</button>
+                <button onclick="selectDigit(6)" class="w-16 h-16 bg-blue-50 hover:bg-blue-100 text-blue-700 text-2xl font-bold rounded-xl shadow-sm border border-blue-200 transition">6</button>
+                
+                <button onclick="selectDigit(7)" class="w-16 h-16 bg-blue-50 hover:bg-blue-100 text-blue-700 text-2xl font-bold rounded-xl shadow-sm border border-blue-200 transition">7</button>
+                <button onclick="selectDigit(8)" class="w-16 h-16 bg-blue-50 hover:bg-blue-100 text-blue-700 text-2xl font-bold rounded-xl shadow-sm border border-blue-200 transition">8</button>
+                <button onclick="selectDigit(9)" class="w-16 h-16 bg-blue-50 hover:bg-blue-100 text-blue-700 text-2xl font-bold rounded-xl shadow-sm border border-blue-200 transition">9</button>
+                
+                <button onclick="clearDigit()" class="w-16 h-16 bg-red-50 hover:bg-red-100 text-red-600 text-lg font-bold rounded-xl shadow-sm border border-red-200 transition">清除</button>
+                <button onclick="selectDigit(0)" class="w-16 h-16 bg-blue-50 hover:bg-blue-100 text-blue-700 text-2xl font-bold rounded-xl shadow-sm border border-blue-200 transition">0</button>
+                <button onclick="closeNumpad()" class="w-16 h-16 bg-gray-100 hover:bg-gray-200 text-gray-600 text-lg font-bold rounded-xl shadow-sm border border-gray-300 transition">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 訊息提示框 (取代 alert) -->
+    <div id="message-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex justify-center items-center">
+        <div class="bg-white p-6 rounded-xl shadow-xl max-w-sm w-full mx-4">
+            <h3 id="message-title" class="text-xl font-bold mb-2">提示</h3>
+            <p id="message-body" class="text-gray-600 mb-6"></p>
+            <div class="flex justify-end">
+                <button onclick="closeMessage()" class="bg-blue-500 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-600 transition">確定</button>
+            </div>
+        </div>
+    </div>
+
+
+<!-- 專屬版權宣告頁尾 (乾淨、單行設計) -->
+    <div class="text-center text-gray-400 text-sm mt-8 mb-4 tracking-wider">
+        &copy; 谷宗芸老師設計 / AI 輔助生成
+    </div>
+
+
+    <script>
+        let currentQuestions = [];
+        let currentMode = 'all'; // 'all', 'improperToMixed', 'mixedToImproper'
+        
+        let activeInputId = null;
+        let isEditingTimer = false;
+
+        let timerInterval;
+        let timeLeft = 2 * 60; // 預設 2 分鐘
+        let isTimerRunning = false;
+        
+        function getRandomInt(min, max) {
+            return Math.floor(Math.random() * (max - min)) + min;
+        }
+
+        function showMessage(title, message) {
+            document.getElementById('message-title').textContent = title;
+            document.getElementById('message-body').textContent = message;
+            document.getElementById('message-modal').classList.remove('hidden');
+        }
+
+        function closeMessage() {
+            document.getElementById('message-modal').classList.add('hidden');
+        }
+
+        // 產生單一題目物件
+        function createQuestionLogic(id, mode) {
+            let type = mode;
+            if (mode === 'all') {
+                type = Math.random() < 0.5 ? 'improperToMixed' : 'mixedToImproper';
+            }
+            
+            let whole, numerator, denominator, improperNumerator;
+            denominator = getRandomInt(2, 10);
+            
+            if (type === 'improperToMixed') {
+                const isInteger = Math.random() < 0.2;
+                if (isInteger) {
+                    whole = getRandomInt(1, 10);
+                    improperNumerator = whole * denominator;
+                    return {
+                        id, type, isInteger: true,
+                        question: { num: improperNumerator, den: denominator },
+                        answer: { whole: whole, num: null, den: null },
+                        qKey: `imp_${improperNumerator}_${denominator}`
+                    };
+                } else {
+                    whole = getRandomInt(1, 10);
+                    numerator = getRandomInt(1, denominator);
+                    improperNumerator = whole * denominator + numerator;
+                    return {
+                        id, type, isInteger: false,
+                        question: { num: improperNumerator, den: denominator },
+                        answer: { whole: whole, num: numerator, den: denominator },
+                        qKey: `imp_${improperNumerator}_${denominator}`
+                    };
+                }
+            } else {
+                whole = getRandomInt(1, 10);
+                numerator = getRandomInt(1, denominator);
+                improperNumerator = whole * denominator + numerator;
+                return {
+                    id, type, isInteger: false,
+                    question: { whole: whole, num: numerator, den: denominator },
+                    answer: { num: improperNumerator, den: denominator },
+                    qKey: `mix_${whole}_${numerator}_${denominator}`
+                };
+            }
+        }
+
+        // 產生指定數量、不重複的題目
+        function generateUniqueQuestions(count, mode) {
+            const questions = [];
+            const seenKeys = new Set();
+            let idCounter = 1;
+            let safetyLimit = 0; // 避免無窮迴圈
+
+            while (questions.length < count && safetyLimit < 1000) {
+                safetyLimit++;
+                const q = createQuestionLogic(idCounter, mode);
+                
+                if (!seenKeys.has(q.qKey)) {
+                    seenKeys.add(q.qKey);
+                    questions.push(q);
+                    idCounter++;
+                }
+            }
+            return questions;
+        }
+
+        function updateModeUI() {
+            const btns = ['btn-mode-improper', 'btn-mode-mixed', 'btn-mode-all'];
+            btns.forEach(id => {
+                document.getElementById(id).className = "bg-gray-100 text-gray-600 hover:bg-gray-200 px-4 py-2.5 rounded-xl font-bold transition";
+            });
+
+            const displayTitle = document.getElementById('mode-title-display');
+            if (currentMode === 'improperToMixed') {
+                document.getElementById('btn-mode-improper').className = "bg-blue-600 text-white shadow-md px-4 py-2.5 rounded-xl font-bold transition";
+                displayTitle.textContent = "練習：將假分數換成帶分數或整數";
+            } else if (currentMode === 'mixedToImproper') {
+                document.getElementById('btn-mode-mixed').className = "bg-emerald-600 text-white shadow-md px-4 py-2.5 rounded-xl font-bold transition";
+                displayTitle.textContent = "練習：將帶分數換成假分數";
+            } else {
+                document.getElementById('btn-mode-all').className = "bg-purple-600 text-white shadow-md px-4 py-2.5 rounded-xl font-bold transition";
+                displayTitle.textContent = "混合練習：假分數換帶分數、帶分數換假分數";
+            }
+        }
+
+        function setModeAndGenerate(mode) {
+            currentMode = mode;
+            updateModeUI();
+            
+            // 網頁版產生 8 題
+            currentQuestions = generateUniqueQuestions(8, currentMode);
+            renderQuestionsList(currentQuestions);
+            
+            // 重設批改狀態
+            const resultMsg = document.getElementById('result-message');
+            resultMsg.classList.add('hidden');
+        }
+
+        function createAnswerBoxHtml(qId, parts) {
+            let html = '';
+            if (parts.includes('whole')) {
+                html += `<div class="digit-box empty" id="ans-${qId}-whole-1" onclick="openNumpad('ans-${qId}-whole-1')"></div>`;
+                html += `<div class="digit-box empty" id="ans-${qId}-whole-2" onclick="openNumpad('ans-${qId}-whole-2')"></div>`;
+            }
+            if (parts.includes('fraction')) {
+                html += `<div class="fraction">`;
+                html += `<div class="numerator flex">
+                            <div class="digit-box empty" id="ans-${qId}-num-1" onclick="openNumpad('ans-${qId}-num-1')"></div>
+                            <div class="digit-box empty" id="ans-${qId}-num-2" onclick="openNumpad('ans-${qId}-num-2')"></div>
+                         </div>`;
+                html += `<div class="denominator flex">
+                            <div class="digit-box empty" id="ans-${qId}-den-1" onclick="openNumpad('ans-${qId}-den-1')"></div>
+                            <div class="digit-box empty" id="ans-${qId}-den-2" onclick="openNumpad('ans-${qId}-den-2')"></div>
+                         </div>`;
+                html += `</div>`;
+            }
+            return html;
+        }
+
+        function renderQuestionsList(questions) {
+            const container = document.getElementById('questions-grid');
+            container.innerHTML = '';
+
+            questions.forEach(q => {
+                const card = document.createElement('div');
+                card.className = 'question-card border border-gray-100 flex-col sm:flex-row p-4 relative';
+                
+                let html = `<div class="flex items-center w-full sm:w-auto mb-3 sm:mb-0 sm:mr-4">
+                                <div class="question-number">${q.id}.</div>`;
+
+                if (q.type === 'improperToMixed') {
+                    html += `<div class="fraction mr-4 text-2xl">
+                                <div class="numerator px-2">${q.question.num}</div>
+                                <div class="denominator px-2">${q.question.den}</div>
+                             </div>`;
+                } else {
+                    html += `<div class="flex items-center mr-4 text-2xl">
+                                <span class="mr-1">${q.question.whole}</span>
+                                <div class="fraction">
+                                    <div class="numerator px-1">${q.question.num}</div>
+                                    <div class="denominator px-1">${q.question.den}</div>
+                                </div>
+                             </div>`;
+                }
+                
+                html += `<span class="mx-2 text-2xl">=</span></div>`;
+                html += `<div class="flex items-center text-gray-500 text-3xl"> ( </div>`;
+                html += `<div class="flex items-center mx-2 min-h-[4rem]">`;
+                
+                if (q.type === 'improperToMixed') {
+                    html += createAnswerBoxHtml(q.id, ['whole', 'fraction']);
+                } else {
+                    html += createAnswerBoxHtml(q.id, ['fraction']);
+                }
+                
+                html += `</div>`;
+                html += `<div class="text-gray-500 text-3xl"> ) </div>`;
+                
+                // 批改打勾/打叉圖示位置 (絕對定位在右側)
+                html += `<div id="mark-${q.id}" class="absolute right-4 top-1/2 transform -translate-y-1/2 w-10 h-10 flex items-center justify-center opacity-0 transition-opacity"></div>`;
+
+                card.innerHTML = html;
+                container.appendChild(card);
+            });
+        }
+
+        function openNumpad(inputId) {
+            if (activeInputId && document.getElementById(activeInputId)) {
+                document.getElementById(activeInputId).classList.remove('active');
+            }
+            activeInputId = inputId;
+            isEditingTimer = false;
+            
+            const box = document.getElementById(inputId);
+            box.classList.add('active');
+            document.getElementById('numpad-title').textContent = '選擇答案數字';
+            document.getElementById('numpad-overlay').style.display = 'flex';
+        }
+
+        function openTimerPad(part) {
+            if (isTimerRunning) return; 
+            if (activeInputId && document.getElementById(activeInputId)) {
+                document.getElementById(activeInputId).classList.remove('bg-gray-600');
+            }
+            activeInputId = `t-${part}`;
+            isEditingTimer = true;
+            
+            const box = document.getElementById(activeInputId);
+            box.style.backgroundColor = '#4b5563'; 
+            
+            document.getElementById('numpad-title').textContent = '設定時間數字';
+            document.getElementById('numpad-overlay').style.display = 'flex';
+        }
+
+        function closeNumpad(event) {
+            if (event && event.target.id !== 'numpad-overlay') return;
+            document.getElementById('numpad-overlay').style.display = 'none';
+            
+            if (activeInputId) {
+                const el = document.getElementById(activeInputId);
+                if (el) {
+                    if (isEditingTimer) {
+                        el.style.backgroundColor = ''; 
+                    } else {
+                        el.classList.remove('active');
+                    }
+                }
+                activeInputId = null;
+            }
+        }
+
+        function selectDigit(digit) {
+            if (!activeInputId) return;
+            const box = document.getElementById(activeInputId);
+            
+            if (isEditingTimer) {
+                if (activeInputId === 't-sec10' && digit > 5) digit = 5; 
+                box.textContent = digit;
+                updateTimeLeftFromUI();
+            } else {
+                box.textContent = digit;
+                box.classList.remove('empty');
+            }
+            closeNumpad();
+        }
+
+        function clearDigit() {
+            if (!activeInputId) return;
+            const box = document.getElementById(activeInputId);
+            
+            if (isEditingTimer) {
+                box.textContent = '0';
+                updateTimeLeftFromUI();
+            } else {
+                box.textContent = '';
+                box.classList.add('empty');
+            }
+            closeNumpad();
+        }
+
+        function updateTimeLeftFromUI() {
+            const m10 = parseInt(document.getElementById('t-min10').textContent);
+            const m1 = parseInt(document.getElementById('t-min1').textContent);
+            const s10 = parseInt(document.getElementById('t-sec10').textContent);
+            const s1 = parseInt(document.getElementById('t-sec1').textContent);
+            timeLeft = (m10 * 10 + m1) * 60 + (s10 * 10 + s1);
+        }
+
+        function updateTimerDisplay() {
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            const mStr = minutes.toString().padStart(2, '0');
+            const sStr = seconds.toString().padStart(2, '0');
+
+            document.getElementById('t-min10').textContent = mStr[0];
+            document.getElementById('t-min1').textContent = mStr[1];
+            document.getElementById('t-sec10').textContent = sStr[0];
+            document.getElementById('t-sec1').textContent = sStr[1];
+        }
+
+        function toggleTimer() {
+            const btn = document.getElementById('btn-timer-start');
+            
+            if (isTimerRunning) {
+                clearInterval(timerInterval);
+                isTimerRunning = false;
+                btn.textContent = '繼續';
+                btn.className = "bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-bold transition shadow whitespace-nowrap";
+            } else {
+                if (timeLeft <= 0) {
+                    showMessage('提示', '時間設定為 0。您可以直接開始作答，無需計時。');
+                    return; 
+                }
+                
+                isTimerRunning = true;
+                btn.textContent = '暫停';
+                btn.className = "bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg font-bold transition shadow whitespace-nowrap";
+                
+                timerInterval = setInterval(() => {
+                    timeLeft--;
+                    updateTimerDisplay();
+                    
+                    if (timeLeft <= 0) {
+                        clearInterval(timerInterval);
+                        isTimerRunning = false;
+                        btn.textContent = '開始';
+                        btn.className = "bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-bold transition shadow whitespace-nowrap";
+                        playBeep();
+                        showMessage('時間到', '作答時間結束！');
+                    }
+                }, 1000);
+            }
+        }
+
+        function resetTimer() {
+            clearInterval(timerInterval);
+            isTimerRunning = false;
+            timeLeft = 2 * 60; // 預設 2 分鐘
+            updateTimerDisplay();
+            
+            const btn = document.getElementById('btn-timer-start');
+            btn.textContent = '開始';
+            btn.className = "bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-bold transition shadow whitespace-nowrap";
+        }
+
+        function playBeep() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, ctx.currentTime);
+                gain.gain.setValueAtTime(1, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1);
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 1);
+            } catch(e) {}
+        }
+
+        function getInputValue(qId, part) {
+            const el1 = document.getElementById(`ans-${qId}-${part}-1`);
+            const el2 = document.getElementById(`ans-${qId}-${part}-2`);
+            if (!el1 || !el2) return null;
+            const val1 = el1.textContent.trim();
+            const val2 = el2.textContent.trim();
+            if (val1 === '' && val2 === '') return null; 
+            return parseInt((val1 || '') + (val2 || ''));
+        }
+
+        function validateAnswer(q) {
+            const userWhole = getInputValue(q.id, 'whole');
+            const userNum = getInputValue(q.id, 'num');
+            const userDen = getInputValue(q.id, 'den');
+
+            if (q.type === 'improperToMixed') {
+                if (q.isInteger) {
+                    if (userWhole === q.answer.whole && userNum === null && userDen === null) return true;
+                } else {
+                    if (userWhole !== null && userNum !== null && userDen !== null) {
+                        // 利用交叉相乘判斷等值，並確保帶分數分子必須小於分母
+                        const userImproperNum = userWhole * userDen + userNum;
+                        const correctImproperNum = q.answer.whole * q.answer.den + q.answer.num;
+                        if (userImproperNum * q.answer.den === correctImproperNum * userDen) {
+                            if (userNum < userDen) return true;
+                        }
+                    }
+                }
+            } else {
+                if (userNum !== null && userDen !== null) {
+                    const correctImproperNum = q.answer.num;
+                    const correctDen = q.answer.den;
+                    if (userNum * correctDen === correctImproperNum * userDen) return true;
+                }
+            }
+            return false;
+        }
+
+        function checkAllAnswers() {
+            if (currentQuestions.length === 0) return;
+
+            let correctCount = 0;
+            currentQuestions.forEach(q => {
+                const isCorrect = validateAnswer(q);
+                const markEl = document.getElementById(`mark-${q.id}`);
+                
+                if (isCorrect) {
+                    correctCount++;
+                    markEl.innerHTML = `<svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>`;
+                } else {
+                    markEl.innerHTML = `<svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg>`;
+                }
+                markEl.classList.remove('opacity-0');
+                markEl.classList.add('opacity-100');
+            });
+
+            const resultMsg = document.getElementById('result-message');
+            if (correctCount === currentQuestions.length) {
+                resultMsg.textContent = `太棒了！全對！(${correctCount}/${currentQuestions.length})`;
+                resultMsg.className = 'mt-8 text-center p-4 rounded-xl text-xl font-bold bg-green-100 text-green-700 block';
+            } else {
+                resultMsg.textContent = `答對了 ${correctCount} 題，還有 ${currentQuestions.length - correctCount} 題要加油喔！`;
+                resultMsg.className = 'mt-8 text-center p-4 rounded-xl text-xl font-bold bg-yellow-100 text-yellow-700 block';
+            }
+        }
+
+        // 產生半張 A4 的 HTML (14題，2欄 x 7列)，使用嚴格的 inline css 定位
+        function generatePDFHalfPage(pdfQuestions, type) {
+            let titleStr = "分數轉換練習";
+            if (currentMode === 'improperToMixed') titleStr = "假分數換帶分數";
+            if (currentMode === 'mixedToImproper') titleStr = "帶分數換假分數";
+
+            let html = `
+                <div style="width: 100%; height: 100%; display: flex; flex-direction: column; font-family: sans-serif;">
+                    <div style="text-align: center; font-size: 18px; font-weight: bold; margin-bottom: 8px;">${titleStr}</div>
+                    
+                    <!-- 2欄 x 7列 的絕對網格 -->
+                    <div style="flex-grow: 1; display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(7, 1fr); gap: 10px 20px;">
+            `;
+
+            pdfQuestions.forEach(q => {
+                html += `<div style="display: flex; align-items: center; justify-content: flex-start; font-size: 24px;">
+                            <div style="font-weight: bold; width: 35px; text-align: right; margin-right: 10px; flex-shrink: 0;">${q.id}.</div>`;
+
+                // 題目渲染
+                if (q.type === 'improperToMixed') {
+                    html += `<div style="display: inline-flex; flex-direction: column; align-items: center; justify-content: center;">
+                                <div style="border-bottom: 2px solid black; padding: 0 8px; line-height: 1.1;">${q.question.num}</div>
+                                <div style="padding: 0 8px; line-height: 1.1;">${q.question.den}</div>
+                             </div>`;
+                } else {
+                    html += `<div style="display: flex; align-items: center;">
+                                <span style="margin-right: 4px;">${q.question.whole}</span>
+                                <div style="display: inline-flex; flex-direction: column; align-items: center; justify-content: center;">
+                                    <div style="border-bottom: 2px solid black; padding: 0 6px; line-height: 1.1;">${q.question.num}</div>
+                                    <div style="padding: 0 6px; line-height: 1.1;">${q.question.den}</div>
+                                </div>
+                             </div>`;
+                }
+
+                html += `<span style="margin: 0 10px;">=</span><span style="color: #666; font-size: 26px;">(</span>`;
+
+                // 答案渲染區塊
+                let ansHtml = '';
+                if (type === 'answer') {
+                    if (q.type === 'improperToMixed') {
+                        if (q.isInteger) {
+                            ansHtml = `<span style="color: #dc2626; font-weight: bold;">${q.answer.whole}</span>`;
+                        } else {
+                            ansHtml = `<div style="display: flex; align-items: center; color: #dc2626; font-weight: bold;">
+                                            <span style="margin-right: 4px;">${q.answer.whole}</span>
+                                            <div style="display: inline-flex; flex-direction: column; align-items: center; font-size: 18px;">
+                                                <div style="border-bottom: 2px solid #dc2626; padding: 0 4px; line-height: 1.1;">${q.answer.num}</div>
+                                                <div style="padding: 0 4px; line-height: 1.1;">${q.answer.den}</div>
+                                            </div>
+                                         </div>`;
+                        }
+                    } else {
+                        ansHtml = `<div style="display: inline-flex; flex-direction: column; align-items: center; color: #dc2626; font-weight: bold;">
+                                        <div style="border-bottom: 2px solid #dc2626; padding: 0 6px; line-height: 1.1;">${q.answer.num}</div>
+                                        <div style="padding: 0 6px; line-height: 1.1;">${q.answer.den}</div>
+                                     </div>`;
+                    }
+                } else {
+                    // 題目卷留空 (至少保留一些寬度讓括號撐開)
+                    ansHtml = `<span style="display: inline-block; width: 45px;"></span>`;
+                }
+
+                html += `<div style="display: flex; justify-content: center; align-items: center; min-width: 45px; height: 100%;">${ansHtml}</div>`;
+                html += `<span style="color: #666; font-size: 26px;">)</span></div>`;
+            });
+
+            html += `</div></div>`;
+            return html;
+        }
+
+        function exportPDF(type) {
+            document.body.style.cursor = 'wait';
+
+            // 背景亂數產生 14 題，確保這 14 題不重複，且與目前網頁上的題目獨立
+            const pdfQuestions = generateUniqueQuestions(14, currentMode);
+
+            // A4 橫向嚴格像素尺寸 (1122 x 793)
+            // 切分成左右兩邊各 561px，並將 padding 縮減讓留白空間留給題目
+            const fullHtml = `
+                <div id="pdf-export-wrapper" style="width: 1122px; height: 793px; display: flex; background-color: white; box-sizing: border-box; margin: 0; padding: 0; color: black; overflow: hidden;">
+                    <!-- 左半部 -->
+                    <div style="width: 561px; height: 793px; box-sizing: border-box; padding: 40px 45px 40px 40px; border-right: 1px dashed #ccc;">
+                        ${generatePDFHalfPage(pdfQuestions, type)}
+                    </div>
+                    <!-- 右半部 (與左半完全相同) -->
+                    <div style="width: 561px; height: 793px; box-sizing: border-box; padding: 40px 40px 40px 45px;">
+                        ${generatePDFHalfPage(pdfQuestions, type)}
+                    </div>
+                </div>
+            `;
+
+            // 隱藏在畫面外
+            const element = document.createElement('div');
+            element.innerHTML = fullHtml;
+            element.style.position = 'absolute';
+            element.style.left = '-9999px';
+            element.style.top = '-9999px';
+            document.body.appendChild(element);
+
+            // 設定 html2pdf，強制使用 pixel 單位避免 RWD 破壞版面
+            const opt = {
+                margin:       0, 
+                filename:     `分數轉換_${type === 'question' ? '題目卷' : '解答卷'}.pdf`,
+                image:        { type: 'jpeg', quality: 1 },
+                html2canvas:  { scale: 2, useCORS: true, windowWidth: 1122, windowHeight: 793, scrollX: 0, scrollY: 0 },
+                jsPDF:        { unit: 'px', format: [1122, 793], orientation: 'landscape' },
+                pagebreak:    { mode: ['avoid-all'] }
+            };
+
+            html2pdf().set(opt).from(element.firstElementChild).save().then(() => {
+                document.body.removeChild(element);
+                document.body.style.cursor = 'default';
+            }).catch(err => {
+                console.error('PDF error:', err);
+                document.body.removeChild(element);
+                document.body.style.cursor = 'default';
+                showMessage('錯誤', '產生 PDF 時發生錯誤。');
+            });
+        }
+
+        window.onload = () => {
+            setModeAndGenerate('all');
+            updateTimerDisplay();
+        };
+    </script>
+</body>
+</html>
