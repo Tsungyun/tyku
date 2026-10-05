@@ -135,27 +135,18 @@
             overflow-y: auto; 
             touch-action: auto; /* 面板內允許正常捲動與點擊 */
         }
-        
-        /* 避免數字輸入框出現上下箭頭 */
-        input[type="number"]::-webkit-inner-spin-button,
-        input[type="number"]::-webkit-outer-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
-        }
-        input[type="number"] {
-            -moz-appearance: textfield;
-        }
     </style>
 </head>
 <body>
 
 <div id="app-container">
-    <!-- 學生測驗超大獨立倒數計時器 (獨立懸浮於左上方，視野極佳且絕不遮擋中央量角器與題圖) -->
+    <!-- 學生測驗超大獨立倒數計時器 (獨立懸浮於左上方) -->
     <div id="large-timer-hud" class="hidden-mode absolute top-5 left-5 z-20 bg-white/95 backdrop-blur-md border-2 border-red-500 rounded-2xl px-5 py-3 shadow-xl flex items-center gap-4 pointer-events-none transition-all duration-300">
         <span class="text-3xl sm:text-4xl animate-pulse">⏱️</span>
         <div class="flex flex-col">
             <span class="text-xs font-bold text-gray-500 tracking-wider">每題作答倒數</span>
-            <span id="large-timer-display" class="font-mono text-4xl sm:text-5xl font-black text-red-600 tracking-wider leading-none">03:00</span>
+            <!-- 預設顯示改為 02:00 -->
+            <span id="large-timer-display" class="font-mono text-4xl sm:text-5xl font-black text-red-600 tracking-wider leading-none">02:00</span>
         </div>
     </div>
 
@@ -175,7 +166,7 @@
         </div>
     </div>
 
-    <!-- 教師出題面板 -->
+     <!-- 教師出題面板 -->
     <div id="teacher-panel" class="ui-panel">
         <h2 class="text-xl font-bold mb-4 text-gray-800 border-b pb-2">👨‍🏫 教師出題模式</h2>
         
@@ -187,6 +178,7 @@
                 <li><strong>如何叫出量角器？</strong> 先按亂數8題，接著點擊下方紫色的「<strong>🚀 鎖定題庫，開始測驗</strong>」按鈕，就會進入線上測驗並出現量角器囉！</li>
             </ul>
         </div>
+        
         
         <div class="mb-4">
             <label class="block text-sm font-medium text-gray-700 mb-1">手動設定單一角度 (0~360°):</label>
@@ -211,15 +203,34 @@
         </div>
 
         <!-- 每題作答倒數時間自訂區域 -->
-        <div class="mb-4 border-t pt-3">
+        <div class="mb-4 border-t pt-3 relative">
             <label class="block text-sm font-bold text-gray-700 mb-1">⏱️ 設定每題作答倒數時間：</label>
             <div class="flex items-center gap-2">
-                <input type="number" id="timer-min-input" min="0" max="59" value="3" class="border border-gray-300 rounded px-2 py-1.5 w-16 text-center font-bold text-gray-800 focus:ring-2 focus:ring-purple-500">
+                <!-- 修改為 inputmode="none" 阻擋原生鍵盤，預設改為 2 分 -->
+                <input type="text" inputmode="none" readonly id="timer-min-input" value="2" class="border border-gray-300 rounded px-2 py-1.5 w-16 text-center font-bold text-purple-700 bg-gray-50 cursor-pointer outline-none transition-shadow">
                 <span class="text-sm font-semibold text-gray-700">分</span>
-                <input type="number" id="timer-sec-input" min="0" max="59" value="0" class="border border-gray-300 rounded px-2 py-1.5 w-16 text-center font-bold text-gray-800 focus:ring-2 focus:ring-purple-500">
+                <input type="text" inputmode="none" readonly id="timer-sec-input" value="0" class="border border-gray-300 rounded px-2 py-1.5 w-16 text-center font-bold text-purple-700 bg-gray-50 cursor-pointer outline-none transition-shadow">
                 <span class="text-sm font-semibold text-gray-700">秒</span>
             </div>
-            <p class="text-xs text-gray-400 mt-1">※ 時間結束若未作答，將自動跳至下一題。</p>
+            <p class="text-xs text-gray-400 mt-1">※ 點擊數字可使用小鍵盤修改。時間結束若未作答，將自動跳下一題。</p>
+
+            <!-- 教師設定時間專用小鍵盤 -->
+            <div id="teacher-time-keypad" class="hidden absolute top-16 left-0 bg-white border border-gray-200 shadow-xl rounded-lg p-2 z-50 w-52">
+                <div class="grid grid-cols-3 gap-1.5">
+                    <button class="t-keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-1.5 rounded shadow-sm text-sm" data-val="1">1</button>
+                    <button class="t-keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-1.5 rounded shadow-sm text-sm" data-val="2">2</button>
+                    <button class="t-keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-1.5 rounded shadow-sm text-sm" data-val="3">3</button>
+                    <button class="t-keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-1.5 rounded shadow-sm text-sm" data-val="4">4</button>
+                    <button class="t-keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-1.5 rounded shadow-sm text-sm" data-val="5">5</button>
+                    <button class="t-keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-1.5 rounded shadow-sm text-sm" data-val="6">6</button>
+                    <button class="t-keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-1.5 rounded shadow-sm text-sm" data-val="7">7</button>
+                    <button class="t-keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-1.5 rounded shadow-sm text-sm" data-val="8">8</button>
+                    <button class="t-keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-1.5 rounded shadow-sm text-sm" data-val="9">9</button>
+                    <button class="t-keypad-btn bg-red-50 border border-red-200 hover:bg-red-100 text-red-600 font-bold py-1.5 rounded shadow-sm text-xs" data-val="clear">歸零</button>
+                    <button class="t-keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-1.5 rounded shadow-sm text-sm" data-val="0">0</button>
+                    <button class="t-keypad-btn bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-600 font-bold py-1.5 rounded shadow-sm text-xs" data-val="ok">確定</button>
+                </div>
+            </div>
         </div>
 
         <div class="mb-4">
@@ -256,11 +267,11 @@
         <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">輸入測量到的角度 (°):</label>
             <div class="flex gap-2 mb-2.5">
-                <!-- 加入 inputmode="none" 避免在手機上點擊時跳出系統原生鍵盤 -->
+                <!-- 學生輸入欄 -->
                 <input type="text" id="student-answer" inputmode="none" class="border border-gray-300 rounded px-3 py-1.5 w-full text-xl font-bold text-center text-purple-700 bg-gray-50 focus:ring-2 focus:ring-purple-500 focus:outline-none" placeholder="0" readonly>
             </div>
 
-            <!-- 虛擬數字鍵盤 (尺寸調小，精巧好點選) -->
+            <!-- 虛擬數字鍵盤 -->
             <div id="virtual-keypad" class="grid grid-cols-3 gap-1.5 mb-3">
                 <button class="keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-2 rounded shadow-sm text-base transition-colors active:bg-gray-200" data-val="1">1</button>
                 <button class="keypad-btn bg-white border border-gray-300 hover:bg-gray-100 text-gray-800 font-bold py-2 rounded shadow-sm text-base transition-colors active:bg-gray-200" data-val="2">2</button>
@@ -338,8 +349,66 @@
     const largeTimerHud = document.getElementById('large-timer-hud');
     const largeTimerDisplay = document.getElementById('large-timer-display');
 
-    // 自訂倒數計時器狀態 (預設每題 180 秒)
-    let questionTimeLimit = 180;
+    // 教師時間設定鍵盤邏輯
+    const teacherTimeKeypad = document.getElementById('teacher-time-keypad');
+    let activeTimeInput = null;
+
+    function openTeacherKeypad(inputEl) {
+        activeTimeInput = inputEl;
+        teacherTimeKeypad.classList.remove('hidden');
+        timerMinInput.classList.remove('ring-2', 'ring-purple-500');
+        timerSecInput.classList.remove('ring-2', 'ring-purple-500');
+        inputEl.classList.add('ring-2', 'ring-purple-500');
+    }
+
+    timerMinInput.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openTeacherKeypad(timerMinInput);
+    });
+
+    timerSecInput.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openTeacherKeypad(timerSecInput);
+    });
+
+    // 點擊背景關閉教師鍵盤
+    document.addEventListener('click', (e) => {
+        if (!teacherTimeKeypad.contains(e.target) && e.target !== timerMinInput && e.target !== timerSecInput) {
+            teacherTimeKeypad.classList.add('hidden');
+            timerMinInput.classList.remove('ring-2', 'ring-purple-500');
+            timerSecInput.classList.remove('ring-2', 'ring-purple-500');
+        }
+    });
+
+    const tKeypadBtns = document.querySelectorAll('.t-keypad-btn');
+    tKeypadBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (!activeTimeInput) return;
+            
+            const val = btn.getAttribute('data-val');
+            let currentText = activeTimeInput.value;
+
+            if (val === 'clear') {
+                activeTimeInput.value = '0';
+            } else if (val === 'ok') {
+                teacherTimeKeypad.classList.add('hidden');
+                activeTimeInput.classList.remove('ring-2', 'ring-purple-500');
+            } else {
+                // 如果目前是 0，輸入數字就取代 0；否則附加在後面（限制最多2位數）
+                if (currentText === '0') {
+                    activeTimeInput.value = val;
+                } else if (currentText.length < 2) { 
+                    let newVal = currentText + val;
+                    if (parseInt(newVal) > 59) newVal = '59'; // 分秒上限防呆
+                    activeTimeInput.value = newVal;
+                }
+            }
+        });
+    });
+
+    // 自訂倒數計時器狀態 (預設每題 120 秒 = 2分鐘)
+    let questionTimeLimit = 120;
     let timeLeft = questionTimeLimit;
     let timerInterval = null;
 
@@ -432,7 +501,7 @@
         const radBase = rotationDegrees * Math.PI / 180;
         const radAngle = (rotationDegrees - angleDegrees) * Math.PI / 180; 
 
-        // 1. 繪製兩條實線 (移除頂點的紅點，直接畫線)
+        // 1. 繪製兩條實線
         ctx.lineWidth = 5;
         ctx.strokeStyle = '#1f2937'; 
         ctx.lineCap = 'round';
@@ -462,7 +531,7 @@
     }
 
     function setupKeypad() {
-        const btns = document.querySelectorAll('.keypad-btn');
+        const btns = document.querySelectorAll('#virtual-keypad .keypad-btn');
         btns.forEach(btn => {
             btn.addEventListener('click', (e) => {
                 // 如果已經送出答案，就不可再點擊鍵盤
@@ -572,7 +641,8 @@
         const mins = parseInt(timerMinInput.value) || 0;
         const secs = parseInt(timerSecInput.value) || 0;
         const total = mins * 60 + secs;
-        questionTimeLimit = total > 0 ? total : 180; // 若設定為0則防呆回退為180秒
+        // 預設改為 120 秒防呆
+        questionTimeLimit = total > 0 ? total : 120; 
 
         // 切換面板顯示
         teacherPanel.classList.add('hidden-mode');
@@ -592,7 +662,7 @@
         const q = questions[currentProblemIndex];
         drawAngle(q.angle, q.rotation);
         
-        // 更新標題與重新啟動 3 分鐘倒數計時
+        // 更新標題與重新啟動倒數計時
         scoreDisplay.textContent = `第 ${currentProblemIndex + 1} / ${questions.length} 題`;
         startQuestionTimer();
         
@@ -963,5 +1033,3 @@
 </body>
 </html>
 ```eof
-
-我在右側面板的最頂端（標題「👨‍🏫 教師出題模式」的正下方）加上了一個**藍色底色的溫馨提示框**。裡面的文字十分簡短直接，說明了亂數出題尾數都是 `0` 或 `5` 的用意，以及提醒老師**需要點擊紫色的按鈕才能叫出量角器並進入測驗**，幫助老師們能更直覺地使用您的工具！
