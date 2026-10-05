@@ -219,11 +219,6 @@
         </div>
     </div>
 
-<!-- 專屬版權宣告頁尾 (乾淨、單行設計) -->
-    <div class="text-center text-gray-400 text-sm mt-8 mb-4 tracking-wider">
-        &copy; 谷宗芸老師設計 / AI 輔助生成
-    </div>
-    
     <script>
         let allStudents = [];
         let unseated = [];
@@ -270,28 +265,105 @@
             }, 3000);
         }
 
+        // ==========================================
+        // 新增存檔與讀檔邏輯 (LocalStorage)
+        // ==========================================
+        function saveState() {
+            const state = {
+                allStudents,
+                unseated,
+                fontSize,
+                blackboardConfig,
+                groups,
+                groupRotations,
+                seatRotations,
+                groupConfigs,
+                inputText: document.getElementById('inputText').value,
+                chartDate: document.getElementById('chartDateInput').value,
+                canvasHeight: document.getElementById('canvasHeightSlider').value,
+                viewMode: document.querySelector('input[name="viewMode"]:checked')?.value || 'student'
+            };
+            localStorage.setItem('seatingChartState', JSON.stringify(state));
+        }
+
+        function loadState() {
+            const saved = localStorage.getItem('seatingChartState');
+            if (saved) {
+                try {
+                    const state = JSON.parse(saved);
+                    allStudents = state.allStudents || [];
+                    unseated = state.unseated || [];
+                    fontSize = state.fontSize || 20;
+                    blackboardConfig = state.blackboardConfig;
+                    groups = state.groups || [];
+                    groupRotations = state.groupRotations || [];
+                    seatRotations = state.seatRotations || [];
+                    groupConfigs = state.groupConfigs || [];
+
+                    // 恢復 UI 狀態
+                    if (state.inputText) document.getElementById('inputText').value = state.inputText;
+                    if (state.chartDate) {
+                        document.getElementById('chartDateInput').value = state.chartDate;
+                        document.getElementById('chartTitle').innerText = `教室座位表 (${state.chartDate})`;
+                    }
+                    if (state.canvasHeight) {
+                        document.getElementById('canvasHeightSlider').value = state.canvasHeight;
+                        document.getElementById('canvasHeightDisplay').innerText = state.canvasHeight + 'px';
+                        document.getElementById('seatingArea').style.height = state.canvasHeight + 'px';
+                    }
+                    if (state.fontSize) {
+                        document.getElementById('fontSizeSlider').value = state.fontSize;
+                        document.getElementById('fontSizeDisplay').innerText = state.fontSize + 'px';
+                    }
+                    if (state.viewMode) {
+                        const radio = document.querySelector(`input[name="viewMode"][value="${state.viewMode}"]`);
+                        if (radio) radio.checked = true;
+                        
+                        const printArea = document.getElementById('printArea');
+                        if (state.viewMode === 'teacher') printArea.classList.add('teacher-view');
+                        else printArea.classList.remove('teacher-view');
+                    }
+                    return true;
+                } catch (e) {
+                    console.error("載入存檔失敗:", e);
+                }
+            }
+            return false;
+        }
+
         window.onload = function() {
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('chartDateInput').value = today;
-            updateDate();
-            
             // 綁定未分配區塊的拖放事件
             const unseatedArea = document.getElementById('unseatedArea');
             unseatedArea.addEventListener('dragover', allowDrop);
             unseatedArea.addEventListener('drop', dropToUnseated);
-            
-            // 初始化六個預設群組位置與資料
-            for (let i = 0; i < 6; i++) {
-                groups.push(Array(4).fill(null));
-                groupRotations.push(0);
-                seatRotations.push(Array(4).fill(0));
-                // 自動安排預設座標
-                let xPos = 40 + (i % 3) * 310;
-                let yPos = Math.floor(i / 3) * 250 + 130;
-                groupConfigs.push({ x: xPos, y: yPos, w: 280, h: 220 });
+
+            // 嘗試載入上次存檔
+            const hasSavedData = loadState();
+
+            if (!hasSavedData) {
+                // 若沒有存檔 (初次使用)，執行原本的預設初始化
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('chartDateInput').value = today;
+                updateDate();
+                
+                // 初始化六個預設群組位置與資料
+                for (let i = 0; i < 6; i++) {
+                    groups.push(Array(4).fill(null));
+                    groupRotations.push(0);
+                    seatRotations.push(Array(4).fill(0));
+                    // 自動安排預設座標
+                    let xPos = 40 + (i % 3) * 310;
+                    let yPos = Math.floor(i / 3) * 250 + 130;
+                    groupConfigs.push({ x: xPos, y: yPos, w: 280, h: 220 });
+                }
+                handleImport(); // 裡面會自動觸發一次存檔
+            } else {
+                // 有存檔的話，直接渲染還原畫面
+                renderSeats();
+                renderUnseated();
+                showMessage("💾 已為您恢復上次的排座進度");
             }
 
-            handleImport();
             initDragAndResizeEngine(); // 啟動畫布自由拖拉引擎
         };
 
@@ -369,8 +441,12 @@
             };
 
             const handlePointerUp = () => {
-                dragState.isDragging = false;
-                dragState.isResizing = false;
+                // 只有在真的有進行拖移或縮放結束時，才進行存檔
+                if (dragState.isDragging || dragState.isResizing) {
+                    dragState.isDragging = false;
+                    dragState.isResizing = false;
+                    saveState();
+                }
             };
 
             // 滑鼠綁定
@@ -387,6 +463,7 @@
             const printArea = document.getElementById('printArea');
             if (mode === 'teacher') printArea.classList.add('teacher-view');
             else printArea.classList.remove('teacher-view');
+            saveState(); // 觸發存檔
         }
 
         function handleImport() {
@@ -414,6 +491,7 @@
             renderSeats();
             renderUnseated();
             showMessage("✅ 名單已成功匯入");
+            saveState(); // 觸發存檔
         }
 
         function handleRandomSeating() {
@@ -432,6 +510,7 @@
             }
             while(studentIndex < shuffled.length) unseated.push(shuffled[studentIndex++]);
             renderSeats(); renderUnseated();
+            saveState(); // 觸發存檔
         }
 
         function handleBalancedSeating() {
@@ -467,29 +546,34 @@
 
             unseated = [...males, ...females, ...others];
             renderSeats(); renderUnseated();
+            saveState(); // 觸發存檔
         }
 
         function handleClearSeats() {
             groups = groups.map(g => Array(g.length).fill(null));
             unseated = [...allStudents];
             renderSeats(); renderUnseated();
+            saveState(); // 觸發存檔
         }
 
         function updateDate() {
             const dateVal = document.getElementById('chartDateInput').value;
             document.getElementById('chartTitle').innerText = `教室座位表 (${dateVal})`;
+            saveState(); // 觸發存檔
         }
 
         function updateFontSize() {
             fontSize = document.getElementById('fontSizeSlider').value;
             document.getElementById('fontSizeDisplay').innerText = fontSize + 'px';
             renderSeats();
+            saveState(); // 觸發存檔
         }
 
         function updateCanvasHeight() {
             const h = document.getElementById('canvasHeightSlider').value;
             document.getElementById('canvasHeightDisplay').innerText = h + 'px';
             document.getElementById('seatingArea').style.height = h + 'px';
+            saveState(); // 觸發存檔
         }
 
         function addGroup() {
@@ -500,6 +584,7 @@
             groupConfigs.push({ x: blackboardConfig.x, y: blackboardConfig.y + 120, w: 280, h: 220 });
             renderSeats();
             showMessage("✨ 已新增一個空白群組框，請拖拉移動它");
+            saveState(); // 觸發存檔
         }
         
         function removeGroup(idx) {
@@ -513,12 +598,14 @@
             renderSeats(); 
             renderUnseated();
             showMessage("🗑️ 群組已刪除");
+            saveState(); // 觸發存檔
         }
 
         function addSeat(groupIndex) {
             groups[groupIndex].push(null);
             seatRotations[groupIndex].push(0);
             renderSeats();
+            saveState(); // 觸發存檔
         }
         
         function removeSeat(groupIndex, seatIndex) {
@@ -527,18 +614,21 @@
             seatRotations[groupIndex].splice(seatIndex, 1);
             if (student) unseated.push(student);
             renderSeats(); renderUnseated();
+            saveState(); // 觸發存檔
         }
 
         function rotateGroup(groupIndex, event) {
             if(event) { event.stopPropagation(); event.preventDefault(); }
             groupRotations[groupIndex] = (groupRotations[groupIndex] + 45) % 360;
             renderSeats();
+            saveState(); // 觸發存檔
         }
 
         function rotateSeat(groupIndex, seatIndex, event) {
             if(event) { event.stopPropagation(); event.preventDefault(); }
             seatRotations[groupIndex][seatIndex] = (seatRotations[groupIndex][seatIndex] + 45) % 360;
             renderSeats();
+            saveState(); // 觸發存檔
         }
         
         function downloadImage() {
@@ -599,6 +689,7 @@
             }
             draggedSource = null; draggedStudentId = null; draggedGroupIndex = null; draggedSeatIndex = null;
             renderSeats(); renderUnseated();
+            saveState(); // 觸發存檔
         }
 
         function dropToUnseated(ev) {
@@ -612,6 +703,7 @@
                 }
             }
             draggedSource = null; draggedStudentId = null; draggedGroupIndex = null; draggedSeatIndex = null;
+            saveState(); // 觸發存檔
         }
 
         function renderSeats() {
