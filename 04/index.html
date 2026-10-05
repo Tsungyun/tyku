@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🌟 自助點名系統 - 紅綠燈嚴格版 🌟</title>
+    <title>🌟 自助點名系統 - 紅綠燈嚴格版 (自動存檔) 🌟</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -136,11 +136,6 @@
         </button>
     </div>
 
-<!-- 專屬版權宣告頁尾 (乾淨、單行設計) -->
-    <div class="text-center text-gray-400 text-sm mt-8 mb-4 tracking-wider">
-        &copy; 谷宗芸老師設計 / AI 輔助生成
-    </div>
-    
     <!-- 設定按鈕 -->
     <button onclick="document.getElementById('settings-modal').showModal()" class="fixed bottom-6 right-6 bg-indigo-600 hover:bg-indigo-700 text-white w-14 h-14 rounded-full shadow-2xl hover:scale-110 transition-transform flex items-center justify-center text-2xl z-40 border-4 border-white">
         <i class="fas fa-cog"></i>
@@ -220,6 +215,8 @@
         const TEACHER_ADD_VAL = 2;
         const TEACHER_DEDUCT_VAL = -2;
 
+        const STORAGE_KEY = 'attendance_system_data'; // 存檔使用的 Key
+
         let appState = {
             students: [],
             schedule: ['08:00', '10:00', '13:30', '15:00'],
@@ -228,19 +225,55 @@
             clickMode: 'normal'        // 'normal' (一般點名), 'add' (教師加分), 'deduct' (教師扣分)
         };
 
-        function init() {
-            // 測試用：預設一個馬上要開始的時間
-            const now = new Date();
-            now.setMinutes(now.getMinutes() + 1); 
-            const testTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-            if (!appState.schedule.includes(testTime)) {
-                appState.schedule.push(testTime);
-                appState.schedule.sort();
+        // 讀取本地儲存資料
+        function loadData() {
+            try {
+                const savedData = localStorage.getItem(STORAGE_KEY);
+                if (savedData) {
+                    appState = JSON.parse(savedData);
+                    // 確保讀取後的狀態正確初始化 (例如重整網頁時取消教師模式)
+                    appState.clickMode = 'normal'; 
+                    return true;
+                }
+            } catch (e) {
+                console.error("無法讀取存檔：", e);
             }
-            appState.activeClassTime = testTime;
+            return false;
+        }
 
-            setupStudents(defaultNames);
-            document.getElementById('student-input-list').value = defaultNames.join('\n');
+        // 寫入本地儲存資料
+        function saveData() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+            } catch (e) {
+                console.error("無法儲存資料：", e);
+            }
+        }
+
+        function init() {
+            const hasSavedData = loadData();
+
+            // 若沒有存檔紀錄，才套用預設值
+            if (!hasSavedData) {
+                // 測試用：預設一個馬上要開始的時間
+                const now = new Date();
+                now.setMinutes(now.getMinutes() + 1); 
+                const testTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+                if (!appState.schedule.includes(testTime)) {
+                    appState.schedule.push(testTime);
+                    appState.schedule.sort();
+                }
+                appState.activeClassTime = testTime;
+
+                setupStudents(defaultNames);
+                saveData(); // 初始化後立刻存檔
+            }
+
+            // 更新設定視窗內的 textarea 內容
+            const currentNames = appState.students.map(s => s.name).join('\n');
+            document.getElementById('student-input-list').value = currentNames;
+
+            // 繪製 UI
             renderStudents();
             renderSchedule();
             updateDisplayClassTime();
@@ -289,6 +322,7 @@
                 btnDeduct.className = "flex items-center gap-1 md:gap-2 px-3 py-2 md:px-5 md:py-2.5 rounded-xl font-black bg-rose-600 text-white border-2 border-rose-700 shadow-inner scale-105 transition-all";
                 btnAdd.className = "flex items-center gap-1 md:gap-2 px-3 py-2 md:px-5 md:py-2.5 rounded-xl font-black bg-slate-100 text-slate-600 hover:bg-blue-100 hover:text-blue-700 border-2 border-slate-200 transition-all opacity-60";
             }
+            saveData(); // 儲存模式狀態
         }
 
         function getWindowTimes() {
@@ -365,6 +399,7 @@
                 appState.latePenaltyApplied = true; // 標記已處理，避免重複扣分
                 if(changed) {
                     renderStudents();
+                    saveData(); // 狀態更新後存檔
                     showSysToast(`打鐘時間已過，未點名學生自動扣 ${Math.abs(SCORE_LATE_AUTO)} 分！`, 'error');
                 }
             }
@@ -398,6 +433,7 @@
                 
                 // 畫面更新與特效
                 renderStudents();
+                saveData(); // 存檔
                 const btn = document.querySelector(`[data-id="${student.id}"]`);
                 if (btn) {
                     createFloatingText(btn, floatText, floatColor);
@@ -412,6 +448,7 @@
                 
                 // 畫面更新與特效
                 renderStudents();
+                saveData(); // 存檔
                 const btn = document.querySelector(`[data-id="${student.id}"]`);
                 if (btn) {
                     createFloatingText(btn, floatText, floatColor);
@@ -474,8 +511,9 @@
                 }
             }
 
-            // 更新 UI
+            // 更新 UI 與存檔
             renderStudents();
+            saveData();
             
             // 套用局部動畫
             const updatedBtn = document.querySelector(`[data-id="${studentId}"]`);
@@ -492,7 +530,6 @@
 
         function showCardWarning(container, text) {
             const warning = document.createElement('div');
-            // 鮮豔紅底白字，極具警告意味
             warning.className = 'absolute inset-0 bg-red-600/95 text-white font-black flex items-center justify-center text-sm sm:text-base z-50 p-1 text-center leading-snug warning-anim tracking-widest rounded-xl shadow-inner border-2 border-red-800';
             warning.innerHTML = text;
             container.appendChild(warning);
@@ -556,7 +593,6 @@
 
                 // 若有分數或狀態，疊加浮水印與分數標籤
                 if (student.status !== 'pending') {
-                    // 分數若大於0顯示綠色+號，否則顯示紅色
                     const scoreStyle = student.score > 0 ? 'bg-green-100 text-green-700 border-green-300' 
                                      : student.score < 0 ? 'bg-rose-100 text-rose-700 border-rose-300' 
                                      : 'bg-gray-100 text-gray-700 border-gray-300';
@@ -571,7 +607,6 @@
                         </div>
                     `;
                 } else if (student.score !== 0) {
-                     // 即使是pending，如果之前有分數也要顯示 (例如：剛開始沒點名，但老師給了加分)
                      const scoreStyle = student.score > 0 ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-rose-100 text-rose-700 border-rose-300';
                      innerHTML += `
                         <div class="absolute bottom-1 right-1 font-black text-xs md:text-sm px-1.5 py-0.5 rounded shadow-sm z-20 border ${scoreStyle}">
@@ -611,19 +646,17 @@
             const text = document.getElementById('student-input-list').value;
             if (!text.trim()) { showSysToast("名單不能為空！", "error"); return; }
             
-            // 使用自訂視窗取代原生的 confirm()
             customConfirm('這將會清除所有現有分數與紀錄，確定要套用嗎？', () => {
-                // 支援從 Excel 複製的資料 (用換行或逗號分隔)
                 const names = text.split(/[\n\t,]+/).map(n => n.trim()).filter(n => n);
                 setupStudents(names);
                 renderStudents();
+                saveData(); // 存檔
                 showSysToast(`成功匯入 ${names.length} 位學生！`);
                 document.getElementById('settings-modal').close();
             });
         }
 
         function resetAttendance() {
-            // 使用自訂視窗取代原生的 confirm()
             customConfirm('確定重設所有人狀態及分數紀錄？所有分數將歸零。', () => {
                 appState.students.forEach(s => { 
                     s.status = 'pending'; 
@@ -632,6 +665,7 @@
                     s.color = colors[Math.floor(Math.random() * colors.length)];
                 });
                 renderStudents();
+                saveData(); // 存檔
                 showSysToast("已歸零所有狀態與分數！");
                 document.getElementById('settings-modal').close();
             });
@@ -644,6 +678,7 @@
                 appState.schedule.push(timeVal);
                 appState.schedule.sort();
                 renderSchedule();
+                saveData(); // 存檔
             }
         }
 
@@ -655,6 +690,7 @@
                 updateStatusIndicator(new Date());
             }
             renderSchedule();
+            saveData(); // 存檔
         }
 
         function setActiveClassTime(time) {
@@ -671,6 +707,7 @@
             updateStatusIndicator(new Date());
             renderSchedule();
             renderStudents();
+            saveData(); // 存檔
             showSysToast(`已切換時段至: ${time}，重新開放點名！`);
         }
 
@@ -782,6 +819,7 @@
             }
         }
 
+        // 啟動應用程式
         init();
     </script>
 </body>
