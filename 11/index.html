@@ -257,11 +257,10 @@
     </div>
 
 
-<!-- 專屬版權宣告頁尾 (乾淨、單行設計) -->
+    <!-- 專屬版權宣告頁尾 (乾淨、單行設計) -->
     <div class="text-center text-gray-400 text-sm mt-8 mb-4 tracking-wider">
         &copy; 谷宗芸老師設計 / AI 輔助生成
     </div>
-
 
     <script>
         let currentQuestions = [];
@@ -412,7 +411,8 @@
 
             questions.forEach(q => {
                 const card = document.createElement('div');
-                card.className = 'question-card border border-gray-100 flex-col sm:flex-row p-4 relative';
+                // 增加 pr-14 以保留空間給右側絕對定位的批改圖示，避免與按鈕重疊
+                card.className = 'question-card border border-gray-100 flex-col sm:flex-row p-4 pr-14 relative';
                 
                 let html = `<div class="flex items-center w-full sm:w-auto mb-3 sm:mb-0 sm:mr-4">
                                 <div class="question-number">${q.id}.</div>`;
@@ -445,8 +445,11 @@
                 html += `</div>`;
                 html += `<div class="text-gray-500 text-3xl"> ) </div>`;
                 
-                // 批改打勾/打叉圖示位置 (絕對定位在右側)
-                html += `<div id="mark-${q.id}" class="absolute right-4 top-1/2 transform -translate-y-1/2 w-10 h-10 flex items-center justify-center opacity-0 transition-opacity"></div>`;
+                // 新增：小小的單題對答案按鈕
+                html += `<button onclick="checkSingleAnswer(${q.id})" class="ml-3 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 hover:text-indigo-700 border border-indigo-200 text-sm px-2 py-1 rounded shadow-sm transition transform active:scale-95 whitespace-nowrap">對答案</button>`;
+                
+                // 批改打勾/打叉圖示位置 (絕對定位在最右側)
+                html += `<div id="mark-${q.id}" class="absolute right-2 top-1/2 transform -translate-y-1/2 w-8 h-8 flex items-center justify-center opacity-0 transition-opacity"></div>`;
 
                 card.innerHTML = html;
                 container.appendChild(card);
@@ -645,6 +648,23 @@
             }
             return false;
         }
+        
+        // 新增的：單題對答案函式
+        function checkSingleAnswer(qId) {
+            const q = currentQuestions.find(item => item.id === qId);
+            if (!q) return;
+
+            const isCorrect = validateAnswer(q);
+            const markEl = document.getElementById(`mark-${q.id}`);
+            
+            if (isCorrect) {
+                markEl.innerHTML = `<svg class="w-8 h-8 text-green-500 bg-white rounded-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>`;
+            } else {
+                markEl.innerHTML = `<svg class="w-8 h-8 text-red-500 bg-white rounded-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg>`;
+            }
+            markEl.classList.remove('opacity-0');
+            markEl.classList.add('opacity-100');
+        }
 
         function checkAllAnswers() {
             if (currentQuestions.length === 0) return;
@@ -656,9 +676,9 @@
                 
                 if (isCorrect) {
                     correctCount++;
-                    markEl.innerHTML = `<svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>`;
+                    markEl.innerHTML = `<svg class="w-8 h-8 text-green-500 bg-white rounded-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>`;
                 } else {
-                    markEl.innerHTML = `<svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg>`;
+                    markEl.innerHTML = `<svg class="w-8 h-8 text-red-500 bg-white rounded-full" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path></svg>`;
                 }
                 markEl.classList.remove('opacity-0');
                 markEl.classList.add('opacity-100');
