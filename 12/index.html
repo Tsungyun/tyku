@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>分數比大小練習</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
+
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #f8fafc;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* 共用分數樣式 */
+        .fraction {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            vertical-align: middle;
+            margin: 0 2px;
+            line-height: 1.1;
+        }
+        .fraction .num {
+            border-bottom: 1.5px solid #111827;
+            width: 100%;
+            text-align: center;
+            padding: 0 1px;
+        }
+        .fraction .den {
+            text-align: center;
+            padding: 0 1px;
+        }
+        .mixed-number {
+            display: inline-flex;
+            align-items: center;
+            vertical-align: middle;
+        }
+        .whole-number {
+            margin-right: 2px;
+            font-weight: 500;
+        }
+
+        @media screen {
+            .web-fraction-text { font-size: 1.25rem; }
+            .web-whole-text { font-size: 1.25rem; }
+            
+            #print-container {
+                display: none !important; /* 網頁模式隱藏列印區塊 */
+            }
+
+            .bracket-btn {
+                cursor: pointer;
+                color: #2563eb;
+                font-weight: bold;
+                padding: 2px 4px;
+                border-radius: 4px;
+                min-width: 44px;
+                text-align: center;
+                display: inline-block;
+                transition: background-color 0.2s;
+            }
+            .bracket-btn:hover { background-color: #dbeafe; }
+            .bracket-btn.answered { color: #111827; }
+
+            .symbol-menu {
+                position: absolute;
+                top: 100%;
+                left: 50%;
+                transform: translateX(-50%);
+                background: white;
+                border: 1px solid #cbd5e1;
+                border-radius: 6px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                display: none;
+                z-index: 50;
+                padding: 4px;
+                gap: 4px;
+            }
+            .symbol-menu.show { display: flex; }
+            
+            .menu-btn {
+                width: 32px;
+                height: 32px;
+                font-size: 1.2rem;
+                font-weight: bold;
+                border-radius: 4px;
+                background-color: #f1f5f9;
+                color: #2563eb;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+            }
+            .menu-btn:hover { background-color: #bfdbfe; }
+        }
+
+        @page {
+            size: A4 landscape;
+            margin: 5mm; /* 極小邊界 */
+        }
+        
+        @media print {
+            body { background-color: white; }
+            .no-print { display: none !important; }
+            #web-container { display: none !important; } /* 列印時隱藏網頁互動區 */
+            
+            #print-container {
+                display: flex !important;
+                width: 100%;
+                height: 100%;
+                flex-direction: row;
+            }
+            
+            /* 列印排版的極致壓縮 */
+            .print-half {
+                width: 50%;
+                padding: 0 8mm; /* 左右留空間 */
+                display: flex;
+                flex-direction: column;
+            }
+            .print-divider {
+                border-right: 1px dashed #94a3b8;
+            }
+            
+            .print-title {
+                font-size: 10pt;
+                font-weight: bold;
+                margin-bottom: 2mm;
+                color: #000;
+            }
+
+            .print-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr; /* 兩直行 */
+                column-gap: 8mm;
+                row-gap: 2mm; /* 極小的上下間距，塞滿題目 */
+                flex-grow: 1;
+            }
+
+            .print-cell {
+                display: flex;
+                align-items: center;
+                justify-content: flex-start;
+                font-size: 11pt; /* 確保分數看得清楚 */
+            }
+            
+            .print-num {
+                font-size: 9pt;
+                color: #333;
+                text-align: right;
+                margin-right: 2px;
+            }
+
+            .print-bracket {
+                margin: 0 6px;
+                font-size: 10pt;
+            }
+            
+            .print-fraction-text { font-size: 11pt; }
+            .print-whole-text { font-size: 11pt; margin-right: 1px; }
+            .fraction .num, .fraction .den { padding: 0 !important; }
+        }
+
+        /* 錯誤提示動畫 */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-3px); }
+            50% { transform: translateX(3px); }
+            75% { transform: translateX(-3px); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="no-print p-4 md:p-6 flex flex-col items-center">
+        <div class="bg-white p-5 rounded-xl shadow-md w-full max-w-4xl flex flex-col items-center gap-4 border border-gray-200">
+            <h1 class="text-xl font-bold text-gray-800">分數比大小練習生成器</h1>
+            
+            <div class="flex flex-wrap items-center justify-center gap-4 bg-gray-50 p-3 rounded-lg w-full border border-gray-200">
+                <span class="font-bold text-gray-700 text-sm">適用年級難度：</span>
+                <label class="flex items-center cursor-pointer hover:bg-gray-200 p-1 rounded">
+                    <input type="radio" name="level" value="1" class="w-4 h-4 text-blue-600" checked onchange="generateQuestions()">
+                    <span class="ml-1 text-sm text-gray-700 font-medium">四上 (同分母)</span>
+                </label>
+                <label class="flex items-center cursor-pointer hover:bg-gray-200 p-1 rounded">
+                    <input type="radio" name="level" value="2" class="w-4 h-4 text-blue-600" onchange="generateQuestions()">
+                    <span class="ml-1 text-sm text-gray-700 font-medium">四下 (等值/倍數異分母)</span>
+                </label>
+            </div>
+
+            <div class="flex flex-wrap justify-center gap-3">
+                <button onclick="generateQuestions()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-5 rounded shadow-sm transition">
+                    重新亂數出題
+                </button>
+                <button onclick="checkAllAnswers()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-5 rounded shadow-sm transition flex items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                    </svg>
+                    全部批改
+                </button>
+                <button onclick="window.print()" class="bg-gray-800 hover:bg-gray-900 text-white font-bold py-2 px-5 rounded shadow-sm transition flex items-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                    </svg>
+                    儲存為 PDF / 列印
+                </button>
+            </div>
+            <p class="text-xs text-gray-500">網頁版一次顯示 20 題 (2直行)，點擊括號作答。列印時自動轉換為 24 題雙拼 A4 滿版紙本考卷。</p>
+        </div>
+    </div>
+
+    <div id="web-container" class="no-print max-w-4xl mx-auto px-4 pb-12 w-full">
+        <div class="bg-white rounded-xl shadow-lg border border-gray-200 p-4 md:p-8 w-full">
+            <div class="mb-6 pb-3 border-b border-gray-200 flex justify-between items-center">
+                <h2 class="text-xl font-bold text-gray-800" id="web-title">比一比，在 ( ) 裡選入 ＜、＝ 或 ＞。</h2>
+                <span class="text-sm font-bold bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full">網頁互動模式 (20題)</span>
+            </div>
+            
+            <!-- 網頁上的題目容器 (雙行排列 grid-cols-2) -->
+            <div id="web-questions-list" class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                <!-- 由 JS 生成 -->
+            </div>
+        </div>
+    </div>
+
+    <div id="print-container">
+        <!-- 左半邊 -->
+        <div class="print-half print-divider">
+            <div class="print-title" id="print-title-L">四上數學：比一比，填入 ＜、＝ 或 ＞</div>
+            <div class="print-grid" id="print-grid-L">
+                <!-- 塞滿 24 題 -->
+            </div>
+        </div>
+        <!-- 右半邊 (內容與左半邊完全相同) -->
+        <div class="print-half">
+            <div class="print-title" id="print-title-R">四上數學：比一比，填入 ＜、＝ 或 ＞</div>
+            <div class="print-grid" id="print-grid-R">
+                <!-- 塞滿 24 題 -->
+            </div>
+        </div>
+    </div>
+
+<!-- 專屬版權宣告頁尾 (乾淨、單行設計) -->
+    <div class="text-center text-gray-400 text-sm mt-8 mb-4 tracking-wider">
+        &copy; 谷宗芸老師設計 / AI 輔助生成
+    </div>
+
+
+    <script>
+        const TOTAL_QUESTIONS_PRINT = 24; // 紙本單邊極限塞 24 題
+        const TOTAL_QUESTIONS_WEB = 20;    // 網頁版顯示 20 題 (2欄 x 10列)
+        
+        let questionsData = [];
+        let activeMenu = null;
+
+        function getRandomInt(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        // 生成分數物件與 HTML (加入 formatHint 以強制顯示特定格式)
+        function createFractionHTML(num, den, mode, formatHint = null) {
+            const fracClass = mode === 'web' ? 'web-fraction-text' : 'print-fraction-text';
+            const wholeClass = mode === 'web' ? 'web-whole-text' : 'print-whole-text';
+            
+            let val = num / den;
+
+            if (num % den === 0) {
+                // 整數
+                return { val, html: `<span class="${wholeClass} font-bold mx-1">${num / den}</span>` };
+            } else if (num < den) {
+                // 真分數
+                return {
+                    val,
+                    html: `
+                    <div class="fraction ${fracClass}">
+                        <span class="num">${num}</span>
+                        <span class="den">${den}</span>
+                    </div>`
+                };
+            } else {
+                // 大於 1 的數，根據 formatHint 決定要顯示假分數還是帶分數
+                let useMixed = Math.random() > 0.5;
+                if (formatHint === 'mixed') useMixed = true;
+                if (formatHint === 'improper') useMixed = false;
+
+                if (useMixed) {
+                    // 帶分數
+                    let whole = Math.floor(num / den);
+                    let rem = num % den;
+                    return {
+                        val,
+                        html: `
+                        <div class="mixed-number">
+                            <span class="whole-number ${wholeClass}">${whole}</span>
+                            <div class="fraction ${fracClass}">
+                                <span class="num">${rem}</span>
+                                <span class="den">${den}</span>
+                            </div>
+                        </div>`
+                    };
+                } else {
+                    // 假分數
+                    return {
+                        val,
+                        html: `
+                        <div class="fraction ${fracClass}">
+                            <span class="num">${num}</span>
+                            <span class="den">${den}</span>
+                        </div>`
+                    };
+                }
+            }
+        }
+
+        // 產生單一題目邏輯 (加入嚴格檢查：防止差距過大、防止視覺一模一樣)
+        function generateSingleQuestion(level) {
+            let num1, den1, num2, den2;
+            let format1 = null, format2 = null;
+            const forceEqual = Math.random() < 0.2; // 20% 機率出等號題
+            let isValid = false;
+
+            while (!isValid) {
+                format1 = null;
+                format2 = null;
+
+                if (level === 1) {
+                    // 四上：同分母
+                    den1 = getRandomInt(3, 12);
+                    den2 = den1;
+                    
+                    if (forceEqual) {
+                        // 強迫相等時，為避免「長得一模一樣」，必須一邊假分數一邊帶分數
+                        num1 = getRandomInt(den1 + 1, den1 * 4); // 確保大於1
+                        num2 = num1;
+                        format1 = 'improper';
+                        format2 = 'mixed';
+                        if (Math.random() > 0.5) [format1, format2] = [format2, format1];
+                    } else {
+                        num1 = getRandomInt(1, den1 * 5);
+                        // 控制差距，避免送分題 (差距限制在 1.5 倍分母內)
+                        let maxGap = Math.ceil(den1 * 1.5);
+                        let offset = getRandomInt(-maxGap, maxGap);
+                        num2 = num1 + offset;
+                        
+                        // 確保不是相等且數值合法
+                        while (num1 === num2 || num2 <= 0) {
+                            offset = getRandomInt(-maxGap, maxGap);
+                            num2 = num1 + offset;
+                        }
+                    }
+                } else {
+                    // 四下：異分母 (倍數關係)
+                    den1 = getRandomInt(2, 6);
+                    let multiplier = getRandomInt(2, 4);
+                    den2 = den1 * multiplier;
+
+                    if (forceEqual) {
+                        num1 = getRandomInt(1, den1 * 4);
+                        num2 = num1 * multiplier;
+                    } else {
+                        num1 = getRandomInt(1, den1 * 4);
+                        let targetNum2 = num1 * multiplier;
+                        // 控制差距，避免送分題 (以 den2 為基準限制差距)
+                        let maxGap = Math.ceil(den2 * 1.5);
+                        let offset = getRandomInt(-maxGap, maxGap);
+                        num2 = targetNum2 + offset;
+                        
+                        while (num2 === targetNum2 || num2 <= 0) {
+                            offset = getRandomInt(-maxGap, maxGap);
+                            num2 = targetNum2 + offset;
+                        }
+                    }
+                    
+                    // 隨機對調左右位置
+                    if (Math.random() > 0.5) {
+                        [num1, num2] = [num2, num1];
+                        [den1, den2] = [den2, den1];
+                        [format1, format2] = [format2, format1];
+                    }
+                }
+
+                // 檢查是否兩邊都是整數
+                let isInt1 = (num1 % den1 === 0);
+                let isInt2 = (num2 % den2 === 0);
+                
+                // 嚴格過濾條件：
+                // 1. 不能兩邊都是整數
+                // 2. 如果是四上(同分母)的相等題，不能是整數 (否則 2 = 2 會長得一模一樣無法強制假/帶分數)
+                if (isInt1 && isInt2) continue;
+                if (level === 1 && forceEqual && (isInt1 || isInt2)) continue;
+
+                isValid = true;
+            }
+
+            return { num1, den1, num2, den2, format1, format2 };
+        }
+
+        // 產生所有題目並渲染畫面
+        function generateQuestions() {
+            questionsData = [];
+            const level = parseInt(document.querySelector('input[name="level"]:checked').value);
+            
+            // 更新列印標題
+            const titleGrade = level === 1 ? '上' : '下';
+            document.getElementById('print-title-L').innerText = `四${titleGrade}數學：比一比，填入 ＜、＝ 或 ＞`;
+            document.getElementById('print-title-R').innerText = `四${titleGrade}數學：比一比，填入 ＜、＝ 或 ＞`;
+
+            const webList = document.getElementById('web-questions-list');
+            const printGridL = document.getElementById('print-grid-L');
+            const printGridR = document.getElementById('print-grid-R');
+            
+            webList.innerHTML = '';
+            printGridL.innerHTML = '';
+            printGridR.innerHTML = '';
+
+            // 一次產生紙本極限的 24 題 (網頁版只取前 20 題顯示)
+            for (let i = 0; i < TOTAL_QUESTIONS_PRINT; i++) {
+                const qData = generateSingleQuestion(level);
+                
+                const webLeft = createFractionHTML(qData.num1, qData.den1, 'web', qData.format1);
+                const webRight = createFractionHTML(qData.num2, qData.den2, 'web', qData.format2);
+                
+                const printLeft = createFractionHTML(qData.num1, qData.den1, 'print', qData.format1);
+                const printRight = createFractionHTML(qData.num2, qData.den2, 'print', qData.format2);
+
+                let correctSym = webLeft.val > webRight.val ? '＞' : (webLeft.val < webRight.val ? '＜' : '＝');
+                
+                questionsData.push({ ...qData, correctSym, userAnswer: null });
+
+                // ======= 渲染網頁互動版 (取前 20 題) =======
+                if (i < TOTAL_QUESTIONS_WEB) {
+                    const webDiv = document.createElement('div');
+                    // 使用 flex 排版，緊縮題號與題目的間距
+                    webDiv.className = "flex items-center bg-gray-50 p-2 md:p-3 rounded border border-gray-200 hover:bg-white transition relative shadow-sm";
+                    webDiv.innerHTML = `
+                        <!-- 題號緊貼 -->
+                        <span class="text-gray-500 font-bold mr-1 md:mr-2 text-sm">(${i + 1})</span>
+                        
+                        <!-- 題目本體置中對齊 -->
+                        <div class="flex items-center justify-center flex-1 pr-6">
+                            <div class="w-12 md:w-16 flex justify-end">${webLeft.html}</div>
+                            
+                            <!-- 互動選單括號 -->
+                            <div class="relative mx-1 md:mx-3">
+                                <span class="bracket-btn text-base" id="web-bracket-${i}" onclick="toggleMenu(${i}, event)">( &nbsp;&nbsp;&nbsp; )</span>
+                                <div class="symbol-menu" id="web-menu-${i}">
+                                    <button class="menu-btn" onclick="selectSymbol(${i}, '＜', event)">＜</button>
+                                    <button class="menu-btn" onclick="selectSymbol(${i}, '＝', event)">＝</button>
+                                    <button class="menu-btn" onclick="selectSymbol(${i}, '＞', event)">＞</button>
+                                </div>
+                            </div>
+                            
+                            <div class="w-12 md:w-16 flex justify-start">${webRight.html}</div>
+                        </div>
+                        
+                        <!-- 對答案結果圖示 (絕對定位在右側) -->
+                        <span id="web-result-${i}" class="absolute right-3 top-1/2 -translate-y-1/2 text-lg font-bold pointer-events-none"></span>
+                    `;
+                    webList.appendChild(webDiv);
+                }
+
+                // ======= 渲染列印紙本版 (雙拼，塞好塞滿 24 題) =======
+                const printHTML = `
+                    <div class="print-cell">
+                        <span class="print-num">${i + 1}.</span>
+                        <div style="width:25px; display:flex; justify-content:flex-end;">${printLeft.html}</div>
+                        <span class="print-bracket">( &nbsp;&nbsp; )</span>
+                        <div style="width:25px; display:flex; justify-content:flex-start;">${printRight.html}</div>
+                    </div>
+                `;
+                
+                printGridL.insertAdjacentHTML('beforeend', printHTML);
+                printGridR.insertAdjacentHTML('beforeend', printHTML);
+            }
+            
+            closeAllMenus();
+        }
+
+        function toggleMenu(index, event) {
+            event.stopPropagation();
+            const menu = document.getElementById(`web-menu-${index}`);
+            
+            if (activeMenu && activeMenu !== menu) activeMenu.classList.remove('show');
+            
+            if (menu.classList.contains('show')) {
+                menu.classList.remove('show');
+                activeMenu = null;
+            } else {
+                menu.classList.add('show');
+                activeMenu = menu;
+            }
+        }
+
+        function selectSymbol(index, symbol, event) {
+            event.stopPropagation();
+            questionsData[index].userAnswer = symbol;
+            
+            const bracket = document.getElementById(`web-bracket-${index}`);
+            bracket.innerHTML = `(<span class="mx-1 text-blue-700">${symbol}</span>)`;
+            bracket.classList.add('answered');
+            
+            // 清除之前的批改結果
+            const resultSpan = document.getElementById(`web-result-${index}`);
+            resultSpan.innerHTML = '';
+            bracket.style.color = '';
+            
+            document.getElementById(`web-menu-${index}`).classList.remove('show');
+            activeMenu = null;
+        }
+
+        // 全部批改功能
+        function checkAllAnswers() {
+            closeAllMenus();
+            
+            for (let i = 0; i < TOTAL_QUESTIONS_WEB; i++) {
+                const q = questionsData[i];
+                const bracket = document.getElementById(`web-bracket-${i}`);
+                const resultSpan = document.getElementById(`web-result-${i}`);
+                
+                // 如果沒有填寫，抖動提示並標記錯誤
+                if (!q.userAnswer) {
+                    bracket.style.animation = "none";
+                    setTimeout(() => bracket.style.animation = "shake 0.3s", 10);
+                    
+                    resultSpan.innerHTML = '<span class="text-red-500">✘</span>';
+                    bracket.innerHTML = `(<span class="mx-1 text-green-600 font-bold">${q.correctSym}</span>)`;
+                    bracket.style.color = '#dc2626';
+                    continue;
+                }
+
+                // 檢查答案是否正確
+                if (q.userAnswer === q.correctSym) {
+                    resultSpan.innerHTML = '<span class="text-green-500">✔</span>';
+                    bracket.style.color = '#16a34a'; // 綠色
+                } else {
+                    resultSpan.innerHTML = '<span class="text-red-500">✘</span>';
+                    bracket.style.color = '#dc2626'; // 紅色
+                    // 顯示錯誤的輸入與正確答案
+                    bracket.innerHTML = `(<span class="mx-1 line-through text-red-400 text-xs">${q.userAnswer}</span><span class="text-green-600 font-bold">${q.correctSym}</span>)`;
+                }
+            }
+        }
+
+        function closeAllMenus() {
+            if (activeMenu) {
+                activeMenu.classList.remove('show');
+                activeMenu = null;
+            }
+        }
+
+        document.addEventListener('click', closeAllMenus);
+
+        // 畫面載入時自動產生題目
+        window.onload = generateQuestions;
+    </script>
+</body>
+</html>
