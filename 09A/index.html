@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>求角度練習 - 多樣化題型</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #f3f4f6;
+        }
+        
+        .print-container {
+            display: none; 
+            width: 297mm; 
+            height: 210mm; 
+            max-height: 210mm;
+            background-color: white;
+            box-sizing: border-box;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: -1000;
+            flex-direction: row; 
+            overflow: hidden; 
+        }
+        .print-half {
+            width: 50%;
+            height: 100%;
+            padding: 5mm 8mm; 
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px dashed #999;
+        }
+        .print-half:last-child {
+            border-right: none;
+        }
+        .print-header {
+            text-align: left; 
+            font-size: 1.05rem; 
+            font-weight: bold;
+            margin-bottom: 2mm;
+            border-bottom: 2px solid #333;
+            padding-bottom: 1mm;
+            letter-spacing: 1px;
+            flex-shrink: 0;
+            display: flex;
+            justify-content: space-between; 
+            align-items: flex-end;
+        }
+        .print-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr; 
+            grid-template-rows: repeat(4, 1fr); 
+            gap: 1mm 4mm;
+            flex-grow: 1;
+            height: 100%;
+            min-height: 0;
+            overflow: hidden;
+        }
+        .print-item {
+            display: flex;
+            flex-direction: column;
+            padding: 1mm 0;
+            overflow: hidden; 
+        }
+        .print-item-header {
+            display: flex;
+            justify-content: flex-start;
+            font-size: 1rem;
+            margin-bottom: 0.5mm;
+            gap: 2mm;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        .print-item-number {
+            font-weight: bold;
+            font-size: 1.1rem;
+            color: #000;
+        }
+        .print-item-canvas-container {
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 0;
+            width: 100%;
+        }
+        .print-item-canvas {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        .print-item-answer-area {
+            height: 5mm;
+            display: flex;
+            align-items: flex-end;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+        }
+        .print-item-answer-text {
+            color: black;
+            font-weight: bold;
+            display: none;
+        }
+        
+        .web-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+        }
+        @media (max-width: 768px) {
+            .web-grid { grid-template-columns: 1fr; }
+        }
+        .correct { border-color: #10b981 !important; background-color: #ecfdf5 !important; }
+        .incorrect { border-color: #ef4444 !important; background-color: #fef2f2 !important; }
+
+        .v-key {
+            background-color: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            padding: 0.75rem 0;
+            font-size: 1.25rem;
+            font-weight: bold;
+            color: #374151;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            transition: all 0.1s;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .v-key:active {
+            background-color: #e5e7eb;
+            transform: scale(0.95);
+        }
+        .v-key-danger { background-color: #fee2e2; color: #dc2626; border-color: #fca5a5; }
+        .v-key-danger:active { background-color: #fecaca; }
+        .v-key-action { background-color: #e5e7eb; color: #4b5563; }
+        .v-key-action:active { background-color: #d1d5db; }
+    </style>
+</head>
+<body class="p-4 md:p-6 text-gray-800 relative">
+
+<div class="max-w-5xl mx-auto bg-white rounded-xl shadow-lg p-6 relative">
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b pb-4 gap-4">
+        <div>
+            <!-- 修改標題，移除 α 符號，改回 ∠A -->
+            <h1 class="text-2xl md:text-3xl font-bold flex items-center gap-2">
+                求以下圖形中的未知角 (∠A) 是幾度？寫成算式做做看。
+            </h1>
+        </div>
+        <div class="flex gap-2 flex-wrap">
+            <button onclick="generateQuestions()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow flex items-center gap-1 font-bold">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" />
+                </svg>
+                重新隨機出題
+            </button>
+            <button onclick="exportPDF('question')" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition shadow flex items-center gap-1">
+                匯出題目
+            </button>
+            <button onclick="exportPDF('answer')" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition shadow flex items-center gap-1">
+                匯出解答
+            </button>
+        </div>
+    </div>
+
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <p class="text-gray-600 text-sm md:text-base bg-gray-50 p-3 rounded-lg border border-gray-200">
+            💡 每次點擊「重新隨機出題」將隨機產生 9 種不同變化的題型。<br>
+            💡 <span class="text-blue-600 font-bold">直接點擊下方題目的「?」空格，會出現數字鍵盤方便作答。</span><br>
+            可直接於下方線上作答，或匯出成 A4 雙欄學習單。
+        </p>
+        <button onclick="checkAnswers()" class="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition shadow font-bold text-lg whitespace-nowrap">
+            批改全部
+        </button>
+    </div>
+    
+    <div id="web-questions-container" class="web-grid"></div>
+</div>
+
+<div id="pdf-export-container" class="print-container">
+    <div class="print-half">
+        <div class="print-header">
+            <span class="print-header-title">求以下圖形中的未知角 (∠A) 是幾度？</span>
+            <span class="pdf-title-type"></span>
+        </div>
+        <div id="print-grid-left" class="print-grid"></div>
+    </div>
+    <div class="print-half">
+        <div class="print-header">
+            <span class="print-header-title">求以下圖形中的未知角 (∠A) 是幾度？</span>
+            <span class="pdf-title-type"></span>
+        </div>
+        <div id="print-grid-right" class="print-grid"></div>
+    </div>
+</div>
+
+<!-- 虛擬數字鍵盤 -->
+<div id="virtual-keypad" class="hidden absolute z-50 bg-white border border-gray-300 shadow-2xl rounded-xl p-3 w-56 transition-opacity duration-200 opacity-0 transform -translate-x-1/2">
+    <div class="flex justify-between items-center mb-3 px-1">
+        <span class="text-sm font-bold text-blue-600 flex items-center gap-1">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287-.947c.886.539 2.042.06 2.287-.947.379-1.561 2.6-1.561 2.978 0a1.533 1.533 0 012.287.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd" />
+            </svg>
+            輸入角度
+        </span>
+        <button onclick="hideKeypad()" class="text-gray-400 hover:text-red-500 bg-gray-100 hover:bg-red-50 rounded-full p-1 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+            </svg>
+        </button>
+    </div>
+    <div class="grid grid-cols-3 gap-2">
+        <button onmousedown="inputKey('1', event)" class="v-key">1</button>
+        <button onmousedown="inputKey('2', event)" class="v-key">2</button>
+        <button onmousedown="inputKey('3', event)" class="v-key">3</button>
+        
+        <button onmousedown="inputKey('4', event)" class="v-key">4</button>
+        <button onmousedown="inputKey('5', event)" class="v-key">5</button>
+        <button onmousedown="inputKey('6', event)" class="v-key">6</button>
+        
+        <button onmousedown="inputKey('7', event)" class="v-key">7</button>
+        <button onmousedown="inputKey('8', event)" class="v-key">8</button>
+        <button onmousedown="inputKey('9', event)" class="v-key">9</button>
+        
+        <button onmousedown="inputKey('C', event)" class="v-key v-key-danger">C</button>
+        <button onmousedown="inputKey('0', event)" class="v-key">0</button>
+        <button onmousedown="inputKey('DEL', event)" class="v-key v-key-action">⌫</button>
+    </div>
+</div>
+
+<div class="text-center text-gray-400 text-sm mt-8 mb-4 tracking-wider">
+    &copy; 谷宗芸老師設計 / AI 輔助生成 (增強版題庫)
+</div>
+
+<script>
+    let currentQuestions = [];
+    const NUM_QUESTIONS = 8;
+    
+    // 虛擬鍵盤狀態
+    let activeInputEl = null;
+    const keypadEl = document.getElementById('virtual-keypad');
+
+    function randInt(min, max) {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    function generateQuestionData() {
+        // 大幅提高新題型 (疊合角) 的出現機率
+        const types = ['overlapping_arcs', 'overlapping_arcs', 'overlapping_arcs', 'overlapping_arcs', 'right_angle', 'line_2', 'line_3', 'circle'];
+        const type = types[randInt(0, types.length - 1)];
+        let angles = {};
+        let conditions = [];
+        let ans = 0;
+        
+        switch (type) {
+            case 'right_angle': 
+                angles.A = randInt(25, 65);
+                angles.B = 90 - angles.A;
+                ans = angles.A;
+                conditions = [`∠B = ${angles.B}°`];
+                break;
+            case 'line_2': 
+                angles.A = randInt(110, 150);
+                angles.B = 180 - angles.A;
+                if (Math.random() > 0.5) [angles.A, angles.B] = [angles.B, angles.A];
+                ans = angles.A;
+                conditions = [`∠B = ${angles.B}°`];
+                break;
+            case 'line_3':
+                angles.B = randInt(35, 70);
+                angles.C = randInt(35, 70);
+                angles.A = 180 - angles.B - angles.C;
+                ans = angles.A;
+                conditions = [`∠B = ${angles.B}°`, `∠C = ${angles.C}°`];
+                break;
+            case 'circle':
+                angles.B = randInt(110, 150);
+                angles.C = randInt(110, 150);
+                angles.A = 360 - angles.B - angles.C;
+                ans = angles.A;
+                conditions = [`∠B = ${angles.B}°`, `∠C = ${angles.C}°`];
+                break;
+            case 'overlapping_arcs': // 完美還原附件的「疊合角」邏輯
+                let t1 = randInt(15, 45); // 左小角 (例如 30)
+                let t2 = randInt(25, 65); // 中小角 (共用角) (例如 60)
+                let t3 = randInt(15, 45); // 右小角 (例如 20)
+                let c1 = t1 + t2; // 左大角
+                let c2 = t2 + t3; // 右大角
+                
+                angles.base = randInt(10, 50); // 整體旋轉角度
+                angles.t1 = t1;
+                angles.t2 = t2;
+                angles.t3 = t3;
+                angles.c1 = c1;
+                angles.c2 = c2;
+                
+                // 隨機決定 A 是左大角還是右大角
+                if (Math.random() > 0.5) {
+                    angles.unknown = 'c1'; // 求左大角
+                    ans = c1;
+                } else {
+                    angles.unknown = 'c2'; // 求右大角
+                    ans = c2;
+                }
+                conditions = ["依圖示"];
+                break;
+        }
+
+        return { type, angles, conditions, ans };
+    }
+
+    function drawAngleProblem(canvas, qData) {
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width;  
+        const h = canvas.height; 
+        const minDim = Math.min(w, h);
+        ctx.clearRect(0, 0, w, h);
+        
+        let cx = w / 2;
+        let cy = h / 2;
+        let r = minDim * 0.45; 
+
+        if (qData.type === 'right_angle') {
+            cx = w * 0.3; cy = h * 0.75; r = minDim * 0.65; 
+        } else if (qData.type === 'line_2' || qData.type === 'line_3' || qData.type === 'overlapping_arcs') {
+            cy = h * 0.75; r = minDim * 0.65; 
+        }
+
+        const baseLineWidth = minDim * 0.008; 
+        const fontSize = Math.floor(minDim * 0.08); 
+
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.font = `bold ${fontSize}px "Noto Sans TC", sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        const drawRay = (angleDeg) => {
+            const rad = -angleDeg * Math.PI / 180;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + r * Math.cos(rad), cy + r * Math.sin(rad)); 
+            ctx.strokeStyle = '#000'; 
+            ctx.lineWidth = baseLineWidth * 1.5; 
+            ctx.stroke();
+        };
+
+        // 加入 isTotal 參數，用於繪製明確的「截斷標線 (Ticks)」
+        const drawMark = (startDeg, endDeg, radiusRatio, label, isRight = false, isTotal = false) => {
+            let s = startDeg;
+            let e = endDeg;
+            if (s > e) e += 360;
+            
+            let sRad = -s * Math.PI / 180;
+            let eRad = -e * Math.PI / 180;
+            let midDeg = (s + e) / 2;
+            let midRad = -midDeg * Math.PI / 180;
+            
+            let arcRadius = r * radiusRatio;
+
+            if (isRight) {
+                const size = r * 0.12;
+                const p1x = cx + size * Math.cos(sRad);
+                const p1y = cy + size * Math.sin(sRad);
+                const p2x = cx + size * Math.sqrt(2) * Math.cos(midRad);
+                const p2y = cy + size * Math.sqrt(2) * Math.sin(midRad);
+                const p3x = cx + size * Math.cos(eRad);
+                const p3y = cy + size * Math.sin(eRad);
+                ctx.beginPath();
+                ctx.moveTo(p1x, p1y);
+                ctx.lineTo(p2x, p2y);
+                ctx.lineTo(p3x, p3y);
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = baseLineWidth;
+                ctx.stroke();
+                return;
+            }
+
+            ctx.beginPath();
+            ctx.arc(cx, cy, arcRadius, sRad, eRad, true); 
+            ctx.strokeStyle = '#000'; 
+            // 如果是大弧線，稍微加粗
+            ctx.lineWidth = isTotal ? baseLineWidth * 1.8 : baseLineWidth * 1.2;
+            ctx.stroke();
+
+            // 畫出圓弧兩端的截斷標線，讓學生清楚知道這個角度包到哪裡
+            if (isTotal) {
+                const tickLen = r * 0.08;
+                ctx.beginPath();
+                ctx.moveTo(cx + (arcRadius - tickLen) * Math.cos(sRad), cy + (arcRadius - tickLen) * Math.sin(sRad));
+                ctx.lineTo(cx + (arcRadius + tickLen) * Math.cos(sRad), cy + (arcRadius + tickLen) * Math.sin(sRad));
+                ctx.moveTo(cx + (arcRadius - tickLen) * Math.cos(eRad), cy + (arcRadius - tickLen) * Math.sin(eRad));
+                ctx.lineTo(cx + (arcRadius + tickLen) * Math.cos(eRad), cy + (arcRadius + tickLen) * Math.sin(eRad));
+                ctx.strokeStyle = '#000'; 
+                ctx.lineWidth = baseLineWidth * 1.5;
+                ctx.stroke();
+            }
+
+            if (label) {
+                const lx = cx + arcRadius * Math.cos(midRad);
+                const ly = cy + arcRadius * Math.sin(midRad);
+                
+                ctx.fillStyle = '#fff';
+                const textWidth = ctx.measureText(label).width;
+                const padX = minDim * 0.015;
+                const padY = minDim * 0.035;
+                ctx.fillRect(lx - textWidth/2 - padX, ly - padY, textWidth + padX*2, padY*2);
+
+                // 如果是未知數 A，改用藍色凸顯
+                ctx.fillStyle = label === 'A' ? '#2563eb' : '#000';
+                ctx.fillText(label, lx, ly);
+            }
+        };
+
+        switch(qData.type) {
+            case 'right_angle': 
+                drawRay(0); drawRay(90); drawRay(qData.angles.B);
+                drawMark(0, 90, 0, '', true); 
+                drawMark(0, qData.angles.B, 0.45, 'B');
+                drawMark(qData.angles.B, 90, 0.75, 'A');
+                break;
+            case 'line_2': 
+                drawRay(0); drawRay(180); drawRay(qData.angles.B);
+                drawMark(0, qData.angles.B, 0.45, 'B');
+                drawMark(qData.angles.B, 180, 0.75, 'A');
+                break;
+            case 'line_3': 
+                drawRay(0); drawRay(180); drawRay(qData.angles.B); drawRay(qData.angles.B + qData.angles.C);
+                drawMark(0, qData.angles.B, 0.35, 'B');
+                drawMark(qData.angles.B, qData.angles.B + qData.angles.C, 0.55, 'C');
+                drawMark(qData.angles.B + qData.angles.C, 180, 0.8, 'A');
+                break;
+            case 'circle': 
+                let a1 = randInt(20, 60); 
+                let a2 = a1 + qData.angles.B;
+                let a3 = a2 + qData.angles.C;
+                drawRay(a1); drawRay(a2); drawRay(a3);
+                drawMark(a1, a2, 0.4, 'B');
+                drawMark(a2, a3, 0.65, 'C');
+                drawMark(a3, a1 + 360, 0.9, 'A');
+                break;
+            case 'overlapping_arcs':
+                let b = qData.angles.base;
+                let t1 = qData.angles.t1;
+                let t2 = qData.angles.t2;
+                let t3 = qData.angles.t3;
+                
+                // 畫出 4 條射線
+                drawRay(b);
+                drawRay(b + t1);
+                drawRay(b + t1 + t2);
+                drawRay(b + t1 + t2 + t3);
+                
+                // 標示左右兩個已知的小角 (錯開半徑高度)
+                drawMark(b, b + t1, 0.45, t1 + '°');
+                drawMark(b + t1 + t2, b + t1 + t2 + t3, 0.55, t3 + '°');
+                
+                // 標示兩個大弧線 (一個是已知總和，一個是 A)
+                let labelC1 = qData.angles.unknown === 'c1' ? 'A' : qData.angles.c1 + '°';
+                let labelC2 = qData.angles.unknown === 'c2' ? 'A' : qData.angles.c2 + '°';
+                
+                // 使用 isTotal = true 畫出兩端帶有「截斷標線」的大弧線，一內一外絕不重疊
+                drawMark(b, b + t1 + t2, 0.75, labelC1, false, true);
+                drawMark(b + t1, b + t1 + t2 + t3, 0.90, labelC2, false, true);
+                break;
+        }
+    }
+
+    function generateQuestions() {
+        currentQuestions = [];
+        const webContainer = document.getElementById('web-questions-container');
+        const printLeft = document.getElementById('print-grid-left');
+        const printRight = document.getElementById('print-grid-right');
+        
+        webContainer.innerHTML = '';
+        printLeft.innerHTML = '';
+        printRight.innerHTML = '';
+        hideKeypad();
+
+        for (let i = 0; i < NUM_QUESTIONS; i++) {
+            const qData = generateQuestionData();
+            currentQuestions.push(qData);
+            
+            let conditionsStr = qData.conditions.join('，');
+            let uName = 'A'; // 修正：直接將未知角名稱指定為 'A'，解決 undefined 錯誤
+            
+            // 網頁版 HTML：修改 label 為動態變數
+            const webItem = document.createElement('div');
+            webItem.className = 'bg-white border-2 border-gray-100 rounded-xl p-5 shadow-sm relative overflow-hidden transition-all duration-300 flex flex-col hover:shadow-md';
+            webItem.id = `web-q-${i}`;
+            webItem.innerHTML = `
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="font-bold text-gray-800 text-lg">${i+1}.</span>
+                    <span class="font-bold text-gray-800 text-lg tracking-wider">${conditionsStr}</span>
+                </div>
+                <div class="flex-grow flex justify-center items-center my-2 h-48 overflow-hidden">
+                    <canvas id="web-canvas-${i}" width="900" height="600" class="max-w-full max-h-full w-auto h-auto object-contain"></canvas>
+                </div>
+                <div class="mt-2 flex justify-between items-end bg-gray-50 p-3 rounded-lg flex-shrink-0">
+                    <div class="flex items-center gap-2">
+                        <label class="font-bold text-gray-700 text-lg">∠${uName} =</label>
+                        <input type="text" readonly id="web-ans-${i}" onclick="showKeypad(this, event)" class="border-b-2 border-gray-400 focus:border-blue-600 outline-none w-16 text-center text-xl py-1 bg-white cursor-pointer transition-colors font-bold shadow-sm rounded-t-sm" placeholder="?">
+                        <span class="text-gray-600 font-bold text-lg">°</span>
+                    </div>
+                    <div class="flex flex-col items-end gap-2">
+                        <div id="web-feedback-${i}" class="font-bold text-sm hidden"></div>
+                        <button onclick="checkSingleAnswer(${i})" class="px-4 py-1.5 bg-teal-500 text-white rounded hover:bg-teal-600 transition shadow text-sm font-bold tracking-wide">對這題</button>
+                    </div>
+                </div>
+            `;
+            webContainer.appendChild(webItem);
+            
+            // 列印版 HTML
+            const createPrintItem = (idSuffix) => {
+                const pItem = document.createElement('div');
+                pItem.className = 'print-item';
+                pItem.innerHTML = `
+                    <div class="print-item-header">
+                        <span class="print-item-number">${i+1}. </span>
+                        <span>${conditionsStr}</span>
+                    </div>
+                    <div class="print-item-canvas-container">
+                        <canvas id="print-canvas-${i}-${idSuffix}" width="900" height="600" class="print-item-canvas"></canvas>
+                    </div>
+                    <div class="print-item-answer-area">
+                        <span>算式/答：<span id="print-ans-${i}-${idSuffix}" class="print-item-answer-text ml-1">∠${uName} = ${qData.ans}°</span></span>
+                    </div>
+                `;
+                return pItem;
+            };
+
+            printLeft.appendChild(createPrintItem('left'));
+            printRight.appendChild(createPrintItem('right'));
+
+            setTimeout(() => {
+                const cWeb = document.getElementById(`web-canvas-${i}`);
+                const cLeft = document.getElementById(`print-canvas-${i}-left`);
+                const cRight = document.getElementById(`print-canvas-${i}-right`);
+                if(cWeb) drawAngleProblem(cWeb, qData);
+                if(cLeft) drawAngleProblem(cLeft, qData);
+                if(cRight) drawAngleProblem(cRight, qData);
+            }, 0);
+        }
+    }
+
+    // 顯示虛擬鍵盤並定位
+    function showKeypad(inputEl, event) {
+        if (event) event.stopPropagation(); 
+        
+        if (activeInputEl) {
+            activeInputEl.classList.remove('border-blue-600', 'bg-blue-50');
+            activeInputEl.classList.add('border-gray-400', 'bg-white');
+        }
+
+        activeInputEl = inputEl;
+        activeInputEl.classList.remove('border-gray-400', 'bg-white');
+        activeInputEl.classList.add('border-blue-600', 'bg-blue-50');
+
+        keypadEl.classList.remove('hidden');
+        
+        setTimeout(() => {
+            keypadEl.classList.remove('opacity-0');
+            keypadEl.classList.add('opacity-100');
+        }, 10);
+
+        const rect = inputEl.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+
+        let leftPos = rect.left + scrollLeft + (rect.width / 2);
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const keypadHeight = 220; 
+
+        if (spaceBelow > keypadHeight) {
+            keypadEl.style.top = (rect.bottom + scrollTop + 10) + 'px';
+        } else {
+            keypadEl.style.top = (rect.top + scrollTop - keypadHeight - 10) + 'px';
+        }
+
+        const halfWidth = 112; 
+        if (leftPos - halfWidth < 10) leftPos = halfWidth + 10;
+        if (leftPos + halfWidth > window.innerWidth) leftPos = window.innerWidth - halfWidth - 10;
+
+        keypadEl.style.left = leftPos + 'px';
+    }
+
+    // 隱藏虛擬鍵盤
+    function hideKeypad() {
+        if (!keypadEl.classList.contains('hidden')) {
+            keypadEl.classList.remove('opacity-100');
+            keypadEl.classList.add('opacity-0');
+            
+            if (activeInputEl) {
+                activeInputEl.classList.remove('border-blue-600', 'bg-blue-50');
+                activeInputEl.classList.add('border-gray-400', 'bg-white');
+            }
+
+            setTimeout(() => {
+                keypadEl.classList.add('hidden');
+                activeInputEl = null;
+            }, 200); 
+        }
+    }
+
+    // 虛擬鍵盤輸入處理
+    function inputKey(val, event) {
+        if (event) event.preventDefault(); 
+        if (!activeInputEl) return;
+
+        let currentVal = activeInputEl.value;
+
+        if (val === 'C') {
+            activeInputEl.value = '';
+        } else if (val === 'DEL') {
+            activeInputEl.value = currentVal.slice(0, -1);
+        } else {
+            if (currentVal.length < 3) {
+                activeInputEl.value += val;
+            }
+        }
+        
+        const itemId = activeInputEl.id.split('-')[2];
+        const itemDiv = document.getElementById(`web-q-${itemId}`);
+        const feedback = document.getElementById(`web-feedback-${itemId}`);
+        
+        if (itemDiv.classList.contains('correct') || itemDiv.classList.contains('incorrect')) {
+            itemDiv.classList.remove('correct', 'incorrect');
+            feedback.classList.add('hidden');
+        }
+    }
+
+    document.addEventListener('mousedown', function(event) {
+        if (!keypadEl.classList.contains('hidden')) {
+            if (!keypadEl.contains(event.target) && event.target !== activeInputEl) {
+                hideKeypad();
+            }
+        }
+    });
+
+    function checkSingleAnswer(i) {
+        const q = currentQuestions[i];
+        const input = document.getElementById(`web-ans-${i}`);
+        const itemDiv = document.getElementById(`web-q-${i}`);
+        const feedback = document.getElementById(`web-feedback-${i}`);
+        const userAns = parseInt(input.value);
+        
+        itemDiv.classList.remove('correct', 'incorrect');
+        feedback.classList.remove('hidden', 'text-green-600', 'text-red-600');
+        
+        if (isNaN(userAns)) {
+            feedback.textContent = '請輸入數字';
+            feedback.classList.add('text-red-600');
+            return;
+        }
+
+        if (userAns === q.ans) {
+            itemDiv.classList.add('correct');
+            feedback.textContent = '✔ 答對了！';
+            feedback.classList.add('text-green-600');
+        } else {
+            itemDiv.classList.add('incorrect');
+            feedback.textContent = '✘ 正解: ' + q.ans + '°';
+            feedback.classList.add('text-red-600');
+        }
+    }
+
+    function checkAnswers() {
+        hideKeypad(); 
+        currentQuestions.forEach((_, i) => checkSingleAnswer(i));
+    }
+
+    async function exportPDF(type) {
+        hideKeypad(); 
+        const container = document.getElementById('pdf-export-container');
+        const ansTexts = document.querySelectorAll('.print-item-answer-text');
+        const titleTypes = document.querySelectorAll('.pdf-title-type');
+        
+        titleTypes.forEach(el => el.textContent = type === 'answer' ? '(解答)' : '(題目)');
+        ansTexts.forEach(el => el.style.display = type === 'answer' ? 'inline' : 'none');
+
+        container.style.display = 'flex';
+
+        try {
+            const canvas = await html2canvas(container, {
+                scale: 3, 
+                useCORS: true,
+                logging: false,
+                backgroundColor: '#ffffff'
+            });
+
+            container.style.display = 'none';
+
+            const imgData = canvas.toDataURL('image/jpeg', 0.98);
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('l', 'mm', 'a4'); 
+            
+            pdf.addImage(imgData, 'JPEG', 0, 0, 297, 210);
+            
+            const filename = type === 'answer' ? '角度計算練習_解答.pdf' : '角度計算練習_題目.pdf';
+            pdf.save(filename);
+
+        } catch (error) {
+            console.error("PDF 匯出失敗:", error);
+            const errorMsg = document.createElement('div');
+            errorMsg.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded shadow-lg z-50';
+            errorMsg.textContent = "匯出 PDF 時發生錯誤，請稍後再試。";
+            document.body.appendChild(errorMsg);
+            setTimeout(() => errorMsg.remove(), 3000);
+            
+            container.style.display = 'none';
+        }
+    }
+
+    window.onload = () => generateQuestions();
+</script>
+</body>
+</html>
