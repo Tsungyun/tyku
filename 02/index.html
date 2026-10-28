@@ -48,6 +48,13 @@
             opacity: 0.01;
             pointer-events: none;
         }
+
+        /* 隱藏原生數字輸入框的上下箭頭 */
+        input[type="text"].custom-input::-webkit-outer-spin-button,
+        input[type="text"].custom-input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
     </style>
 </head>
 <body class="bg-slate-100 min-h-screen p-4 md:p-8 font-sans text-gray-800">
@@ -56,7 +63,7 @@
         
         <div id="controls-section">
             <h1 class="text-3xl md:text-4xl font-bold text-center mb-2 text-indigo-600 tracking-wide">自訂乘法練習題產生器</h1>
-            <p class="text-center text-gray-500 mb-8 font-medium">8 題模式 / 支援橫向 A4 對半裁切設計</p>
+            <p class="text-center text-gray-500 mb-8 font-medium">8 題模式 / 支援橫向 A4 對半裁切設計 / 支援直接作答</p>
             
             <!-- 設定區塊 -->
             <div class="bg-indigo-50/50 p-6 rounded-xl mb-8 flex flex-wrap justify-center items-center gap-6 border border-indigo-100 shadow-sm">
@@ -97,7 +104,7 @@
                     🎲 產生新題目
                 </button>
                 <button id="btn-show-answer" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-8 rounded-lg shadow-md transition duration-200 transform hover:-translate-y-0.5">
-                    👀 顯示解答
+                    👀 顯示計算過程
                 </button>
                 <button id="btn-export-q" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-8 rounded-lg shadow-md transition duration-200 transform hover:-translate-y-0.5 flex items-center">
                     <span>📄 匯出題目 (PDF版)</span>
@@ -134,6 +141,85 @@
 
         let currentQuestions = [];
         let answersShown = false;
+        let activeInput = null;
+
+        // ====== 建立迷你螢幕小鍵盤 ======
+        const keypad = document.createElement('div');
+        keypad.id = 'mini-keypad';
+        // 絕對定位、高層級，小巧的寬度與間距
+        keypad.className = 'hidden absolute bg-slate-50 shadow-xl border border-gray-300 rounded-lg p-1.5 z-[9999] select-none';
+        keypad.style.width = '140px'; 
+        keypad.innerHTML = `
+            <div class="grid grid-cols-3 gap-1 text-sm font-bold text-gray-700">
+                <button class="kp-btn bg-white hover:bg-indigo-100 border border-gray-200 py-1.5 rounded shadow-sm transition">1</button>
+                <button class="kp-btn bg-white hover:bg-indigo-100 border border-gray-200 py-1.5 rounded shadow-sm transition">2</button>
+                <button class="kp-btn bg-white hover:bg-indigo-100 border border-gray-200 py-1.5 rounded shadow-sm transition">3</button>
+                <button class="kp-btn bg-white hover:bg-indigo-100 border border-gray-200 py-1.5 rounded shadow-sm transition">4</button>
+                <button class="kp-btn bg-white hover:bg-indigo-100 border border-gray-200 py-1.5 rounded shadow-sm transition">5</button>
+                <button class="kp-btn bg-white hover:bg-indigo-100 border border-gray-200 py-1.5 rounded shadow-sm transition">6</button>
+                <button class="kp-btn bg-white hover:bg-indigo-100 border border-gray-200 py-1.5 rounded shadow-sm transition">7</button>
+                <button class="kp-btn bg-white hover:bg-indigo-100 border border-gray-200 py-1.5 rounded shadow-sm transition">8</button>
+                <button class="kp-btn bg-white hover:bg-indigo-100 border border-gray-200 py-1.5 rounded shadow-sm transition">9</button>
+                <button class="kp-btn bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 py-1.5 rounded shadow-sm transition">C</button>
+                <button class="kp-btn bg-white hover:bg-indigo-100 border border-gray-200 py-1.5 rounded shadow-sm transition">0</button>
+                <button class="kp-btn bg-yellow-50 text-yellow-600 hover:bg-yellow-100 border border-yellow-100 py-1.5 rounded shadow-sm transition">⌫</button>
+            </div>
+            <button class="kp-close mt-1.5 w-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-1 rounded shadow-sm text-xs transition">
+                🔽 關閉鍵盤
+            </button>
+        `;
+        document.body.appendChild(keypad);
+
+        // 小鍵盤事件綁定
+        keypad.addEventListener('click', (e) => {
+            if (!activeInput) return;
+            const target = e.target;
+
+            if (target.classList.contains('kp-btn')) {
+                const val = target.innerText;
+                if (val === 'C') {
+                    activeInput.value = '';
+                } else if (val === '⌫') {
+                    activeInput.value = activeInput.value.slice(0, -1);
+                } else {
+                    activeInput.value += val;
+                }
+            } else if (target.classList.contains('kp-close')) {
+                hideKeypad();
+            }
+        });
+
+        // 點擊空白處關閉小鍵盤
+        document.addEventListener('click', (e) => {
+            if (activeInput && e.target !== activeInput && !keypad.contains(e.target)) {
+                hideKeypad();
+            }
+        });
+
+        function showKeypad(e, inputEl) {
+            e.stopPropagation();
+            activeInput = inputEl;
+            
+            // 取得輸入框的位置以動態放置小鍵盤
+            const rect = inputEl.getBoundingClientRect();
+            let top = rect.bottom + window.scrollY + 4;
+            let left = rect.left + window.scrollX;
+
+            // 簡單的邊界檢查，避免鍵盤超出畫面右側
+            if (left + 140 > window.innerWidth) {
+                left = window.innerWidth - 150;
+            }
+
+            keypad.style.top = top + 'px';
+            keypad.style.left = left + 'px';
+            keypad.classList.remove('hidden');
+        }
+
+        function hideKeypad() {
+            keypad.classList.add('hidden');
+            activeInput = null;
+        }
+        // ===================================
 
         // 隨機產生特定位數的數字字串 (避免大數精度流失)
         function getRandomString(digits) {
@@ -146,6 +232,7 @@
 
         // 產生 8 題測驗
         function generateQuestions() {
+            hideKeypad(); // 產生新題目時關閉鍵盤
             currentQuestions = [];
             const m1Digits = parseInt(multiplicandSelect.value);
             const m2Digits = parseInt(multiplierSelect.value);
@@ -169,7 +256,6 @@
             if (isCompact) {
                 // =============== PDF 專用的緊湊版 =================
                 const multiplierLen = strNum2.length;
-                // 根據乘數位數動態計算字體與行距，確保 9位數×9位數 也能完整容納在卡片高度內不被裁切
                 let fontSize = '10px';
                 let lineMargin = '2px 0';
                 let lineHeight = '1.12';
@@ -252,24 +338,71 @@
 
             currentQuestions.forEach((q, index) => {
                 const card = document.createElement('div');
-                card.className = 'bg-white border-2 border-gray-100 p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow';
+                card.className = 'bg-white border-2 border-gray-100 p-5 rounded-xl shadow-sm hover:shadow-md transition-shadow relative';
 
+                // 題目標頭
                 const header = document.createElement('div');
-                header.className = 'text-lg font-semibold text-gray-700 mb-4 border-b-2 border-gray-50 pb-2';
-                const answerText = answersShown ? (q.num1 * q.num2).toString() : '';
-                header.innerHTML = `<span class="text-indigo-500 mr-2 text-xl">(${index + 1})</span> ${q.num1.toString()} × ${q.num2.toString()} = ${answerText}`;
+                header.className = 'text-lg font-semibold text-gray-700 mb-3 border-b-2 border-gray-50 pb-2';
+                header.innerHTML = `<span class="text-indigo-500 mr-2 text-xl">(${index + 1})</span> ${q.num1.toString()} × ${q.num2.toString()} = `;
                 card.appendChild(header);
 
-                const answerDiv = document.createElement('div');
-                answerDiv.className = `mt-4 flex justify-center ${answersShown ? '' : 'hidden'}`;
-                answerDiv.innerHTML = generateVerticalMathHTML(q.num1, q.num2, false);
-                card.appendChild(answerDiv);
+                // --- 新增：互動式作答區 ---
+                const interactiveDiv = document.createElement('div');
+                interactiveDiv.className = 'flex items-center gap-2 mt-2';
+
+                // 答案輸入框 (唯讀，強制透過小鍵盤輸入)
+                const answerInput = document.createElement('input');
+                answerInput.type = 'text';
+                answerInput.readOnly = true; // 避免跳出原生手機鍵盤
+                answerInput.className = 'custom-input flex-1 border-2 border-indigo-100 rounded-lg px-2 py-1.5 text-right font-mono text-lg font-bold text-indigo-700 bg-indigo-50/30 focus:outline-none focus:border-indigo-400 cursor-pointer placeholder-gray-300';
+                answerInput.placeholder = '點此作答';
+                answerInput.addEventListener('click', (e) => showKeypad(e, answerInput));
+
+                // 個別核對按鈕
+                const checkBtn = document.createElement('button');
+                checkBtn.className = 'bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg hover:bg-indigo-200 font-bold text-sm whitespace-nowrap transition-colors shadow-sm';
+                checkBtn.innerText = '核對';
+
+                // 對錯圖示回饋區
+                const feedbackIcon = document.createElement('span');
+                feedbackIcon.className = 'text-xl font-bold ml-1 w-6 text-center inline-block';
+                feedbackIcon.innerHTML = ''; // 初始為空
+
+                // 核對邏輯
+                checkBtn.addEventListener('click', () => {
+                    hideKeypad();
+                    const userAns = answerInput.value.trim();
+                    const correctAns = (q.num1 * q.num2).toString();
+                    
+                    if (userAns === "") {
+                        feedbackIcon.innerHTML = '❓';
+                        feedbackIcon.className = 'text-xl ml-1 w-6 text-center inline-block text-gray-400';
+                    } else if (userAns === correctAns) {
+                        feedbackIcon.innerHTML = '⭕';
+                        feedbackIcon.className = 'text-xl ml-1 w-6 text-center inline-block text-green-500 font-bold drop-shadow-sm';
+                    } else {
+                        feedbackIcon.innerHTML = '❌';
+                        feedbackIcon.className = 'text-xl ml-1 w-6 text-center inline-block text-red-500 font-bold drop-shadow-sm';
+                    }
+                });
+
+                interactiveDiv.appendChild(answerInput);
+                interactiveDiv.appendChild(checkBtn);
+                interactiveDiv.appendChild(feedbackIcon);
+                card.appendChild(interactiveDiv);
+                // --------------------------
+
+                // 直式計算過程區塊 (透過按鈕顯示/隱藏)
+                const calculationDiv = document.createElement('div');
+                calculationDiv.className = `mt-4 flex justify-center border-t border-dashed border-gray-200 pt-3 ${answersShown ? '' : 'hidden'}`;
+                calculationDiv.innerHTML = generateVerticalMathHTML(q.num1, q.num2, false);
+                card.appendChild(calculationDiv);
                 
                 questionsContainer.appendChild(card);
             });
             
-            // 更新「顯示解答」按鈕狀態
-            btnShowAnswer.innerHTML = answersShown ? "🙈 隱藏解答" : "👀 顯示解答";
+            // 更新「顯示計算過程」按鈕狀態
+            btnShowAnswer.innerHTML = answersShown ? "🙈 隱藏計算過程" : "👀 顯示計算過程";
             if(answersShown) {
                 btnShowAnswer.className = "bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-8 rounded-lg shadow-md transition duration-200 transform hover:-translate-y-0.5";
             } else {
@@ -280,7 +413,6 @@
         // 動態建構供 PDF 匯出的特殊排版 (A4 橫向、左右對稱)
         function buildPDFLayout(isAnswerMode) {
             const container = document.createElement('div');
-            // 將長寬比壓至 0.655 (1060px × 695px)，遠低於 A4 頁面比例極限 0.696，確保 100% 不換頁、不截斷
             container.style.width = '1060px';
             container.style.height = '695px';
             container.style.backgroundColor = 'white';
@@ -290,7 +422,6 @@
             container.style.boxSizing = 'border-box';
             container.style.overflow = 'hidden';
 
-            // 建立半邊版面的函數 (左右雙欄各包含 8 題完整題目框)
             const buildHalfPage = () => {
                 const half = document.createElement('div');
                 half.style.width = '50%';
@@ -301,7 +432,6 @@
                 half.style.boxSizing = 'border-box';
                 half.style.overflow = 'hidden';
 
-                // 極簡單行標題，僅佔用極小空間，完整釋放垂直高度給第 7、8 題
                 const title = document.createElement('div');
                 title.style.textAlign = 'center';
                 title.style.fontSize = '12px';
@@ -313,7 +443,6 @@
                 title.innerText = isAnswerMode ? '乘法練習題 (解答卷)' : '乘法練習題 (題目卷)';
                 half.appendChild(title);
 
-                // 8 題網格 (2欄 x 4列)
                 const grid = document.createElement('div');
                 grid.style.display = 'grid';
                 grid.style.gridTemplateColumns = 'repeat(2, 1fr)';
@@ -342,7 +471,6 @@
                     header.style.lineHeight = '1.2';
                     header.style.whiteSpace = 'nowrap';
                     
-                    // 題目版等號後無問號，解答版等號後直接呈現答案
                     const equationAnswer = isAnswerMode ? (q.num1 * q.num2).toString() : '';
                     header.innerHTML = `<span style="color: #4f46e5; margin-right: 3px;">(${index + 1})</span> ${q.num1.toString()} &times; ${q.num2.toString()} = ${equationAnswer}`;
                     card.appendChild(header);
@@ -355,7 +483,6 @@
                         answerDiv.style.flex = '1 1 0%';
                         answerDiv.style.minHeight = '0';
                         answerDiv.style.overflow = 'hidden';
-                        // 呼叫產生微縮版本的直式乘法
                         answerDiv.innerHTML = generateVerticalMathHTML(q.num1, q.num2, true);
                         card.appendChild(answerDiv);
                     }
@@ -367,11 +494,9 @@
                 return half;
             };
 
-            // 組合左半與右半部
             const leftHalf = buildHalfPage();
             const rightHalf = buildHalfPage();
             
-            // 在右半部加上左邊的虛線框，作為「裁切線」
             rightHalf.style.borderLeft = '2px dashed #9ca3af';
 
             container.appendChild(leftHalf);
@@ -382,18 +507,16 @@
 
         // 匯出成 PDF
         function exportToPDF(isAnswerMode) {
-            // 防止連點
+            hideKeypad();
             const btn = isAnswerMode ? btnExportA : btnExportQ;
             const originalText = btn.innerHTML;
             btn.innerHTML = `<span class="animate-pulse">⏳ 產生PDF中...</span>`;
             btn.disabled = true;
 
-            // 清空隱藏容器並插入新的 PDF 版面
             pdfExportContainer.innerHTML = '';
             const layout = buildPDFLayout(isAnswerMode);
             pdfExportContainer.appendChild(layout);
 
-            // 設定 PDF 匯出參數 (精確對應 A4 橫向毫米尺寸)
             const opt = {
                 margin:       [5, 5, 5, 5],
                 filename:     isAnswerMode ? '乘法練習題_解答版_雙欄.pdf' : '乘法練習題_題目版_雙欄.pdf',
@@ -403,7 +526,6 @@
                 pagebreak:    { mode: 'avoid-all' }
             };
 
-            // 稍微延遲以確保 DOM 已確實被加入
             setTimeout(() => {
                 html2pdf().set(opt).from(layout).save().then(() => {
                     pdfExportContainer.innerHTML = '';
@@ -422,6 +544,7 @@
         btnGenerate.addEventListener('click', generateQuestions);
         
         btnShowAnswer.addEventListener('click', () => {
+            hideKeypad();
             answersShown = !answersShown;
             renderQuestionsForWeb();
         });
