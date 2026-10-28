@@ -348,24 +348,29 @@
 
                 // --- 新增：互動式作答區 ---
                 const interactiveDiv = document.createElement('div');
-                interactiveDiv.className = 'flex items-center gap-2 mt-2';
+                interactiveDiv.className = 'flex flex-col gap-2 mt-2';
 
                 // 答案輸入框 (唯讀，強制透過小鍵盤輸入)
                 const answerInput = document.createElement('input');
                 answerInput.type = 'text';
                 answerInput.readOnly = true; // 避免跳出原生手機鍵盤
-                answerInput.className = 'custom-input flex-1 border-2 border-indigo-100 rounded-lg px-2 py-1.5 text-right font-mono text-lg font-bold text-indigo-700 bg-indigo-50/30 focus:outline-none focus:border-indigo-400 cursor-pointer placeholder-gray-300';
+                // 縮小高度、字體，避免輸入框過大
+                answerInput.className = 'custom-input w-full border-2 border-indigo-100 rounded-lg px-2 py-1 text-right font-mono text-base font-bold text-indigo-700 bg-indigo-50/30 focus:outline-none focus:border-indigo-400 cursor-pointer placeholder-gray-300';
                 answerInput.placeholder = '點此作答';
                 answerInput.addEventListener('click', (e) => showKeypad(e, answerInput));
 
-                // 個別核對按鈕
+                // 動作區塊 (放置核對按鈕與圖示)
+                const actionDiv = document.createElement('div');
+                actionDiv.className = 'flex justify-end items-center gap-2';
+
+                // 個別核對按鈕 (移至下一行並縮小)
                 const checkBtn = document.createElement('button');
-                checkBtn.className = 'bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg hover:bg-indigo-200 font-bold text-sm whitespace-nowrap transition-colors shadow-sm';
+                checkBtn.className = 'bg-indigo-100 text-indigo-700 px-2 py-1 rounded-md hover:bg-indigo-200 font-bold text-xs whitespace-nowrap transition-colors shadow-sm';
                 checkBtn.innerText = '核對';
 
                 // 對錯圖示回饋區
                 const feedbackIcon = document.createElement('span');
-                feedbackIcon.className = 'text-xl font-bold ml-1 w-6 text-center inline-block';
+                feedbackIcon.className = 'text-lg font-bold ml-1 w-5 text-center inline-block';
                 feedbackIcon.innerHTML = ''; // 初始為空
 
                 // 核對邏輯
@@ -376,19 +381,20 @@
                     
                     if (userAns === "") {
                         feedbackIcon.innerHTML = '❓';
-                        feedbackIcon.className = 'text-xl ml-1 w-6 text-center inline-block text-gray-400';
+                        feedbackIcon.className = 'text-lg ml-1 w-5 text-center inline-block text-gray-400';
                     } else if (userAns === correctAns) {
                         feedbackIcon.innerHTML = '⭕';
-                        feedbackIcon.className = 'text-xl ml-1 w-6 text-center inline-block text-green-500 font-bold drop-shadow-sm';
+                        feedbackIcon.className = 'text-lg ml-1 w-5 text-center inline-block text-green-500 font-bold drop-shadow-sm';
                     } else {
                         feedbackIcon.innerHTML = '❌';
-                        feedbackIcon.className = 'text-xl ml-1 w-6 text-center inline-block text-red-500 font-bold drop-shadow-sm';
+                        feedbackIcon.className = 'text-lg ml-1 w-5 text-center inline-block text-red-500 font-bold drop-shadow-sm';
                     }
                 });
 
+                actionDiv.appendChild(checkBtn);
+                actionDiv.appendChild(feedbackIcon);
                 interactiveDiv.appendChild(answerInput);
-                interactiveDiv.appendChild(checkBtn);
-                interactiveDiv.appendChild(feedbackIcon);
+                interactiveDiv.appendChild(actionDiv);
                 card.appendChild(interactiveDiv);
                 // --------------------------
 
