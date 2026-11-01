@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智慧考試計時系統</title>
+    <!-- 引入 Tailwind CSS 進行快速美觀的排版 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 引入 Google Fonts：Noto Sans TC (高質感中文) / Oswald (專業數字顯示) */
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Oswald:wght@500;700&display=swap');
+        
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #f8fafc;
+        }
+
+        /* 專門為計時器數字設計的英文字體，極具現代科技感 */
+        .timer-font {
+            font-family: 'Oswald', sans-serif;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 0.02em;
+        }
+
+        /* 最後10秒閃爍與呼吸發光動畫 */
+        @keyframes flash-warning {
+            0%, 100% { 
+                color: #ff4d4d; 
+                text-shadow: 0 0 20px rgba(255,77,77,0.8), 0 0 40px rgba(255,77,77,0.4); 
+                transform: scale(1);
+            }
+            50% { 
+                color: #ffe6e6; 
+                text-shadow: 0 0 10px rgba(255,77,77,0.4); 
+                transform: scale(1.02);
+            }
+        }
+
+        .flash-active {
+            animation: flash-warning 0.6s ease-in-out infinite;
+        }
+
+        /* 玻璃透視效果 (Glassmorphism) */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        /* 深色漸層背景 (前台大螢幕) */
+        .cinematic-bg {
+            background: radial-gradient(circle at center, #1e293b 0%, #0f172a 50%, #020617 100%);
+        }
+    </style>
+</head>
+<body class="transition-colors duration-500 overflow-x-hidden">
+
+    <!-- 自訂提示訊息框 (取代原有的 alert) -->
+    <div id="toast-msg" class="fixed top-5 left-1/2 transform -translate-x-1/2 -translate-y-[150%] opacity-0 bg-gray-800 text-white px-6 py-3 rounded-full shadow-2xl transition-all duration-300 z-50 font-medium flex items-center gap-2">
+        <svg class="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+        <span id="toast-text">提示訊息</span>
+    </div>
+
+    <!-- ==================== 後台設定畫面 ==================== -->
+    <div id="settings-panel" class="min-h-screen flex flex-col items-center py-12 px-4 bg-gradient-to-br from-slate-100 via-blue-50 to-indigo-50">
+        
+        <div class="w-full max-w-5xl glass-panel rounded-[2rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] p-10 relative">
+            <!-- 儲存狀態標籤 -->
+            <div class="absolute top-6 right-8 flex items-center text-sm font-medium text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+                <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                設定已自動儲存於瀏覽器
+            </div>
+
+            <h1 class="text-3xl md:text-4xl font-black text-center text-slate-800 mb-10 tracking-wide">
+                📝 考試時間排程設定
+            </h1>
+            
+            <!-- 新增考試表單 -->
+            <div class="bg-white/60 rounded-2xl p-8 mb-10 border border-white shadow-sm">
+                <h2 class="text-xl font-bold mb-6 text-slate-700 flex items-center gap-2">
+                    <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                    新增考試節次
+                </h2>
+                <form id="add-exam-form" class="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+                    <div>
+                        <label class="block text-sm font-bold text-slate-600 mb-2">科目名稱</label>
+                        <input type="text" id="subject-input" required placeholder="例如：國文、數學" class="w-full px-5 py-3 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all shadow-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-slate-600 mb-2">開始時間</label>
+                        <input type="time" id="start-time-input" required class="w-full px-5 py-3 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all shadow-sm timer-font text-lg">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-slate-600 mb-2">結束時間</label>
+                        <input type="time" id="end-time-input" required class="w-full px-5 py-3 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all shadow-sm timer-font text-lg">
+                    </div>
+                    <div>
+                        <button type="submit" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-lg hover:shadow-blue-500/30 transform hover:-translate-y-0.5">
+                            新增科目
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- 已設定的考試列表 -->
+            <div class="mb-10">
+                <h2 class="text-xl font-bold mb-6 text-slate-700 flex items-center gap-2">
+                    <svg class="w-6 h-6 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
+                    今日考試排程
+                </h2>
+                <div class="overflow-x-auto rounded-xl shadow-sm border border-slate-200">
+                    <table class="w-full text-left border-collapse bg-white">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200">
+                                <th class="py-4 px-6 font-bold text-slate-500">科目名稱</th>
+                                <th class="py-4 px-6 font-bold text-slate-500">開始時間</th>
+                                <th class="py-4 px-6 font-bold text-slate-500">結束時間</th>
+                                <th class="py-4 px-6 font-bold text-slate-500 text-center">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="exam-list" class="divide-y divide-slate-100">
+                            <!-- JS 動態插入清單 -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="empty-state" class="text-center py-16 bg-white rounded-xl border border-slate-200 mt-2 hidden">
+                    <div class="text-6xl mb-4">📭</div>
+                    <p class="text-slate-400 font-medium text-lg">目前沒有任何考試排程，請從上方新增。</p>
+                </div>
+            </div>
+
+            <!-- 啟動按鈕 -->
+            <div class="flex justify-center mt-12 border-t border-slate-200 pt-10">
+                <button id="start-display-btn" class="group relative inline-flex items-center justify-center px-12 py-5 text-xl font-bold text-white transition-all duration-300 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full hover:from-emerald-400 hover:to-teal-500 shadow-[0_10px_40px_-10px_rgba(16,185,129,0.7)] hover:scale-105">
+                    <span class="mr-2">進入大螢幕計時模式</span>
+                    <svg class="w-6 h-6 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 前台計時大螢幕畫面 ==================== -->
+    <div id="display-panel" class="hidden cinematic-bg min-h-screen text-white flex flex-col justify-between overflow-hidden relative">
+        
+        <!-- 頂部資訊列：顯示現在時間 -->
+        <div class="flex justify-between items-start p-8 md:p-10 relative z-10">
+            <div class="flex flex-col bg-slate-800/50 backdrop-blur-md px-6 py-4 rounded-2xl border border-slate-700/50 shadow-lg">
+                <span class="text-slate-400 text-lg font-bold tracking-widest mb-1">現在時間</span>
+                <div id="current-actual-time" class="timer-font text-5xl md:text-6xl font-bold text-white drop-shadow-md tracking-wider">
+                    00:00:00
+                </div>
+            </div>
+            
+            <button id="back-to-settings-btn" class="bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white px-5 py-3 rounded-xl text-base font-medium transition-all opacity-40 hover:opacity-100 flex items-center border border-slate-600 backdrop-blur-sm">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                返回設定
+            </button>
+        </div>
+
+        <!-- 中間核心資訊：科目、時間範圍、倒數計時 -->
+        <div class="flex-grow flex flex-col items-center justify-center text-center w-full px-4 transform -translate-y-4 relative z-10">
+            
+            <!-- 狀態標籤 (考試中 / 等待中 / 休息中) -->
+            <div id="status-badge" class="px-8 py-2.5 rounded-full text-xl md:text-2xl font-bold tracking-widest mb-8 bg-blue-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)] border border-blue-400/30">
+                準備中
+            </div>
+
+            <!-- 科目名稱 -->
+            <h1 id="current-subject" class="text-7xl md:text-[9rem] font-black tracking-widest mb-6 drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)]">
+                --
+            </h1>
+
+            <!-- 該節考試時間範圍 -->
+            <div class="text-3xl md:text-4xl text-slate-400 font-bold mb-12 flex items-center justify-center gap-4 bg-slate-900/50 px-8 py-3 rounded-2xl border border-slate-800">
+                <svg class="w-10 h-10 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span id="time-range" class="timer-font tracking-widest">00:00 - 00:00</span>
+            </div>
+
+            <!-- 倒數計時器 -->
+            <div class="flex flex-col items-center">
+                <div class="text-slate-400 text-2xl md:text-3xl font-bold tracking-widest mb-4" id="countdown-label">距離結束剩餘時間</div>
+                <!-- 數字加上 timer-font 套用 Oswald 字體 -->
+                <div id="countdown-timer" class="timer-font text-[9rem] md:text-[18rem] leading-none font-bold text-white drop-shadow-[0_0_40px_rgba(255,255,255,0.15)] transition-all duration-300">
+                    00:00
+                </div>
+            </div>
+            
+        </div>
+        
+        <!-- 底部進度條 (視覺裝飾) -->
+        <div class="w-full h-3 md:h-4 bg-slate-800 absolute bottom-0 z-20">
+            <div id="progress-bar" class="h-full bg-gradient-to-r from-blue-600 to-cyan-400 w-0 transition-all duration-1000 ease-linear shadow-[0_-5px_15px_rgba(6,182,212,0.5)]"></div>
+        </div>
+    </div>
+
+    <!-- ==================== JavaScript 邏輯 ==================== -->
+    <script>
+        // --- 狀態與資料 ---
+        let exams = [];
+        let timerInterval = null;
+        
+        // 取得 DOM 元素 - 設定頁面
+        const settingsPanel = document.getElementById('settings-panel');
+        const displayPanel = document.getElementById('display-panel');
+        const addExamForm = document.getElementById('add-exam-form');
+        const subjectInput = document.getElementById('subject-input');
+        const startTimeInput = document.getElementById('start-time-input');
+        const endTimeInput = document.getElementById('end-time-input');
+        const examListEl = document.getElementById('exam-list');
+        const emptyStateEl = document.getElementById('empty-state');
+        const startDisplayBtn = document.getElementById('start-display-btn');
+        const backToSettingsBtn = document.getElementById('back-to-settings-btn');
+        
+        // 取得 DOM 元素 - 顯示頁面
+        const currentActualTimeEl = document.getElementById('current-actual-time');
+        const statusBadgeEl = document.getElementById('status-badge');
+        const currentSubjectEl = document.getElementById('current-subject');
+        const timeRangeEl = document.getElementById('time-range');
+        const countdownLabelEl = document.getElementById('countdown-label');
+        const countdownTimerEl = document.getElementById('countdown-timer');
+        const progressBarEl = document.getElementById('progress-bar');
+
+        // 自訂提示訊息功能 (取代 alert)
+        function showToast(msg) {
+            const toast = document.getElementById('toast-msg');
+            document.getElementById('toast-text').innerText = msg;
+            toast.classList.remove('-translate-y-[150%]', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+            
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('-translate-y-[150%]', 'opacity-0');
+            }, 3500);
+        }
+
+        // --- 初始化 ---
+        function init() {
+            // 從 LocalStorage 載入資料 (等同於 cookie 功能，永久儲存直到使用者清除)
+            const savedExams = localStorage.getItem('examSchedule');
+            if (savedExams) {
+                exams = JSON.parse(savedExams);
+            } else {
+                // 若無資料，提供兩筆預設範例
+                const now = new Date();
+                const pad = (n) => n.toString().padStart(2, '0');
+                
+                let s1 = new Date(now.getTime() - 1000 * 60 * 10); 
+                let e1 = new Date(now.getTime() + 1000 * 60 * 1);  
+                
+                let s2 = new Date(now.getTime() + 1000 * 60 * 5);  
+                let e2 = new Date(now.getTime() + 1000 * 60 * 65);
+                
+                exams = [
+                    { id: Date.now().toString(), subject: "語文 (測試用)", startTime: `${pad(s1.getHours())}:${pad(s1.getMinutes())}`, endTime: `${pad(e1.getHours())}:${pad(e1.getMinutes())}` },
+                    { id: (Date.now()+1).toString(), subject: "數學", startTime: `${pad(s2.getHours())}:${pad(s2.getMinutes())}`, endTime: `${pad(e2.getHours())}:${pad(e2.getMinutes())}` }
+                ];
+                saveExams();
+            }
+            renderExamList();
+            
+            // 綁定事件
+            addExamForm.addEventListener('submit', handleAddExam);
+            startDisplayBtn.addEventListener('click', enterDisplayMode);
+            backToSettingsBtn.addEventListener('click', exitDisplayMode);
+            
+            // 開始背景時鐘 (用於設定畫面右上角與內部邏輯)
+            setInterval(updateActualTimeOnly, 1000);
+            updateActualTimeOnly(); // 立即更新一次
+        }
+
+        // --- 設定頁面邏輯 ---
+        function handleAddExam(e) {
+            e.preventDefault();
+            const subject = subjectInput.value.trim();
+            const startTime = startTimeInput.value;
+            const endTime = endTimeInput.value;
+
+            if (startTime >= endTime) {
+                showToast("⚠️ 結束時間必須晚於開始時間！");
+                return;
+            }
+
+            const newExam = {
+                id: Date.now().toString(),
+                subject,
+                startTime,
+                endTime
+            };
+
+            exams.push(newExam);
+            // 依照開始時間排序
+            exams.sort((a, b) => a.startTime.localeCompare(b.startTime));
+            
+            saveExams();
+            renderExamList();
+            
+            // 清空表單
+            subjectInput.value = '';
+            startTimeInput.value = '';
+            endTimeInput.value = '';
+            
+            showToast("✅ 科目新增成功！");
+        }
+
+        function deleteExam(id) {
+            exams = exams.filter(ex => ex.id !== id);
+            saveExams();
+            renderExamList();
+        }
+
+        function saveExams() {
+            // 將設定存入瀏覽器，下次打開網頁不用重新設定
+            localStorage.setItem('examSchedule', JSON.stringify(exams));
+        }
+
+        function renderExamList() {
+            examListEl.innerHTML = '';
+            if (exams.length === 0) {
+                emptyStateEl.classList.remove('hidden');
+                examListEl.parentElement.parentElement.classList.add('hidden');
+            } else {
+                emptyStateEl.classList.add('hidden');
+                examListEl.parentElement.parentElement.classList.remove('hidden');
+                
+                exams.forEach(ex => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-blue-50/50 transition-colors group';
+                    tr.innerHTML = `
+                        <td class="py-4 px-6 font-bold text-slate-800 text-lg">${ex.subject}</td>
+                        <td class="py-4 px-6 text-blue-600 timer-font text-xl">${ex.startTime}</td>
+                        <td class="py-4 px-6 text-rose-500 timer-font text-xl">${ex.endTime}</td>
+                        <td class="py-4 px-6 text-center">
+                            <button onclick="deleteExam('${ex.id}')" class="text-rose-500 hover:text-white bg-rose-50 hover:bg-rose-500 px-4 py-2 rounded-lg font-bold transition-all shadow-sm">
+                                刪除
+                            </button>
+                        </td>
+                    `;
+                    examListEl.appendChild(tr);
+                });
+            }
+        }
+
+        // --- 切換模式 ---
+        function enterDisplayMode() {
+            if (exams.length === 0) {
+                showToast("⚠️ 請至少設定一節考試排程再開始！");
+                return;
+            }
+            settingsPanel.classList.add('hidden');
+            displayPanel.classList.remove('hidden');
+            
+            // 嘗試全螢幕 (部分瀏覽器限制需要使用者互動)
+            try {
+                if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen();
+                }
+            } catch (e) { console.log("Fullscreen API error", e); }
+
+            // 啟動主循環，間隔200ms確保介面更新順暢且倒數精準
+            timerInterval = setInterval(gameLoop, 200); 
+            gameLoop(); 
+        }
+
+        function exitDisplayMode() {
+            settingsPanel.classList.remove('hidden');
+            displayPanel.classList.add('hidden');
+            clearInterval(timerInterval);
+            
+            try {
+                if (document.fullscreenElement) {
+                    document.exitFullscreen();
+                }
+            } catch (e) { console.log("Exit fullscreen error", e); }
+            
+            countdownTimerEl.classList.remove('flash-active');
+            countdownTimerEl.style.color = "white"; 
+        }
+
+        // --- 核心計時邏輯 ---
+        // 輔助函數：將 "HH:MM" 轉為今日的 Date 物件
+        function getTimeObject(timeStr) {
+            const [h, m] = timeStr.split(':');
+            const d = new Date();
+            d.setHours(parseInt(h, 10), parseInt(m, 10), 0, 0);
+            return d;
+        }
+
+        // 輔助函數：格式化毫秒為 MM:SS
+        function formatCountdown(ms) {
+            if (ms <= 0) return "00:00";
+            const totalSeconds = Math.floor(ms / 1000);
+            const m = Math.floor(totalSeconds / 60);
+            const s = totalSeconds % 60;
+            return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+        
+        function updateActualTimeOnly() {
+            const now = new Date();
+            const h = now.getHours().toString().padStart(2, '0');
+            const m = now.getMinutes().toString().padStart(2, '0');
+            const s = now.getSeconds().toString().padStart(2, '0');
+            currentActualTimeEl.innerText = `${h}:${m}:${s}`;
+        }
+
+        function gameLoop() {
+            updateActualTimeOnly();
+            const now = new Date();
+            
+            let activeExam = null;
+            let nextExam = null;
+
+            // 尋找當前進行中或下一節的考試
+            for (let i = 0; i < exams.length; i++) {
+                const ex = exams[i];
+                const start = getTimeObject(ex.startTime);
+                const end = getTimeObject(ex.endTime);
+                
+                if (now >= start && now < end) {
+                    activeExam = ex;
+                    break;
+                } else if (now < start) {
+                    if (!nextExam) {
+                        nextExam = ex;
+                    }
+                }
+            }
+
+            // --- 畫面渲染邏輯 ---
+            if (activeExam) {
+                // [狀態：考試進行中]
+                const end = getTimeObject(activeExam.endTime);
+                const start = getTimeObject(activeExam.startTime);
+                const remainingMs = end - now;
+                const totalDurationMs = end - start;
+                
+                statusBadgeEl.innerText = "考試進行中";
+                statusBadgeEl.className = "px-8 py-2.5 rounded-full text-xl md:text-2xl font-bold tracking-widest mb-8 bg-rose-600 text-white shadow-[0_0_20px_rgba(225,29,72,0.6)] border border-rose-400/30";
+                
+                currentSubjectEl.innerText = activeExam.subject;
+                currentSubjectEl.className = "text-7xl md:text-[9rem] font-black tracking-widest mb-6 drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)] text-white";
+                
+                timeRangeEl.innerText = `${activeExam.startTime} - ${activeExam.endTime}`;
+                countdownLabelEl.innerText = "距離結束剩餘時間";
+                countdownTimerEl.innerText = formatCountdown(remainingMs);
+                
+                // 最後10秒判定 (<= 10000 毫秒) - 加入閃爍特效
+                if (remainingMs <= 10000 && remainingMs > 0) {
+                    if (!countdownTimerEl.classList.contains('flash-active')) {
+                        countdownTimerEl.classList.add('flash-active');
+                    }
+                } else {
+                    countdownTimerEl.classList.remove('flash-active');
+                    countdownTimerEl.style.color = "white";
+                }
+
+                // 進度條
+                const progressPct = ((now - start) / totalDurationMs) * 100;
+                progressBarEl.style.width = `${Math.min(100, Math.max(0, progressPct))}%`;
+                progressBarEl.className = "h-full bg-gradient-to-r from-rose-500 to-red-400 transition-all duration-1000 ease-linear shadow-[0_-5px_20px_rgba(225,29,72,0.6)]";
+
+            } else if (nextExam) {
+                // [狀態：等待中 / 休息時間，準備下一節]
+                countdownTimerEl.classList.remove('flash-active');
+                countdownTimerEl.style.color = "white";
+
+                const start = getTimeObject(nextExam.startTime);
+                const remainingMs = start - now;
+                
+                statusBadgeEl.innerText = "等待考試開始";
+                statusBadgeEl.className = "px-8 py-2.5 rounded-full text-xl md:text-2xl font-bold tracking-widest mb-8 bg-blue-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)] border border-blue-400/30";
+                
+                currentSubjectEl.innerText = `下一節: ${nextExam.subject}`;
+                currentSubjectEl.className = "text-5xl md:text-7xl font-black tracking-widest mb-6 drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)] text-slate-300";
+                
+                timeRangeEl.innerText = `${nextExam.startTime} - ${nextExam.endTime}`;
+                countdownLabelEl.innerText = "距離下一節考試開始還有";
+                countdownTimerEl.innerText = formatCountdown(remainingMs);
+                
+                progressBarEl.style.width = `0%`;
+                progressBarEl.className = "h-full bg-gradient-to-r from-blue-600 to-cyan-400 transition-all duration-1000 ease-linear";
+
+            } else {
+                // [狀態：今日考試全部結束]
+                countdownTimerEl.classList.remove('flash-active');
+                countdownTimerEl.style.color = "white";
+
+                statusBadgeEl.innerText = "全部結束";
+                statusBadgeEl.className = "px-8 py-2.5 rounded-full text-xl md:text-2xl font-bold tracking-widest mb-8 bg-emerald-600 text-white shadow-[0_0_20px_rgba(5,150,105,0.5)] border border-emerald-400/30";
+                
+                currentSubjectEl.innerText = "考試已結束";
+                currentSubjectEl.className = "text-6xl md:text-8xl font-black tracking-widest mb-6 drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)] text-white";
+                
+                timeRangeEl.innerText = "-- : --";
+                countdownLabelEl.innerText = "辛苦了！";
+                countdownTimerEl.innerText = "00:00";
+                
+                progressBarEl.style.width = `100%`;
+                progressBarEl.className = "h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-1000 ease-linear shadow-[0_-5px_20px_rgba(16,185,129,0.5)]";
+            }
+        }
+
+        // 啟動應用程式
+        init();
+
+    </script>
+
+<!-- 專屬版權宣告頁尾 (乾淨、單行設計) -->
+    <div class="text-center text-gray-400 text-sm mt-8 mb-4 tracking-wider">
+        &copy; 谷宗芸老師設計 / AI 輔助生成
+    </div>
+
+</body>
+</html>
