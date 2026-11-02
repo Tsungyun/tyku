@@ -141,52 +141,52 @@
     </div>
 
     <!-- ==================== 前台計時大螢幕畫面 ==================== -->
-    <div id="display-panel" class="hidden cinematic-bg min-h-screen text-white flex flex-col justify-between overflow-y-auto relative py-10">
+    <div id="display-panel" class="hidden cinematic-bg min-h-screen text-white flex flex-col justify-between overflow-hidden relative py-6">
         
         <!-- 頂部資訊列：返回按鈕改為絕對定位，避免推擠版面 -->
-        <div class="absolute top-6 right-6 md:top-10 md:right-10 z-20">
-            <button id="back-to-settings-btn" class="bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white px-5 py-3 rounded-xl text-base font-medium transition-all opacity-40 hover:opacity-100 flex items-center border border-slate-600 backdrop-blur-sm shadow-lg">
+        <div class="absolute top-6 right-6 md:top-8 md:right-8 z-20">
+            <button id="back-to-settings-btn" class="bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white px-4 py-2.5 rounded-xl text-sm md:text-base font-medium transition-all opacity-40 hover:opacity-100 flex items-center border border-slate-600 backdrop-blur-sm shadow-lg">
                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
                 返回設定
             </button>
         </div>
 
-        <!-- 中間核心資訊：居中排版緊湊化 -->
-        <div class="flex-grow flex flex-col items-center justify-center text-center w-full px-4 relative z-10 space-y-6 md:space-y-8 my-auto mt-12 md:mt-0">
+        <!-- 中間核心資訊：居中排版緊湊化，確保不超出 1080p 畫面 -->
+        <div class="flex-grow flex flex-col items-center justify-center text-center w-full px-4 relative z-10 space-y-5 md:space-y-6 my-auto">
             
             <!-- 狀態標籤 -->
-            <div id="status-badge" class="px-8 py-2.5 rounded-full text-xl md:text-2xl font-bold tracking-widest bg-blue-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)] border border-blue-400/30">
+            <div id="status-badge" class="px-6 py-2 rounded-full text-lg md:text-xl font-bold tracking-widest bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)] border border-blue-400/30">
                 準備中
             </div>
 
-            <!-- 科目名稱 (字體縮小一點以符合畫面) -->
-            <h1 id="current-subject" class="text-6xl md:text-8xl font-black tracking-widest drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)]">
+            <!-- 科目名稱 -->
+            <h1 id="current-subject" class="text-5xl md:text-7xl font-black tracking-widest drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)]">
                 --
             </h1>
 
-            <!-- 該節考試時間範圍 (字體放大) -->
-            <div class="text-4xl md:text-6xl text-slate-400 font-bold flex items-center justify-center gap-4 bg-slate-900/50 px-10 py-4 rounded-3xl border border-slate-800">
-                <svg class="w-12 h-12 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <!-- 該節考試時間範圍 -->
+            <div class="text-3xl md:text-5xl text-slate-300 font-bold flex items-center justify-center gap-4 bg-slate-900/40 px-8 py-3 rounded-2xl border border-slate-700/50 backdrop-blur-sm shadow-inner">
+                <svg class="w-8 h-8 md:w-10 md:h-10 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                 <span id="time-range" class="timer-font tracking-widest">00:00 - 00:00</span>
             </div>
 
-            <!-- 倒數計時器 (字體縮小、加入分鐘與秒的單位切換) -->
-            <div class="flex flex-col items-center mt-4">
-                <div class="text-slate-400 text-3xl md:text-4xl font-bold tracking-widest mb-2" id="countdown-label">距離結束剩餘時間</div>
-                <div class="flex items-baseline justify-center gap-4">
-                    <div id="countdown-timer" class="timer-font text-8xl md:text-[12rem] leading-none font-bold text-white drop-shadow-[0_0_40px_rgba(255,255,255,0.15)] transition-all duration-300">
+            <!-- 倒數計時器 (毛玻璃區塊，縮小數字) -->
+            <div class="flex flex-col items-center bg-white/5 px-12 py-6 rounded-[2.5rem] border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.3)] backdrop-blur-md mt-2">
+                <div class="text-slate-300 text-xl md:text-2xl font-bold tracking-widest mb-1" id="countdown-label">距離結束剩餘時間</div>
+                <div class="flex items-baseline justify-center gap-3 md:gap-4">
+                    <div id="countdown-timer" class="timer-font text-7xl md:text-[9rem] leading-none font-bold text-white drop-shadow-[0_0_30px_rgba(255,255,255,0.2)] transition-all duration-300">
                         0
                     </div>
-                    <div id="countdown-unit" class="text-4xl md:text-6xl font-bold text-slate-300 drop-shadow-md">
+                    <div id="countdown-unit" class="text-3xl md:text-4xl font-bold text-slate-300 drop-shadow-md">
                         分鐘
                     </div>
                 </div>
             </div>
 
-            <!-- 現在時間 (移至下方、字體放大) -->
-            <div class="flex flex-col items-center mt-12 bg-slate-800/40 backdrop-blur-md px-10 py-5 rounded-[2rem] border border-slate-700/50 shadow-2xl">
-                <span class="text-slate-400 text-2xl font-bold tracking-widest mb-2">現在時間</span>
-                <div id="current-actual-time" class="timer-font text-7xl md:text-8xl font-bold text-white drop-shadow-lg tracking-wider">
+            <!-- 現在時間 (中文字放大，數字縮小) -->
+            <div class="flex flex-col items-center pt-2">
+                <span class="text-blue-300 text-3xl md:text-4xl font-black tracking-widest mb-2 drop-shadow-md">現在時間</span>
+                <div id="current-actual-time" class="timer-font text-5xl md:text-6xl font-bold text-slate-200 drop-shadow-lg tracking-wider bg-slate-900/80 px-8 py-2.5 rounded-[1.25rem] border border-slate-700/80 shadow-inner">
                     00:00:00
                 </div>
             </div>
@@ -194,7 +194,7 @@
         </div>
         
         <!-- 底部進度條 (視覺裝飾) -->
-        <div class="w-full h-3 md:h-4 bg-slate-800 absolute bottom-0 z-20">
+        <div class="w-full h-2 md:h-3 bg-slate-800 absolute bottom-0 z-20">
             <div id="progress-bar" class="h-full bg-gradient-to-r from-blue-600 to-cyan-400 w-0 transition-all duration-1000 ease-linear shadow-[0_-5px_15px_rgba(6,182,212,0.5)]"></div>
         </div>
     </div>
@@ -450,10 +450,10 @@
                 const totalDurationMs = end - start;
                 
                 statusBadgeEl.innerText = "考試進行中";
-                statusBadgeEl.className = "px-8 py-2.5 rounded-full text-xl md:text-2xl font-bold tracking-widest bg-rose-600 text-white shadow-[0_0_20px_rgba(225,29,72,0.6)] border border-rose-400/30";
+                statusBadgeEl.className = "px-6 py-2 rounded-full text-lg md:text-xl font-bold tracking-widest bg-rose-600 text-white shadow-[0_0_15px_rgba(225,29,72,0.6)] border border-rose-400/30";
                 
                 currentSubjectEl.innerText = activeExam.subject;
-                currentSubjectEl.className = "text-6xl md:text-8xl font-black tracking-widest drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)] text-white";
+                currentSubjectEl.className = "text-5xl md:text-7xl font-black tracking-widest drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)] text-white";
                 
                 timeRangeEl.innerText = `${activeExam.startTime} - ${activeExam.endTime}`;
                 countdownLabelEl.innerText = "距離結束剩餘時間";
@@ -472,7 +472,7 @@
                 // 進度條
                 const progressPct = ((now - start) / totalDurationMs) * 100;
                 progressBarEl.style.width = `${Math.min(100, Math.max(0, progressPct))}%`;
-                progressBarEl.className = "h-full bg-gradient-to-r from-rose-500 to-red-400 transition-all duration-1000 ease-linear shadow-[0_-5px_20px_rgba(225,29,72,0.6)]";
+                progressBarEl.className = "h-full bg-gradient-to-r from-rose-500 to-red-400 transition-all duration-1000 ease-linear shadow-[0_-5px_15px_rgba(225,29,72,0.6)]";
 
             } else if (nextExam) {
                 // [狀態：等待中 / 休息時間，準備下一節]
@@ -483,10 +483,10 @@
                 const remainingMs = start - now;
                 
                 statusBadgeEl.innerText = "等待考試開始";
-                statusBadgeEl.className = "px-8 py-2.5 rounded-full text-xl md:text-2xl font-bold tracking-widest bg-blue-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.4)] border border-blue-400/30";
+                statusBadgeEl.className = "px-6 py-2 rounded-full text-lg md:text-xl font-bold tracking-widest bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)] border border-blue-400/30";
                 
                 currentSubjectEl.innerText = `下一節: ${nextExam.subject}`;
-                currentSubjectEl.className = "text-5xl md:text-7xl font-black tracking-widest drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)] text-slate-300";
+                currentSubjectEl.className = "text-4xl md:text-6xl font-black tracking-widest drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)] text-slate-300";
                 
                 timeRangeEl.innerText = `${nextExam.startTime} - ${nextExam.endTime}`;
                 countdownLabelEl.innerText = "距離下一節考試開始還有";
@@ -501,10 +501,10 @@
                 countdownTimerEl.style.color = "white";
 
                 statusBadgeEl.innerText = "全部結束";
-                statusBadgeEl.className = "px-8 py-2.5 rounded-full text-xl md:text-2xl font-bold tracking-widest bg-emerald-600 text-white shadow-[0_0_20px_rgba(5,150,105,0.5)] border border-emerald-400/30";
+                statusBadgeEl.className = "px-6 py-2 rounded-full text-lg md:text-xl font-bold tracking-widest bg-emerald-600 text-white shadow-[0_0_15px_rgba(5,150,105,0.5)] border border-emerald-400/30";
                 
                 currentSubjectEl.innerText = "考試已結束";
-                currentSubjectEl.className = "text-6xl md:text-8xl font-black tracking-widest drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)] text-white";
+                currentSubjectEl.className = "text-5xl md:text-7xl font-black tracking-widest drop-shadow-[0_10px_20px_rgba(0,0,0,0.5)] text-white";
                 
                 timeRangeEl.innerText = "-- : --";
                 countdownLabelEl.innerText = "辛苦了！";
@@ -512,7 +512,7 @@
                 countdownUnitEl.innerText = "";
                 
                 progressBarEl.style.width = `100%`;
-                progressBarEl.className = "h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-1000 ease-linear shadow-[0_-5px_20px_rgba(16,185,129,0.5)]";
+                progressBarEl.className = "h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-1000 ease-linear shadow-[0_-5px_15px_rgba(16,185,129,0.5)]";
             }
         }
 
@@ -520,11 +520,11 @@
         init();
 
     </script>
+
 <!-- 專屬版權宣告頁尾 (乾淨、單行設計) -->
     <div class="text-center text-gray-400 text-sm mt-8 mb-4 tracking-wider">
         &copy; 谷宗芸老師設計 / AI 輔助生成
-    </div>
-
+    </div>    
 
 </body>
 </html>
