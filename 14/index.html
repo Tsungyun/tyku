@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>時鐘角度旋轉練習</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 html2pdf 處理中文字型轉 PDF 的問題 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        body { font-family: 'Inter', 'Microsoft JhengHei', sans-serif; background-color: #f3f4f6; touch-action: manipulation;}
+        .numpad-btn {
+            background-color: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #374151;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            transition: all 0.1s;
+        }
+        .numpad-btn:active { background-color: #e5e7eb; transform: scale(0.95); }
+        .numpad-btn.action-btn { background-color: #dbeafe; color: #1e40af; border-color: #bfdbfe; }
+        .numpad-btn.action-btn:active { background-color: #bfdbfe; }
+        .numpad-btn.submit-btn { background-color: #10b981; color: white; border-color: #059669; }
+        .numpad-btn.submit-btn:active { background-color: #059669; }
+        
+        /* PDF 隱藏區域樣式設定 */
+        #pdf-container { position: absolute; left: -9999px; top: -9999px; width: 297mm; }
+        .a4-landscape {
+            width: 297mm;
+            height: 210mm;
+            background-color: white;
+            display: flex;
+            padding: 10mm 15mm;
+            box-sizing: border-box;
+            font-family: 'Microsoft JhengHei', sans-serif;
+        }
+        .page-break { page-break-before: always; }
+        .half-page { width: 50%; height: 100%; display: flex; flex-direction: column; }
+        .left-half { padding-right: 12mm; border-right: 1px dashed #9ca3af; }
+        .right-half { padding-left: 12mm; }
+        .pdf-title { text-align: center; font-size: 20px; font-weight: bold; margin-bottom: 15px; }
+        .pdf-name-row { display: flex; justify-content: flex-end; margin-bottom: 5px; font-size: 14px; }
+        
+        /* 學習單兩欄四列網格設計 */
+        .pdf-grid { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            grid-template-rows: repeat(4, 1fr); 
+            gap: 5mm; 
+            flex-grow: 1; 
+        }
+        .pdf-question { font-size: 15px; line-height: 1.4; padding: 2px; }
+        
+        /* 網格作答框選取狀態樣式 */
+        .active-input { border-color: #3b82f6 !important; background-color: #eff6ff !important; box-shadow: 0 0 0 2px #93c5fd; }
+        .q-card { transition: all 0.2s; cursor: pointer; }
+        .q-card:hover { border-color: #bfdbfe; }
+        
+        /* 迷你小鍵盤樣式 */
+        .mini-btn {
+            background-color: #ffffff; border: 1px solid #d1d5db; border-radius: 0.375rem;
+            padding: 0.5rem; font-size: 1.125rem; font-weight: 600; color: #374151;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); transition: all 0.1s; text-align: center;
+        }
+        .mini-btn:active { background-color: #e5e7eb; transform: scale(0.95); }
+        .mini-btn.action { background-color: #f3f4f6; color: #4b5563; font-size: 1rem; }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <div class="mx-auto min-h-screen bg-white shadow-lg flex flex-col max-w-3xl relative">
+        
+        <!-- 頂部頁籤/導覽列 -->
+        <div class="w-full bg-blue-600 text-white p-4 shadow-md flex justify-between items-center absolute top-0 left-0 right-0 z-10">
+            <h1 class="text-xl font-bold">時鐘角度旋轉練習</h1>
+            <button onclick="generatePDF()" class="bg-blue-500 hover:bg-blue-400 text-white px-3 py-1 rounded text-sm font-semibold transition border border-blue-400">
+                匯出A4學習單
+            </button>
+        </div>
+
+        <!-- 主要練習區域 -->
+        <div class="flex-1 w-full pt-16 flex flex-col h-screen">
+            
+            <!-- 題目區 (8題) -->
+            <div class="flex-1 overflow-y-auto p-4 pb-20"> 
+                <div id="questions-grid" class="grid grid-cols-2 gap-3">
+                    <!-- JavaScript 將動態生成 8 題在這裡 -->
+                </div>
+                
+                <div id="action-area" class="mt-8 mb-10 flex justify-center gap-4">
+                    <button onclick="showAllSolutions()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-bold py-3 px-6 rounded-xl shadow-md transition">
+                        顯示所有解答詳解
+                    </button>
+                    <button onclick="nextBatch()" class="bg-blue-600 hover:bg-blue-700 text-white text-lg font-bold py-3 px-6 rounded-xl shadow-md transition">
+                        產生新題目
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 共用的小型浮動數字鍵盤 -->
+    <div id="shared-numpad" class="hidden mt-2 bg-gray-100 p-2 rounded-lg border border-gray-200 shadow-inner w-full max-w-[200px] mx-auto">
+        <div class="grid grid-cols-3 gap-1.5">
+            <button class="mini-btn" onclick="appendNumber('1'); event.stopPropagation();">1</button>
+            <button class="mini-btn" onclick="appendNumber('2'); event.stopPropagation();">2</button>
+            <button class="mini-btn" onclick="appendNumber('3'); event.stopPropagation();">3</button>
+            <button class="mini-btn" onclick="appendNumber('4'); event.stopPropagation();">4</button>
+            <button class="mini-btn" onclick="appendNumber('5'); event.stopPropagation();">5</button>
+            <button class="mini-btn" onclick="appendNumber('6'); event.stopPropagation();">6</button>
+            <button class="mini-btn" onclick="appendNumber('7'); event.stopPropagation();">7</button>
+            <button class="mini-btn" onclick="appendNumber('8'); event.stopPropagation();">8</button>
+            <button class="mini-btn" onclick="appendNumber('9'); event.stopPropagation();">9</button>
+            <button class="mini-btn action" onclick="clearInput(); event.stopPropagation();">清除</button>
+            <button class="mini-btn" onclick="appendNumber('0'); event.stopPropagation();">0</button>
+            <button class="mini-btn action text-blue-600 font-bold" onclick="hideNumpad(); event.stopPropagation();">關閉</button>
+        </div>
+    </div>
+
+    <!-- 用來產生 PDF 的隱藏 DOM -->
+    <div id="pdf-container">
+        <div id="pdf-wrapper">
+            <!-- 頁面一：題目卷 -->
+            <div id="pdf-page-questions" class="a4-landscape">
+                <div class="half-page left-half" id="pdf-q-left"></div>
+                <div class="half-page right-half" id="pdf-q-right"></div>
+            </div>
+            <!-- 頁面二：解答卷 -->
+            <div id="pdf-page-answers" class="a4-landscape page-break">
+                <div class="half-page left-half" id="pdf-a-left"></div>
+                <div class="half-page right-half" id="pdf-a-right"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 訊息彈窗 (取代 alert) -->
+    <div id="msg-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full text-center mx-4">
+            <p id="msg-text" class="text-lg font-bold text-gray-800 mb-6">訊息</p>
+            <button onclick="closeMsg()" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold w-full">確定</button>
+        </div>
+    </div>
+
+    <script>
+        // 狀態變數
+        let questions = [];
+        let userInputs = [];
+        let activeIndex = -1;
+        let checkedStates = []; // 紀錄各題是否已對過答案
+
+        // 初始化
+        window.onload = () => {
+            generateBatch();
+        };
+
+        // 產生單一題目邏輯
+        function createQuestionLogic() {
+            let start = Math.floor(Math.random() * 12) + 1;
+            let end;
+            do {
+                end = Math.floor(Math.random() * 12) + 1;
+            } while (start === end);
+
+            let direction = Math.random() > 0.5 ? '順時針' : '逆時針';
+            let steps = 0;
+
+            if (direction === '順時針') {
+                if (end > start) steps = end - start;
+                else steps = (12 - start) + end;
+            } else { // 逆時針
+                if (start > end) steps = start - end;
+                else steps = (12 - end) + start;
+            }
+
+            let answer = steps * 30;
+            return { start, end, direction, answer };
+        }
+
+        // 產生 8 題批次
+        function generateBatch() {
+            questions = [];
+            userInputs = ["", "", "", "", "", "", "", ""];
+            checkedStates = [false, false, false, false, false, false, false, false];
+            activeIndex = -1;
+            
+            // 將共用鍵盤先移回 body 隱藏，避免在清空 grid 時被刪除
+            document.body.appendChild(document.getElementById('shared-numpad'));
+            document.getElementById('shared-numpad').classList.add('hidden');
+
+            const grid = document.getElementById('questions-grid');
+            grid.innerHTML = "";
+            
+            for (let i = 0; i < 8; i++) {
+                questions.push(createQuestionLogic());
+                
+                const qDiv = document.createElement('div');
+                qDiv.className = "q-card bg-white p-3 rounded-xl border-2 border-gray-200 flex flex-col shadow-sm";
+                
+                // HTML 結構：題目文字敘述 + 小輸入框 + 單題對答案按鈕
+                qDiv.innerHTML = `
+                    <div class="text-sm text-gray-400 font-bold mb-1">第 ${i + 1} 題</div>
+                    <div class="text-base font-bold text-gray-700 leading-relaxed mb-3 flex-1">
+                        圓形時鐘指針從數字 <span class="text-blue-600 text-lg">${questions[i].start}</span> 的位置，<span class="text-red-500">${questions[i].direction}旋轉</span>到數字 <span class="text-blue-600 text-lg">${questions[i].end}</span> 的位置，是轉了幾度？
+                    </div>
+                    
+                    <div class="flex items-center justify-between mt-auto">
+                        <div class="flex items-center">
+                            <div id="input-box-${i}" onclick="setActiveInput(${i}, event)" class="w-16 h-10 bg-gray-50 border-2 border-gray-300 rounded-lg flex items-center justify-center text-lg font-bold text-blue-600 cursor-pointer">
+                                ${userInputs[i]}
+                            </div>
+                            <span class="ml-2 text-sm text-gray-500 font-medium">度</span>
+                        </div>
+                        <button id="check-btn-${i}" onclick="checkSingleAnswer(${i}); event.stopPropagation();" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 text-sm font-bold py-1.5 px-3 rounded-lg transition">
+                            對答案
+                        </button>
+                    </div>
+
+                    <!-- 小鍵盤預留插槽 -->
+                    <div id="numpad-slot-${i}" class="w-full mt-1 flex justify-center"></div>
+                    
+                    <!-- 隱藏的解答與時鐘區 -->
+                    <div id="feedback-${i}" class="hidden flex-col items-center mt-3 pt-3 border-t border-gray-100">
+                        <div id="result-text-${i}" class="text-sm font-bold mb-2"></div>
+                        <div class="bg-white p-1 rounded-full border border-gray-200 shadow-sm">
+                            <canvas id="clockCanvas-${i}" width="110" height="110"></canvas>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(qDiv);
+            }
+            
+            // 自動滾動到頂部
+            document.querySelector('.overflow-y-auto').scrollTop = 0;
+        }
+
+        // 設定目前作答中的格子，並顯示小鍵盤
+        function setActiveInput(index, event) {
+            if (checkedStates[index]) return; // 已經對過答案就不再彈出鍵盤
+
+            // 移除舊的 active 狀態
+            if (activeIndex !== -1 && !checkedStates[activeIndex]) {
+                const oldInput = document.getElementById(`input-box-${activeIndex}`);
+                if(oldInput) oldInput.classList.remove('active-input');
+            }
+
+            activeIndex = index;
+            document.getElementById(`input-box-${activeIndex}`).classList.add('active-input');
+
+            // 移動共用鍵盤到該題的插槽並顯示
+            const numpad = document.getElementById('shared-numpad');
+            const slot = document.getElementById(`numpad-slot-${index}`);
+            slot.appendChild(numpad);
+            numpad.classList.remove('hidden');
+        }
+
+        function hideNumpad() {
+            const numpad = document.getElementById('shared-numpad');
+            numpad.classList.add('hidden');
+            if (activeIndex !== -1) {
+                const activeBox = document.getElementById(`input-box-${activeIndex}`);
+                if(activeBox) activeBox.classList.remove('active-input');
+                activeIndex = -1;
+            }
+        }
+
+        // 數字鍵盤功能
+        function appendNumber(num) {
+            if (activeIndex === -1 || checkedStates[activeIndex]) return;
+            if (userInputs[activeIndex].length < 3) {
+                userInputs[activeIndex] += num;
+                updateInputDisplay();
+            }
+        }
+
+        function clearInput() {
+            if (activeIndex === -1 || checkedStates[activeIndex]) return;
+            userInputs[activeIndex] = "";
+            updateInputDisplay();
+        }
+        
+        function updateInputDisplay() {
+            if(activeIndex !== -1) {
+                document.getElementById(`input-box-${activeIndex}`).innerText = userInputs[activeIndex];
+            }
+        }
+
+        // 單題檢查答案
+        function checkSingleAnswer(i, forceShow = false) {
+            if (!forceShow && userInputs[i] === "") {
+                showMsg("請先輸入答案喔！");
+                return;
+            }
+
+            if(activeIndex === i) hideNumpad();
+            checkedStates[i] = true;
+            
+            const userAnswer = parseInt(userInputs[i]);
+            const isCorrect = userAnswer === questions[i].answer;
+            
+            const feedbackDiv = document.getElementById(`feedback-${i}`);
+            const resultText = document.getElementById(`result-text-${i}`);
+            const inputBox = document.getElementById(`input-box-${i}`);
+            const checkBtn = document.getElementById(`check-btn-${i}`);
+            
+            checkBtn.classList.add('hidden'); // 隱藏對答案按鈕
+            inputBox.classList.remove('cursor-pointer', 'active-input'); // 取消點擊狀態
+            
+            feedbackDiv.classList.remove('hidden');
+            feedbackDiv.classList.add('flex');
+
+            if (isCorrect) {
+                resultText.innerHTML = `<span class="text-green-600">✔ 答對了</span>`;
+                inputBox.classList.replace('border-gray-300', 'border-green-400');
+                inputBox.classList.add('bg-green-50', 'text-green-700');
+            } else {
+                let msg = forceShow && userInputs[i] === "" ? "未作答" : `✘ 錯誤`;
+                resultText.innerHTML = `<span class="text-red-500">${msg} (正解: ${questions[i].answer}°)</span>`;
+                inputBox.classList.replace('border-gray-300', 'border-red-400');
+                inputBox.classList.add('bg-red-50', 'text-red-700');
+                if(userInputs[i] !== "") {
+                    inputBox.innerHTML = `<span class="line-through opacity-60 text-sm">${userInputs[i]}</span>`;
+                }
+            }
+
+            // 畫小小時鐘解答
+            drawSmallClock(i, questions[i].start, questions[i].end, questions[i].direction);
+        }
+
+        // 顯示所有解答詳解
+        function showAllSolutions() {
+            hideNumpad();
+            for (let i = 0; i < 8; i++) {
+                if (!checkedStates[i]) {
+                    checkSingleAnswer(i, true);
+                }
+            }
+        }
+
+        function nextBatch() {
+            generateBatch();
+        }
+
+        // 繪製解答用的小時鐘 (Canvas)
+        function drawSmallClock(index, startNum, endNum, direction) {
+            const canvas = document.getElementById(`clockCanvas-${index}`);
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+            const cx = width / 2;
+            const cy = height / 2;
+            const radius = width / 2 - 8;
+            
+            ctx.clearRect(0, 0, width, height);
+
+            // 1. 畫外框
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+            ctx.lineWidth = 2.5;
+            ctx.strokeStyle = '#4b5563';
+            ctx.stroke();
+
+            // 畫 12 個無數字小刻度
+            ctx.font = '11px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            for (let i = 1; i <= 12; i++) {
+                const angle = (i * 30 - 90) * (Math.PI / 180);
+                const tickLen = (i % 3 === 0) ? 6 : 3; // 3,6,9,12點刻度稍微長一點
+                const tickStartX = cx + (radius - tickLen) * Math.cos(angle);
+                const tickStartY = cy + (radius - tickLen) * Math.sin(angle);
+                const tickEndX = cx + radius * Math.cos(angle);
+                const tickEndY = cy + radius * Math.sin(angle);
+                
+                ctx.beginPath();
+                ctx.moveTo(tickStartX, tickStartY);
+                ctx.lineTo(tickEndX, tickEndY);
+                ctx.lineWidth = (i % 3 === 0) ? 2 : 1;
+                ctx.strokeStyle = '#374151';
+                ctx.stroke();
+
+                // 畫數字
+                const numRadius = radius - 14;
+                const numX = cx + numRadius * Math.cos(angle);
+                const numY = cy + numRadius * Math.sin(angle);
+                ctx.fillStyle = '#1f2937';
+                ctx.fillText(i.toString(), numX, numY);
+            }
+
+            const getAngle = (num) => (num * 30 - 90) * (Math.PI / 180);
+            const startAngle = getAngle(startNum);
+            const endAngle = getAngle(endNum);
+
+            // 2. 畫兩條線 (時針)
+            const drawHand = (angle) => {
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                const handLength = radius - 24; // 縮短指針避免蓋到數字
+                ctx.lineTo(cx + handLength * Math.cos(angle), cy + handLength * Math.sin(angle));
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#111827';
+                ctx.stroke();
+            };
+
+            drawHand(startAngle);
+            drawHand(endAngle);
+
+            // 中心點
+            ctx.beginPath();
+            ctx.arc(cx, cy, 3, 0, 2 * Math.PI);
+            ctx.fillStyle = '#111827';
+            ctx.fill();
+
+            // 3. 畫旋轉紅色弧線與箭頭
+            const arcRadius = radius * 0.45;
+            ctx.beginPath();
+            const isCounterClockwise = direction === '逆時針';
+            ctx.arc(cx, cy, arcRadius, startAngle, endAngle, isCounterClockwise);
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#dc2626'; // 紅色強調軌跡
+            ctx.stroke();
+
+            // 箭頭 (在終點處)
+            const tipX = cx + arcRadius * Math.cos(endAngle);
+            const tipY = cy + arcRadius * Math.sin(endAngle);
+            const tangentAngle = isCounterClockwise ? endAngle - Math.PI / 2 : endAngle + Math.PI / 2;
+            
+            ctx.beginPath();
+            ctx.moveTo(tipX, tipY);
+            ctx.lineTo(tipX - 8 * Math.cos(tangentAngle - Math.PI / 6), tipY - 8 * Math.sin(tangentAngle - Math.PI / 6));
+            ctx.lineTo(tipX - 8 * Math.cos(tangentAngle + Math.PI / 6), tipY - 8 * Math.sin(tangentAngle + Math.PI / 6));
+            ctx.closePath();
+            ctx.fillStyle = '#dc2626';
+            ctx.fill();
+        }
+
+        // 生成 PDF (包含亂數產生的左右各 8 題，與對應的解答頁)
+        function generatePDF() {
+            showMsg("正在產生學習單與解答，請稍候...");
+            
+            // 產生 8 題作為學習單內容 (左右兩邊共用這 8 題)
+            let pdfQuestions = [];
+            for(let i=0; i<8; i++) {
+                pdfQuestions.push(createQuestionLogic());
+            }
+
+            // 建立 HTML 字串的輔助函數 (加入 2欄4列 的 grid)
+            const buildHTML = (qs, showAnswer, titlePrefix) => {
+                let html = `<div class="pdf-name-row">班級：_______ 姓名：_________ 座號：___</div>
+                            <div class="pdf-title">時鐘角度旋轉練習 ${titlePrefix}</div>
+                            <div class="pdf-grid">`;
+                qs.forEach((q, index) => {
+                    html += `<div class="pdf-question">
+                        ${index + 1}. 圓形時鐘指針從數字 ${q.start} 的位置，${q.direction}旋轉到數字 ${q.end} 的位置，是轉了幾度？
+                        <br><br>
+                        ${showAnswer ? `<span style="color:red; font-weight:bold; font-size:16px;">解答：${q.answer}°</span>` : '<br>'}
+                    </div>`;
+                });
+                html += `</div>`;
+                return html;
+            };
+
+            // 填入題目卷 (第一頁：左右內容相同)
+            document.getElementById('pdf-q-left').innerHTML = buildHTML(pdfQuestions, false, "(題目)");
+            document.getElementById('pdf-q-right').innerHTML = buildHTML(pdfQuestions, false, "(題目)");
+
+            // 填入解答卷 (第二頁：左右內容相同，但顯示答案)
+            document.getElementById('pdf-a-left').innerHTML = buildHTML(pdfQuestions, true, "(解答)");
+            document.getElementById('pdf-a-right').innerHTML = buildHTML(pdfQuestions, true, "(解答)");
+
+            const element = document.getElementById('pdf-wrapper');
+            
+            const opt = {
+                margin:       0,
+                filename:     '時鐘角度練習與解答.pdf',
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true },
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' }
+            };
+
+            setTimeout(() => {
+                html2pdf().set(opt).from(element).save().then(() => {
+                    closeMsg();
+                });
+            }, 500); 
+        }
+
+        // 自訂訊息彈窗
+        function showMsg(text) {
+            document.getElementById('msg-text').innerHTML = text;
+            document.getElementById('msg-modal').style.display = 'flex';
+        }
+
+        function closeMsg() {
+            document.getElementById('msg-modal').style.display = 'none';
+        }
+    </script>
+<!-- 專屬版權宣告頁尾 (乾淨、單行設計) -->
+    <div class="text-center text-gray-400 text-sm mt-8 mb-4 tracking-wider">
+        &copy; 谷宗芸老師設計 / AI 輔助生成
+    </div>
+
+
+</body>
+</html>
