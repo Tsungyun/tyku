@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智慧考試計時系統 (可愛校園版)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 引入優雅清晰的中文字體 (Noto Sans TC) 與流暢圓潤的數字字體 (Nunito) */
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;800;900&family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+
+        :root {
+            --brown-line: #3b332c; /* 改為更深邃、優雅的深摩卡/暖灰黑色，提升質感與閱讀舒適度 */
+            --bg-cream: #fdf6e3;   /* 溫馨奶茶底色 */
+            --dot-color: #f7e0ce;  /* 柔和的蜜桃點點 */
+            --pink-bg: #ffe4e8;
+            --blue-bg: #e6f0fa;
+            --green-btn: #d5ead8;
+        }
+
+        body {
+            /* 中文改用 Noto Sans TC，字形優美、清晰且具現代感 */
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: var(--bg-cream);
+            /* 製作點點背景 */
+            background-image: radial-gradient(var(--dot-color) 20%, transparent 20%), radial-gradient(var(--dot-color) 20%, transparent 20%);
+            background-size: 40px 40px;
+            background-position: 0 0, 20px 20px;
+            color: var(--brown-line);
+            overflow: hidden; /* 防止出現捲軸 */
+            user-select: none;
+        }
+
+        .timer-font {
+            /* 數字改用 Nunito，字形流暢優雅，非常適合時間顯示 */
+            font-family: 'Nunito', sans-serif;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* 粗邊框與圓角共用樣式 */
+        .cute-border {
+            border: 3px solid var(--brown-line);
+            border-radius: 1.5rem;
+            background-color: #ffffff;
+            box-shadow: 0 4px 0 rgba(92, 64, 51, 0.1);
+        }
+
+        /* 自訂設定畫面隱藏與顯示 */
+        .modal-overlay {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(4px);
+        }
+
+        /* 進度條卡皮巴拉動畫 */
+        .bounce-capybara {
+            animation: bounce-capy 1s infinite alternate;
+        }
+        @keyframes bounce-capy {
+            from { transform: translateY(0); }
+            to { transform: translateY(-4px); }
+        }
+
+        /* 標籤小緞帶 */
+        .ribbon-tag {
+            background-color: #ffb6c1;
+            border: 2px solid var(--brown-line);
+            border-radius: 999px;
+            padding: 2px 16px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            position: absolute;
+            top: -12px;
+            left: 24px;
+        }
+
+        /* 閃爍提醒 */
+        .flash-red {
+            color: #ef4444;
+            animation: flash 1s infinite;
+        }
+        @keyframes flash {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* 隱藏捲軸但可滾動 */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col p-2 md:p-4" id="app-body">
+
+    <!-- ===== 頂部資訊 ===== -->
+    <header class="flex flex-col items-center justify-center mb-2 relative">
+        <div class="text-gray-500 font-bold text-base mb-1" id="header-date">
+            11 月 4 日 星期三
+        </div>
+        <div class="flex items-center gap-4">
+            <div class="text-2xl font-bold flex items-center gap-2">
+                <span>📋</span>
+                <span class="relative inline-block">
+                    <!-- 螢光筆畫線效果 -->
+                    <span class="absolute inset-0 bg-yellow-300 rounded-sm top-1/2 -bottom-1 -z-10 opacity-70"></span>
+                    <span id="exam-title-display">期中定期評量</span>
+                </span>
+            </div>
+            <div class="flex flex-col items-center ml-4">
+                <span class="text-xs font-bold text-gray-500 mb-[-3px]">現在時間</span>
+                <div class="timer-font text-4xl font-black text-brown-line tracking-wider" id="main-clock">
+                    00:00:00
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- ===== 主要內容區 (左右兩大塊) ===== -->
+    <main class="flex-grow flex gap-3 md:gap-4 min-h-0">
+        
+        <!-- 左側：計時大看板 -->
+        <section class="flex-[2] cute-border relative flex flex-col items-center justify-center p-6">
+            <div class="ribbon-tag" id="subject-badge">第 1 科 / 共 3 科</div>
+            
+            <div class="flex flex-col items-center w-full max-w-2xl mt-4">
+                <!-- 科目名稱與時間 -->
+                <div class="flex items-baseline gap-6 mb-4">
+                    <h1 class="text-[4rem] font-black leading-none" id="current-subject-name">英 語</h1>
+                    <div class="bg-blue-100 border-2 border-brown-line rounded-full px-5 py-1.5 text-2xl font-bold timer-font shadow-sm" id="current-time-slot">
+                        08:45 - 09:25
+                    </div>
+                </div>
+
+                <!-- 倒數文字與計時器 -->
+                <div class="w-full text-left ml-8">
+                    <h2 class="text-xl font-bold mb-1" id="countdown-label">距離考試開始還有</h2>
+                    <div class="timer-font text-[6.5rem] font-black leading-none tracking-tight text-brown-line" id="countdown-timer">
+                        0:00:00
+                    </div>
+                </div>
+
+                <!-- 底部進度條 -->
+                <div class="w-full mt-10 relative px-4">
+                    <!-- 卡皮巴拉圖示 (絕對定位) -->
+                    <div class="absolute -top-[52px] text-4xl bounce-capybara transition-all duration-1000 z-10" id="progress-capybara" style="left: 0%;">
+                        <svg width="60" height="75" viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg">
+                            <!-- 橘子葉子 -->
+                            <path d="M 55 10 Q 65 5 70 15 Q 60 20 55 10" fill="#009933" stroke="#000" stroke-width="3" stroke-linejoin="round"/>
+                            <!-- 橘子 -->
+                            <circle cx="50" cy="22" r="14" fill="#ffb347" stroke="#000" stroke-width="3"/>
+                            <!-- 耳朵 -->
+                            <circle cx="22" cy="45" r="9" fill="#7a4b3a" stroke="#000" stroke-width="3"/>
+                            <circle cx="78" cy="45" r="9" fill="#7a4b3a" stroke="#000" stroke-width="3"/>
+                            <!-- 圓滾滾身體 -->
+                            <ellipse cx="50" cy="75" rx="42" ry="42" fill="#eeb37b" stroke="#000" stroke-width="3"/>
+                            <!-- 腮紅 -->
+                            <ellipse cx="25" cy="65" rx="6" ry="4" fill="#ff7777" opacity="0.9"/>
+                            <ellipse cx="75" cy="65" rx="6" ry="4" fill="#ff7777" opacity="0.9"/>
+                            <!-- 閉著的眼睛 -->
+                            <path d="M 24 57 Q 29 53 34 57" fill="none" stroke="#000" stroke-width="3.5" stroke-linecap="round"/>
+                            <path d="M 66 57 Q 71 53 76 57" fill="none" stroke="#000" stroke-width="3.5" stroke-linecap="round"/>
+                            <!-- 鼻子/嘴巴區塊 -->
+                            <rect x="39" y="55" width="22" height="24" rx="8" fill="#9c6644" stroke="#000" stroke-width="2.5"/>
+                            <!-- 嘴巴線條 -->
+                            <path d="M 50 58 L 50 68 M 50 68 Q 44 68 44 75 M 50 68 Q 56 68 56 75" fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round"/>
+                            <!-- 深色小手 -->
+                            <path d="M 18 80 Q 20 95 30 90 Q 25 80 18 80" fill="#7a4b3a" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/>
+                            <path d="M 82 80 Q 80 95 70 90 Q 75 80 82 80" fill="#7a4b3a" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/>
+                            <!-- 深色小腳 -->
+                            <path d="M 30 110 Q 20 115 18 105 Q 25 100 30 110" fill="#7a4b3a" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/>
+                            <path d="M 70 110 Q 80 115 82 105 Q 75 100 70 110" fill="#7a4b3a" stroke="#000" stroke-width="2.5" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                    <!-- 終點旗幟 -->
+                    <div class="absolute -top-10 right-2 z-10">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M4 15S7 13 12 15s8-2 8-2V3s-3 2-8 0-8 2-8 2v10z" fill="#ffb6c1" stroke="var(--brown-line)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M4 22V3" stroke="var(--brown-line)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+
+                    <!-- 進度條軌道 -->
+                    <div class="w-full h-8 bg-[#ebe3d5] rounded-full border-2 border-brown-line relative overflow-hidden shadow-inner">
+                        <div id="progress-bar-fill" class="h-full bg-white transition-all duration-1000" style="width: 0%;"></div>
+                    </div>
+                    
+                    <!-- 底部時間標示 -->
+                    <div class="flex justify-between text-sm font-bold text-gray-500 mt-2 px-1">
+                        <span id="progress-start" class="timer-font">08:45</span>
+                        <span id="progress-percent" class="timer-font">0%</span>
+                        <span id="progress-end" class="timer-font">09:25</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 右側：出缺席看板 -->
+        <section class="flex-1 cute-border relative flex flex-col p-4 md:p-5 bg-white">
+            <div class="ribbon-tag bg-teal-100" style="left: 20px;">出缺席</div>
+            
+            <div class="flex gap-3 mt-4">
+                <div class="flex-1 bg-blue-50 border-2 border-brown-line rounded-2xl p-2 flex flex-col items-center">
+                    <span class="font-bold text-gray-600 mb-1 text-sm">應到</span>
+                    <div class="text-3xl font-black timer-font"><span id="display-expected">30</span><span class="text-lg ml-1 font-sans">人</span></div>
+                </div>
+                <div class="flex-1 bg-teal-50 border-2 border-brown-line rounded-2xl p-2 flex flex-col items-center">
+                    <span class="font-bold text-gray-600 mb-1 text-sm">實到</span>
+                    <div class="text-3xl font-black timer-font"><span id="display-actual">30</span><span class="text-lg ml-1 font-sans">人</span></div>
+                </div>
+            </div>
+
+            <div class="flex-grow mt-3 bg-pink-50 border-2 border-brown-line rounded-2xl p-3 flex flex-col min-h-0">
+                <span class="font-bold text-gray-700 mb-2 text-base">缺席座號</span>
+                <div class="flex-grow flex items-center justify-center text-center p-1 overflow-y-auto no-scrollbar">
+                    <div id="display-absent-list" class="text-2xl font-bold leading-relaxed w-full word-break">
+                        🎉 全班到齊！
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ===== 底部資訊列 (三科總覽 & 跑馬燈) ===== -->
+    <footer class="mt-2 flex flex-col gap-2">
+        <!-- 三科卡片列 -->
+        <div class="flex gap-4 justify-between" id="bottom-subject-cards">
+            <!-- 由 JS 動態產生 -->
+        </div>
+
+        <!-- 底部跑馬燈與按鈕列 -->
+        <div class="flex items-center justify-between mt-2">
+            
+            <div class="flex gap-2">
+                <button onclick="toggleSettings(true)" class="bg-pink-100 hover:bg-pink-200 border-2 border-brown-line px-4 py-1.5 rounded-full font-bold text-sm transition-transform active:scale-95 flex items-center gap-1 shadow-sm">
+                    ⚙️ 設定
+                </button>
+                <button onclick="testBell()" class="bg-yellow-100 hover:bg-yellow-200 border-2 border-brown-line px-4 py-1.5 rounded-full font-bold text-sm transition-transform active:scale-95 flex items-center gap-1 shadow-sm">
+                    🔔 測試叮咚聲
+                </button>
+            </div>
+
+            <div class="flex-grow text-center text-xl font-bold text-rose-500 tracking-wide flex justify-center items-center gap-2">
+                <span>✏️</span>
+                <span id="footer-reminder">寫完記得檢查姓名與座號喔</span>
+                <span>✏️</span>
+            </div>
+
+            <div class="flex gap-2">
+                <button onclick="toggleFullscreen()" class="bg-blue-100 hover:bg-blue-200 border-2 border-brown-line px-4 py-1.5 rounded-full font-bold text-sm transition-transform active:scale-95 flex items-center gap-1 shadow-sm">
+                    🔲 全螢幕
+                </button>
+            </div>
+
+        </div>
+    </footer>
+
+    <!-- ===== 設定彈出視窗 (Modal) ===== -->
+    <div id="settings-modal" class="fixed inset-0 modal-overlay hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white border-4 border-brown-line rounded-3xl w-full max-w-2xl max-h-full overflow-y-auto no-scrollbar shadow-2xl p-6 relative">
+            <h2 class="text-2xl font-black mb-4 flex items-center gap-2">
+                ⚙️ 考場設定
+            </h2>
+            
+            <div class="space-y-4">
+                <!-- 考試名稱 -->
+                <div>
+                    <label class="block font-bold text-sm mb-1">考試名稱</label>
+                    <input type="text" id="set-title" class="w-full border-2 border-brown-line rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-yellow-300 font-bold" value="期中定期評量">
+                    <div class="flex flex-wrap gap-2 mt-2">
+                        <button type="button" class="text-xs bg-pink-50 border border-brown-line rounded-full px-3 py-1 hover:bg-pink-100" onclick="document.getElementById('set-title').value=this.innerText">期中定期評量</button>
+                        <button type="button" class="text-xs bg-pink-50 border border-brown-line rounded-full px-3 py-1 hover:bg-pink-100" onclick="document.getElementById('set-title').value=this.innerText">期末定期評量</button>
+                        <button type="button" class="text-xs bg-pink-50 border border-brown-line rounded-full px-3 py-1 hover:bg-pink-100" onclick="document.getElementById('set-title').value=this.innerText">第一次段考</button>
+                        <button type="button" class="text-xs bg-pink-50 border border-brown-line rounded-full px-3 py-1 hover:bg-pink-100" onclick="document.getElementById('set-title').value=this.innerText">小考</button>
+                    </div>
+                </div>
+
+                <!-- 三個科目設定區塊 -->
+                <div id="subject-settings-container" class="space-y-3">
+                    <!-- JS 動態生成 3 科 -->
+                </div>
+
+                <div class="text-right">
+                    <button type="button" onclick="resetDefaultSubjects()" class="text-sm bg-[#d7ccc8] border-2 border-brown-line rounded-full px-4 py-1.5 font-bold hover:bg-[#bcaaa4] transition-colors">
+                        ↺ 恢復預設科目和時間
+                    </button>
+                </div>
+
+                <hr class="border-brown-line border-t-2 border-dashed">
+
+                <!-- 出缺席設定 -->
+                <div class="flex gap-4">
+                    <div class="flex-1">
+                        <label class="block font-bold text-sm mb-1">應到人數</label>
+                        <input type="number" id="set-expected" class="w-full border-2 border-brown-line rounded-xl px-3 py-2 outline-none" value="30" min="1">
+                    </div>
+                    <div class="flex-1">
+                        <label class="block font-bold text-sm mb-1">實到人數 (自動計算)</label>
+                        <input type="text" id="set-actual" class="w-full border-2 border-brown-line rounded-xl px-3 py-2 outline-none bg-gray-100" readonly value="自動計算">
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-bold text-sm mb-1">缺席座號 <span class="text-xs font-normal text-gray-500">例如：3, 12 或填寫文字 (資源班)</span></label>
+                    <input type="text" id="set-absent" class="w-full border-2 border-brown-line rounded-xl px-3 py-2 outline-none" placeholder="無">
+                </div>
+
+                <!-- 提醒設定 -->
+                <div class="flex items-end gap-2">
+                    <div>
+                        <label class="block font-bold text-sm mb-1">結束前提醒 (都填 0 就不提醒)</label>
+                        <div class="flex items-center gap-2">
+                            <input type="number" id="set-remind-m" class="w-20 border-2 border-brown-line rounded-xl px-3 py-2 outline-none text-center" value="5" min="0"> 分
+                            <input type="number" id="set-remind-s" class="w-20 border-2 border-brown-line rounded-xl px-3 py-2 outline-none text-center" value="0" min="0"> 秒
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 底部小叮嚀 -->
+                <div>
+                    <label class="block font-bold text-sm mb-1">底部小叮嚀</label>
+                    <input type="text" id="set-reminder-text" class="w-full border-2 border-brown-line rounded-xl px-3 py-2 outline-none text-rose-500 font-bold" value="寫完記得檢查姓名與座號喔">
+                </div>
+
+                <!-- 核取方塊 -->
+                <div class="space-y-2 pt-2">
+                    <label class="flex items-center gap-2 cursor-pointer font-bold">
+                        <input type="checkbox" id="set-play-bell" class="w-5 h-5 accent-blue-500" checked>
+                        時間到播放叮咚聲
+                    </label>
+                </div>
+
+            </div>
+
+            <!-- 底部按鈕 -->
+            <div class="flex justify-end gap-3 mt-6 pt-4 border-t-2 border-brown-line">
+                <button onclick="toggleSettings(false)" class="px-6 py-2 rounded-full border-2 border-brown-line font-bold hover:bg-gray-100 transition-colors">取消</button>
+                <button onclick="saveSettings()" class="px-6 py-2 rounded-full border-2 border-brown-line font-bold bg-teal-100 hover:bg-teal-200 transition-colors flex items-center gap-1">✅ 套用</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 音效播放用 (使用 base64 短音效避免外部連結失效) -->
+    <audio id="bell-sound" src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=" preload="auto"></audio>
+
+    <script>
+        // --- 核心資料狀態 ---
+        let config = {
+            title: "期中定期評量",
+            subjects: [
+                { name: "英語", start: "08:45", end: "09:25" },
+                { name: "自然", start: "09:35", end: "10:15" },
+                { name: "國語", start: "10:30", end: "11:10" }
+            ],
+            attendance: { expected: 30, absentStr: "" },
+            remindMin: 5,
+            remindSec: 0,
+            reminderText: "寫完記得檢查姓名與座號喔",
+            playBell: true
+        };
+
+        // 常見科目 (用於快速按鈕)
+        const commonSubjects = [
+            "國語", "數學", "英語", "自然", "社會", "國文", "英文", "生活", "健康", "綜合"
+        ];
+
+        let timerInterval;
+
+        // --- 初始化與 DOM 綁定 ---
+        document.addEventListener('DOMContentLoaded', () => {
+            loadFromStorage();
+            generateSettingsForm();
+            applyConfigToUI();
+            
+            // 啟動主時鐘
+            timerInterval = setInterval(mainLoop, 200); // 快速更新以確保動畫與倒數順暢
+            
+            // 簡單生成一個合成的叮咚聲給 audio 標籤 (Tone.js 替代方案)
+            createBeepSound();
+        });
+
+        // --- 設定畫面功能 ---
+        function generateSettingsForm() {
+            const container = document.getElementById('subject-settings-container');
+            container.innerHTML = '';
+            const labels = ['第一科', '第二科', '第三科'];
+            const colors = ['bg-blue-100', 'bg-blue-50', 'bg-blue-50'];
+
+            config.subjects.forEach((sub, i) => {
+                const isRequired = i === 0 ? '' : '<span class="text-xs text-gray-500 font-normal">(不考可留空)</span>';
+                const html = `
+                    <div class="border-2 border-brown-line rounded-xl p-3 bg-white relative">
+                        <div class="absolute -top-3 left-4 bg-white px-2 font-bold text-sm flex items-center gap-1 text-blue-600">
+                            <span class="w-3 h-3 ${colors[i]} border border-brown-line inline-block"></span> ${labels[i]} ${isRequired}
+                        </div>
+                        <div class="grid grid-cols-12 gap-3 mt-2">
+                            <div class="col-span-5">
+                                <label class="block text-xs font-bold mb-1 text-gray-600">科目</label>
+                                <input type="text" id="set-sub-name-${i}" class="w-full border-2 border-brown-line rounded-lg px-2 py-1.5 outline-none font-bold" value="${sub.name}">
+                            </div>
+                            <div class="col-span-3">
+                                <label class="block text-xs font-bold mb-1 text-gray-600">開始</label>
+                                <input type="time" id="set-sub-start-${i}" class="w-full border-2 border-brown-line rounded-lg px-1 py-1.5 outline-none timer-font font-bold" value="${sub.start}">
+                            </div>
+                            <div class="col-span-4">
+                                <label class="block text-xs font-bold mb-1 text-gray-600">結束</label>
+                                <input type="time" id="set-sub-end-${i}" class="w-full border-2 border-brown-line rounded-lg px-1 py-1.5 outline-none timer-font font-bold" value="${sub.end}">
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap gap-1 mt-2">
+                            ${commonSubjects.map(k => `<button type="button" class="text-xs bg-green-50 border border-green-200 rounded-full px-2 py-0.5 hover:bg-green-100 text-green-800" onclick="document.getElementById('set-sub-name-${i}').value='${k}'">${k}</button>`).join('')}
+                            <button type="button" class="text-xs bg-gray-50 border border-gray-200 rounded-full px-2 py-0.5 hover:bg-gray-100 text-gray-600 ml-auto" onclick="document.getElementById('set-sub-name-${i}').value=''; document.getElementById('set-sub-start-${i}').value=''; document.getElementById('set-sub-end-${i}').value='';">清除</button>
+                        </div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', html);
+            });
+
+            // 綁定出缺席輸入連動
+            document.getElementById('set-title').value = config.title;
+            document.getElementById('set-expected').value = config.attendance.expected;
+            document.getElementById('set-absent').value = config.attendance.absentStr;
+            document.getElementById('set-remind-m').value = config.remindMin;
+            document.getElementById('set-remind-s').value = config.remindSec;
+            document.getElementById('set-reminder-text').value = config.reminderText;
+            document.getElementById('set-play-bell').checked = config.playBell;
+        }
+
+        function toggleSettings(show) {
+            const modal = document.getElementById('settings-modal');
+            if (show) {
+                generateSettingsForm();
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+
+        function resetDefaultSubjects() {
+            config.subjects = [
+                { name: "英語", start: "08:45", end: "09:25" },
+                { name: "自然", start: "09:35", end: "10:15" },
+                { name: "國語", start: "10:30", end: "11:10" }
+            ];
+            generateSettingsForm();
+        }
+
+        function saveSettings() {
+            config.title = document.getElementById('set-title').value.trim();
+            config.attendance.expected = parseInt(document.getElementById('set-expected').value) || 0;
+            config.attendance.absentStr = document.getElementById('set-absent').value.trim();
+            config.remindMin = parseInt(document.getElementById('set-remind-m').value) || 0;
+            config.remindSec = parseInt(document.getElementById('set-remind-s').value) || 0;
+            config.reminderText = document.getElementById('set-reminder-text').value.trim();
+            config.playBell = document.getElementById('set-play-bell').checked;
+
+            config.subjects = [];
+            for (let i = 0; i < 3; i++) {
+                const name = document.getElementById(`set-sub-name-${i}`).value.trim();
+                const start = document.getElementById(`set-sub-start-${i}`).value;
+                const end = document.getElementById(`set-sub-end-${i}`).value;
+                if (name || start || end) { // 允許部分留空，但在前台過濾
+                    config.subjects.push({ name, start, end });
+                } else {
+                    config.subjects.push({ name: "", start: "", end: "" }); // 保持長度為3
+                }
+            }
+
+            saveToStorage();
+            applyConfigToUI();
+            toggleSettings(false);
+        }
+
+        // --- 輔助字串功能 ---
+        function parseAbsentCount(str) {
+            if (!str) return 0;
+            // 支援逗號或空白分隔
+            const parts = str.split(/[,\s]+/).filter(p => p.trim() !== "");
+            return parts.length;
+        }
+
+        // --- 更新 UI 畫面 ---
+        function applyConfigToUI() {
+            // 標題
+            document.getElementById('exam-title-display').innerHTML = config.title;
+            
+            // 出缺席
+            const exp = config.attendance.expected;
+            const absentCount = parseAbsentCount(config.attendance.absentStr);
+            const act = Math.max(0, exp - absentCount);
+            
+            document.getElementById('display-expected').innerText = exp;
+            document.getElementById('display-actual').innerText = act;
+            
+            const absentDisplay = document.getElementById('display-absent-list');
+            if (absentCount === 0) {
+                absentDisplay.innerHTML = '🎉 全班到齊！';
+                absentDisplay.className = "text-3xl font-bold leading-relaxed w-full text-center text-teal-600";
+            } else {
+                absentDisplay.innerHTML = config.attendance.absentStr.replace(/[,\s]+/g, ' , ');
+                absentDisplay.className = "text-4xl font-black leading-relaxed w-full text-center text-rose-500 timer-font tracking-widest";
+            }
+
+            // 跑馬燈
+            document.getElementById('footer-reminder').innerText = config.reminderText;
+
+            // 底部 3 科卡片
+            const bottomContainer = document.getElementById('bottom-subject-cards');
+            bottomContainer.innerHTML = '';
+            
+            const validSubjects = config.subjects.filter(s => s.name && s.start && s.end);
+            
+            config.subjects.forEach((sub, idx) => {
+                if (!sub.name) {
+                    bottomContainer.innerHTML += `<div class="flex-1 rounded-2xl border-2 border-brown-line bg-gray-100 opacity-50 p-2 flex justify-center items-center"><span class="text-gray-400 font-bold text-sm">-- 空 --</span></div>`;
+                    return;
+                }
+                
+                // 決定顏色 (跟圖片一樣: 黃, 白, 白 或是動態)
+                let bgClass = "bg-white";
+                bottomContainer.innerHTML += `
+                    <div class="flex-1 rounded-2xl border-2 border-brown-line ${bgClass} p-3 flex justify-between items-center relative transition-colors shadow-sm" id="bottom-card-${idx}">
+                        <div class="flex flex-col">
+                            <span class="font-black text-xl mb-1">${sub.name}</span>
+                            <span class="timer-font text-sm text-gray-500 font-bold">${sub.start} - ${sub.end}</span>
+                        </div>
+                        <div id="bottom-card-status-${idx}" class="border-2 border-brown-line rounded-full px-3 py-1 text-xs font-bold text-gray-400">
+                            待考 ⏳
+                        </div>
+                    </div>
+                `;
+            });
+            
+            mainLoop(); // 立即更新一次狀態
+        }
+
+        // --- 核心時間與邏輯迴圈 ---
+        let lastPlayedBellId = null;
+
+        function getTodayTimeMs(timeStr) {
+            if (!timeStr) return 0;
+            const [h, m] = timeStr.split(':');
+            const d = new Date();
+            d.setHours(parseInt(h, 10), parseInt(m, 10), 0, 0);
+            return d.getTime();
+        }
+
+        function formatHMS(ms) {
+            if (ms <= 0) return "0:00:00";
+            const totalSec = Math.floor(ms / 1000);
+            const h = Math.floor(totalSec / 3600);
+            const m = Math.floor((totalSec % 3600) / 60);
+            const s = totalSec % 60;
+            return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+
+        function mainLoop() {
+            const now = new Date();
+            
+            // 1. 更新頂部時間與日期
+            const days = ['日', '一', '二', '三', '四', '五', '六'];
+            document.getElementById('header-date').innerText = `${now.getMonth()+1} 月 ${now.getDate()} 日  星期${days[now.getDay()]}`;
+            document.getElementById('main-clock').innerText = now.toTimeString().split(' ')[0]; // HH:MM:SS
+            
+            const nowMs = now.getTime();
+
+            // 2. 判斷當前節次狀態
+            let activeIdx = -1;
+            let nextIdx = -1;
+            let validCount = 0;
+            let currentValidIndex = 0; // 用於計算 第 x 科
+
+            for (let i = 0; i < 3; i++) {
+                const sub = config.subjects[i];
+                if (!sub.name) continue;
+                validCount++;
+                
+                const sTime = getTodayTimeMs(sub.start);
+                const eTime = getTodayTimeMs(sub.end);
+                
+                // 更新底部卡片狀態
+                const card = document.getElementById(`bottom-card-${i}`);
+                const statusBadge = document.getElementById(`bottom-card-status-${i}`);
+                if (card && statusBadge) {
+                    if (nowMs >= sTime && nowMs < eTime) {
+                        card.classList.replace('bg-white', 'bg-amber-100');
+                        statusBadge.innerHTML = '考試中 ✍️';
+                        statusBadge.className = "border-2 border-brown-line bg-amber-200 rounded-full px-3 py-1 text-xs font-bold text-brown-line";
+                    } else if (nowMs < sTime && (nextIdx === -1 || activeIdx !== -1)) {
+                        card.classList.replace('bg-amber-100', 'bg-white');
+                        if (activeIdx === -1 && nextIdx === -1) {
+                            statusBadge.innerHTML = '下一科 ⏭️';
+                            statusBadge.className = "border-2 border-brown-line bg-pink-300 rounded-full px-3 py-1 text-xs font-bold text-white shadow-sm";
+                        } else {
+                            statusBadge.innerHTML = '待考 ⏳';
+                            statusBadge.className = "border-2 border-brown-line rounded-full px-3 py-1 text-xs font-bold text-gray-400";
+                        }
+                    } else {
+                        card.classList.replace('bg-amber-100', 'bg-white');
+                        statusBadge.innerHTML = '已結束 ✅';
+                        statusBadge.className = "border-2 border-brown-line bg-gray-200 rounded-full px-3 py-1 text-xs font-bold text-gray-500";
+                    }
+                }
+
+                // 尋找主畫面的目標
+                if (nowMs >= sTime && nowMs < eTime) {
+                    activeIdx = i;
+                    currentValidIndex = validCount;
+                } else if (nowMs < sTime && activeIdx === -1 && nextIdx === -1) {
+                    nextIdx = i;
+                    currentValidIndex = validCount;
+                } else if (nowMs >= eTime) {
+                    // 已結束的科目的順序累加
+                    if (activeIdx === -1 && nextIdx === -1) currentValidIndex = validCount;
+                }
+            }
+
+            // 3. 更新左側大看板
+            const subjectEl = document.getElementById('current-subject-name');
+            const timeSlotEl = document.getElementById('current-time-slot');
+            const cdLabelEl = document.getElementById('countdown-label');
+            const cdTimerEl = document.getElementById('countdown-timer');
+            const badgeEl = document.getElementById('subject-badge');
+            
+            const progBar = document.getElementById('progress-bar-fill');
+            const progCapy = document.getElementById('progress-capybara');
+            const progStart = document.getElementById('progress-start');
+            const progEnd = document.getElementById('progress-end');
+            const progPercent = document.getElementById('progress-percent');
+
+            let targetSub = null;
+            let isTesting = false;
+
+            if (activeIdx !== -1) {
+                targetSub = config.subjects[activeIdx];
+                isTesting = true;
+            } else if (nextIdx !== -1) {
+                targetSub = config.subjects[nextIdx];
+            }
+
+            if (targetSub) {
+                badgeEl.innerText = `第 ${currentValidIndex} 科 / 共 ${validCount} 科`;
+                subjectEl.innerHTML = targetSub.name;
+                timeSlotEl.innerText = `${targetSub.start} - ${targetSub.end}`;
+                
+                const sTime = getTodayTimeMs(targetSub.start);
+                const eTime = getTodayTimeMs(targetSub.end);
+                
+                progStart.innerText = targetSub.start;
+                progEnd.innerText = targetSub.end;
+
+                if (isTesting) {
+                    cdLabelEl.innerText = "距離本節考試結束還有";
+                    const remainMs = eTime - nowMs;
+                    cdTimerEl.innerText = formatHMS(remainMs);
+                    
+                    // 結束提醒判斷
+                    const alertMs = (config.remindMin * 60 + config.remindSec) * 1000;
+                    if (alertMs > 0 && remainMs <= alertMs) {
+                        cdTimerEl.classList.add('flash-red');
+                    } else {
+                        cdTimerEl.classList.remove('flash-red');
+                    }
+
+                    // 進度條
+                    const total = eTime - sTime;
+                    const pass = nowMs - sTime;
+                    let pct = (pass / total) * 100;
+                    pct = Math.max(0, Math.min(100, pct));
+                    
+                    progBar.style.width = `${pct}%`;
+                    progCapy.style.left = `calc(${pct}% - 20px)`;
+                    progPercent.innerText = `${Math.floor(pct)}%`;
+
+                    // 檢查播放結束鐘聲
+                    if (remainMs <= 1000 && remainMs > 0 && config.playBell && lastPlayedBellId !== `end-${activeIdx}`) {
+                        testBell();
+                        lastPlayedBellId = `end-${activeIdx}`;
+                    }
+
+                } else {
+                    cdLabelEl.innerText = "距離下一節考試開始還有";
+                    const remainMs = sTime - nowMs;
+                    cdTimerEl.innerText = formatHMS(remainMs);
+                    cdTimerEl.classList.remove('flash-red');
+                    
+                    progBar.style.width = `0%`;
+                    progCapy.style.left = `-20px`;
+                    progPercent.innerText = `0%`;
+
+                    // 檢查播放開始鐘聲
+                    if (remainMs <= 1000 && remainMs > 0 && config.playBell && lastPlayedBellId !== `start-${nextIdx}`) {
+                        testBell();
+                        lastPlayedBellId = `start-${nextIdx}`;
+                    }
+                }
+            } else {
+                // 全部結束
+                badgeEl.innerText = `本日測驗結束`;
+                subjectEl.innerHTML = "辛苦了";
+                timeSlotEl.innerText = `--:-- - --:--`;
+                cdLabelEl.innerText = "測驗已全數結束";
+                cdTimerEl.innerText = "0:00:00";
+                cdTimerEl.classList.remove('flash-red');
+                progBar.style.width = `100%`;
+                progCapy.style.left = `calc(100% - 20px)`;
+                progPercent.innerText = `100%`;
+            }
+        }
+
+        // --- 雜項功能 ---
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.log("Error attempting to enable full-screen mode:", err.message);
+                });
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        }
+
+        // Web Audio API 產生簡易的學校鐘聲 (雙音叮咚)
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function testBell() {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
+            const playNote = (freq, startTime, duration) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime + startTime);
+                
+                gain.gain.setValueAtTime(0, audioCtx.currentTime + startTime);
+                gain.gain.linearRampToValueAtTime(0.5, audioCtx.currentTime + startTime + 0.05);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + startTime + duration);
+                
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(audioCtx.currentTime + startTime);
+                osc.stop(audioCtx.currentTime + startTime + duration);
+            };
+
+            // 簡單的 E -> C 叮咚聲
+            playNote(659.25, 0, 1.5); // E5
+            playNote(523.25, 0.6, 2.0); // C5
+        }
+        function createBeepSound() {
+             // 此處僅為滿足 HTML 標籤所需，實際播放使用 Web Audio API (testBell) 效果較好
+        }
+
+        function saveToStorage() {
+            localStorage.setItem('cuteExamConfig', JSON.stringify(config));
+        }
+
+        function loadFromStorage() {
+            const saved = localStorage.getItem('cuteExamConfig');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    config = { ...config, ...parsed }; // 合併避免舊版缺少欄位
+                } catch(e) { console.error("Parse config error", e); }
+            }
+        }
+
+    </script>
+<!-- 專屬版權宣告頁尾 (乾淨、單行設計) -->
+    <div class="text-center text-gray-400 text-sm mt-8 mb-4 tracking-wider">
+        &copy; 谷宗芸老師設計 / AI 輔助生成
+    </div>
+
+</body>
+</html>
