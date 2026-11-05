@@ -37,13 +37,13 @@
         
         <div id="controls-section">
             <h1 class="text-3xl md:text-4xl font-bold text-center mb-2 text-indigo-600 tracking-wide">自訂除法練習題產生器</h1>
-            <p class="text-center text-gray-500 mb-8 font-medium">8 題模式 / 支援橫向 A4 對半裁切設計 / 小數精密除法</p>
+            <p class="text-center text-gray-500 mb-8 font-medium">8 題模式 / 支援橫向 A4 對半裁切設計 / 支援各類題型與大小關係指定</p>
             
             <!-- 設定區塊 -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                 <!-- 左側設定：位數與大小關係 -->
                 <div class="bg-indigo-50/50 p-5 rounded-xl border border-indigo-100 shadow-sm">
-                    <h3 class="font-bold text-indigo-700 mb-4 text-lg border-b border-indigo-200 pb-2">🔢 基本數值設定</h3>
+                    <h3 class="font-bold text-indigo-700 mb-4 text-lg border-b border-indigo-200 pb-2">🔢 基本數值與大小關係</h3>
                     
                     <div class="space-y-4">
                         <div class="flex items-center justify-between">
@@ -67,36 +67,39 @@
                             </select>
                         </div>
                         <div class="pt-2 border-t border-indigo-100">
-                            <label class="block text-sm font-bold text-gray-700 mb-2">大小關係限制：</label>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">大小關係限制 (老師可自由選擇)：</label>
                             <select id="size-relation" class="w-full border-gray-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2 text-base font-medium text-indigo-700 bg-white">
-                                <option value="gt">限制被除數 &gt; 除數 (大除小)</option>
-                                <option value="lt">限制被除數 &lt; 除數 (小除大)</option>
-                                <option value="rnd">不限制 (大小隨機)</option>
+                                <option value="gt">被除數 &gt; 除數 (大除小，例：45 ÷ 6)</option>
+                                <option value="lt">被除數 &lt; 除數 (小除大，例：3 ÷ 8)</option>
+                                <option value="rnd">不限制 (大小隨機出題)</option>
                             </select>
                         </div>
                     </div>
                 </div>
 
-                <!-- 右側設定：小數與餘數 -->
+                <!-- 右側設定：題型與商數設定 -->
                 <div class="bg-emerald-50/50 p-5 rounded-xl border border-emerald-100 shadow-sm">
-                    <h3 class="font-bold text-emerald-700 mb-4 text-lg border-b border-emerald-200 pb-2">🎯 目標與餘數設定</h3>
+                    <h3 class="font-bold text-emerald-700 mb-4 text-lg border-b border-emerald-200 pb-2">🎯 題型與商數設定</h3>
                     
                     <div class="space-y-4">
                         <div>
-                            <label class="block text-sm font-bold text-gray-700 mb-2">商計算至：</label>
-                            <select id="target-precision" class="w-full border-gray-300 rounded-lg shadow-sm focus:border-emerald-500 focus:ring-emerald-500 p-2 text-base font-medium text-gray-700 bg-white">
-                                <option value="0">整數 (不出現小數點)</option>
-                                <option value="1">小數點後第 1 位</option>
-                                <option value="2">小數點後第 2 位</option>
-                                <option value="3">小數點後第 3 位</option>
-                            </select>
-                        </div>
-                        <div class="pt-2 border-t border-emerald-100">
-                            <label class="block text-sm font-bold text-gray-700 mb-2">餘數狀態 (在此精確度下)：</label>
-                            <select id="remainder-type" class="w-full border-gray-300 rounded-lg shadow-sm focus:border-emerald-500 focus:ring-emerald-500 p-2 text-base font-medium text-emerald-700 bg-white">
-                                <option value="zero">必定整除 (無餘數)</option>
-                                <option value="has">必定有餘數</option>
-                                <option value="rnd">不限制 (整除或餘數隨機)</option>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">請選擇商的計算方式與餘數：</label>
+                            <select id="question-type" class="w-full border-gray-300 rounded-lg shadow-sm focus:border-emerald-500 focus:ring-emerald-500 p-2 text-base font-medium text-gray-700 bg-white">
+                                <optgroup label="【基本】商算到個位數 (整數)">
+                                    <option value="0-zero">商到個位數，整除 (沒有餘數)</option>
+                                    <option value="0-has">商到個位數，有餘數</option>
+                                    <option value="0-rnd">商到個位數，隨機出題 (整除或有餘數)</option>
+                                </optgroup>
+                                <optgroup label="【進階】商算到小數第 1 位">
+                                    <option value="1-zero">商到小數第 1 位，整除 (沒有餘數)</option>
+                                    <option value="1-has">商到小數第 1 位，有餘數</option>
+                                    <option value="1-rnd">商到小數第 1 位，隨機出題</option>
+                                </optgroup>
+                                <optgroup label="【進階】商算到小數第 2 位">
+                                    <option value="2-zero">商到小數第 2 位，整除 (沒有餘數)</option>
+                                    <option value="2-has">商到小數第 2 位，有餘數</option>
+                                    <option value="2-rnd">商到小數第 2 位，隨機出題</option>
+                                </optgroup>
                             </select>
                         </div>
                     </div>
@@ -131,6 +134,25 @@
         &copy; 谷宗芸老師設計 / AI 輔助生成
     </div>
 
+    <!-- 虛擬小鍵盤 (預設隱藏) -->
+    <div id="virtual-numpad" class="hidden absolute z-50 bg-gray-100 border border-gray-300 shadow-2xl rounded-xl p-2 w-44 transition-opacity">
+        <div class="grid grid-cols-3 gap-1">
+            <button class="numpad-btn bg-white hover:bg-indigo-50 text-gray-800 font-bold py-2 rounded shadow-sm text-lg border border-gray-200" data-val="1">1</button>
+            <button class="numpad-btn bg-white hover:bg-indigo-50 text-gray-800 font-bold py-2 rounded shadow-sm text-lg border border-gray-200" data-val="2">2</button>
+            <button class="numpad-btn bg-white hover:bg-indigo-50 text-gray-800 font-bold py-2 rounded shadow-sm text-lg border border-gray-200" data-val="3">3</button>
+            <button class="numpad-btn bg-white hover:bg-indigo-50 text-gray-800 font-bold py-2 rounded shadow-sm text-lg border border-gray-200" data-val="4">4</button>
+            <button class="numpad-btn bg-white hover:bg-indigo-50 text-gray-800 font-bold py-2 rounded shadow-sm text-lg border border-gray-200" data-val="5">5</button>
+            <button class="numpad-btn bg-white hover:bg-indigo-50 text-gray-800 font-bold py-2 rounded shadow-sm text-lg border border-gray-200" data-val="6">6</button>
+            <button class="numpad-btn bg-white hover:bg-indigo-50 text-gray-800 font-bold py-2 rounded shadow-sm text-lg border border-gray-200" data-val="7">7</button>
+            <button class="numpad-btn bg-white hover:bg-indigo-50 text-gray-800 font-bold py-2 rounded shadow-sm text-lg border border-gray-200" data-val="8">8</button>
+            <button class="numpad-btn bg-white hover:bg-indigo-50 text-gray-800 font-bold py-2 rounded shadow-sm text-lg border border-gray-200" data-val="9">9</button>
+            <button class="numpad-btn bg-white hover:bg-indigo-50 text-gray-800 font-bold py-2 rounded shadow-sm text-lg border border-gray-200" data-val=".">.</button>
+            <button class="numpad-btn bg-white hover:bg-indigo-50 text-gray-800 font-bold py-2 rounded shadow-sm text-lg border border-gray-200" data-val="0">0</button>
+            <button class="numpad-btn bg-red-100 hover:bg-red-200 text-red-600 font-bold py-2 rounded shadow-sm text-lg border border-red-200" data-val="del">⌫</button>
+        </div>
+        <button id="numpad-close" class="mt-2 w-full bg-gray-300 hover:bg-gray-400 text-gray-700 font-bold py-1.5 rounded shadow-sm text-sm transition">關閉鍵盤</button>
+    </div>
+
     <!-- 用於暫存 PDF 排版的隱藏容器 -->
     <div id="pdf-export-container"></div>
 
@@ -144,25 +166,61 @@
         const btnExportQ = document.getElementById('btn-export-q');
         const btnExportA = document.getElementById('btn-export-a');
         
+        const dividendSel = document.getElementById('dividend-digits');
+        const divisorSel = document.getElementById('divisor-digits');
         const sizeRelationSel = document.getElementById('size-relation');
-        const precSel = document.getElementById('target-precision');
-        const remSel = document.getElementById('remainder-type');
+        const questionTypeSel = document.getElementById('question-type');
         
         let currentQuestions = [];
         let answersShown = false;
+        
+        // 虛擬鍵盤狀態
+        const numpad = document.getElementById('virtual-numpad');
+        let activeInput = null;
 
-        // UI 邏輯：防止不合理的數學設定 (例如：被除數 < 除數 時，整數無法整除)
+        // UI 邏輯：防止不合理的數學設定 (自動防呆)
         function updateUIConstraints() {
-            if (sizeRelationSel.value === 'lt' && precSel.value === '0') {
-                if (remSel.value === 'zero') remSel.value = 'has';
-                remSel.options[0].disabled = true; // 禁用整除
-            } else {
-                remSel.options[0].disabled = false;
+            let aDig = parseInt(dividendSel.value);
+            let bDig = parseInt(divisorSel.value);
+            let sizeRelOpts = Array.from(sizeRelationSel.options);
+
+            // 1. 重設大小關係的停用狀態
+            sizeRelOpts.forEach(opt => opt.disabled = false);
+
+            // 檢查位數是否已經強制決定了大小關係
+            if (aDig > bDig) {
+                // 位數較大，被除數必定 > 除數，停用「小除大」
+                sizeRelOpts.find(o => o.value === 'lt').disabled = true;
+                if (sizeRelationSel.value === 'lt') sizeRelationSel.value = 'gt';
+            } else if (aDig < bDig) {
+                // 位數較小，被除數必定 < 除數，停用「大除小」
+                sizeRelOpts.find(o => o.value === 'gt').disabled = true;
+                if (sizeRelationSel.value === 'gt') sizeRelationSel.value = 'lt';
+            }
+
+            // 2. 處理題型選項防呆
+            let effectiveSizeRel = sizeRelationSel.value;
+            if (aDig < bDig) effectiveSizeRel = 'lt'; // 即使選隨機，位數小就是小除大
+            
+            let qTypeOpts = Array.from(questionTypeSel.options);
+            qTypeOpts.forEach(opt => opt.disabled = false);
+
+            // 如果是「小除大 (被除數 < 除數)」，個位數不可能整除 (除非被除數是0，但我們最小是1)
+            // 所以停用「商到個位數，整除」選項
+            if (effectiveSizeRel === 'lt') {
+                let opt0Zero = qTypeOpts.find(o => o.value === '0-zero');
+                if (opt0Zero) {
+                    opt0Zero.disabled = true;
+                    if (questionTypeSel.value === '0-zero') questionTypeSel.value = '0-has';
+                }
             }
         }
 
+        // 綁定設定變更事件以觸發防呆機制
+        dividendSel.addEventListener('change', updateUIConstraints);
+        divisorSel.addEventListener('change', updateUIConstraints);
         sizeRelationSel.addEventListener('change', updateUIConstraints);
-        precSel.addEventListener('change', updateUIConstraints);
+        questionTypeSel.addEventListener('change', updateUIConstraints);
 
         // 產生特定位數的隨機數字串
         function getRandomString(digits) {
@@ -185,11 +243,14 @@
 
         // 產生單一除法題目
         function generateDivisionQuestion(usedNumbers) {
-            let A_digits = parseInt(document.getElementById('dividend-digits').value);
-            let B_digits = parseInt(document.getElementById('divisor-digits').value);
+            let A_digits = parseInt(dividendSel.value);
+            let B_digits = parseInt(divisorSel.value);
             let sizeRel = sizeRelationSel.value;
-            let prec = parseInt(precSel.value);
-            let remType = remSel.value;
+            
+            // 解析題型與商的設定 (例如 "1-zero" 代表 小數第1位 + 整除)
+            let typeParts = questionTypeSel.value.split('-');
+            let prec = parseInt(typeParts[0]); // 精確度 (0, 1, 2)
+            let remType = typeParts[1];        // 餘數型態 (zero, has, rnd)
             
             let maxAttempts = 50000;
             let attempts = 0;
@@ -234,7 +295,7 @@
                     if (remType === 'has' && isZeroRem) continue;
                 }
                 
-                // 驗證大小關係
+                // 驗證大小關係 (老師指定的限制)
                 if (sizeRel === 'gt' && num1 <= num2) continue;
                 if (sizeRel === 'lt' && num1 >= num2) continue;
                 
@@ -249,9 +310,11 @@
                 return { num1, num2, precision: prec };
             }
             
-            // 極端防呆退路 (正常設定下不會觸發)
+            // 極端防呆退路 (在合理的設定下不會觸發)
             console.warn("條件過於嚴苛，已退回預設題目");
-            return { num1: 10n, num2: 2n, precision: 0 };
+            let fallbackA = 10n * (10n ** BigInt(prec));
+            let fallbackB = 2n;
+            return { num1: fallbackA, num2: fallbackB, precision: prec };
         }
 
         // 產生 8 題測驗
@@ -422,17 +485,39 @@
         // 渲染網頁畫面上的題目
         function renderQuestionsForWeb() {
             questionsContainer.innerHTML = ''; 
+            
+            // 取得目前的題型設定，判斷是否需要餘數輸入框
+            let typeParts = questionTypeSel.value.split('-');
+            let needsRem = typeParts[1] !== 'zero';
 
             currentQuestions.forEach((q, index) => {
                 const card = document.createElement('div');
                 card.className = 'bg-white border-2 border-gray-100 p-5 rounded-xl shadow-sm hover:shadow-md transition-shadow flex flex-col h-full';
 
                 const header = document.createElement('div');
-                header.className = 'text-lg font-semibold text-gray-700 mb-4 border-b-2 border-gray-50 pb-2 truncate';
+                header.className = 'text-lg font-semibold text-gray-700 mb-4 border-b-2 border-gray-50 pb-2';
                 
                 let displayAns = answersShown ? formatAnswer(q.num1, q.num2, q.precision) : '';
-                // 題目模式下隱藏問號，解答模式下顯示答案
-                header.innerHTML = `<span class="text-indigo-500 mr-2 text-xl">(${index + 1})</span> ${q.num1.toString()} &divide; ${q.num2.toString()} = <span class="text-blue-600 font-bold ml-1">${displayAns}</span>`;
+                
+                if (answersShown) {
+                    // 解答模式下，直接顯示答案字串
+                    header.innerHTML = `<span class="text-indigo-500 mr-2 text-xl">(${index + 1})</span> ${q.num1.toString()} &divide; ${q.num2.toString()} = <span class="text-blue-600 font-bold ml-1">${displayAns}</span>`;
+                } else {
+                    // 題目模式下，顯示學生作答區
+                    header.innerHTML = `
+                        <div class="mb-3 truncate"><span class="text-indigo-500 mr-2 text-xl">(${index + 1})</span> ${q.num1.toString()} &divide; ${q.num2.toString()} = </div>
+                        <div class="flex items-center gap-1.5 mt-2 text-sm bg-indigo-50/40 p-2 rounded-lg border border-indigo-100">
+                            <label class="font-bold text-gray-600 whitespace-nowrap">商:</label>
+                            <input type="text" readonly class="student-ans-q w-14 border border-gray-300 rounded p-1 text-center bg-white cursor-pointer focus:ring-2 focus:ring-indigo-400 focus:outline-none shadow-inner text-base font-bold text-indigo-700" data-qidx="${index}" placeholder="?">
+                            
+                            ${needsRem ? `<label class="font-bold text-gray-600 whitespace-nowrap ml-1">餘:</label>
+                            <input type="text" readonly class="student-ans-r w-14 border border-gray-300 rounded p-1 text-center bg-white cursor-pointer focus:ring-2 focus:ring-indigo-400 focus:outline-none shadow-inner text-base font-bold text-emerald-700" data-qidx="${index}" placeholder="?">` : ''}
+                            
+                            <button class="check-ans-btn bg-emerald-500 text-white px-2 py-1.5 rounded shadow-sm hover:bg-emerald-600 ml-auto whitespace-nowrap transition transform hover:scale-105 active:scale-95" data-qidx="${index}">對答案</button>
+                            <span class="feedback-icon text-xl w-6 text-center" id="feedback-${index}"></span>
+                        </div>
+                    `;
+                }
                 card.appendChild(header);
 
                 const answerDiv = document.createElement('div');
@@ -454,6 +539,118 @@
             }
         }
 
+        // --- 虛擬鍵盤與對答案邏輯 ---
+
+        // 點擊事件代理：顯示鍵盤或對答案
+        document.addEventListener('click', (e) => {
+            // 點擊作答框顯示鍵盤
+            if (e.target.matches('input.student-ans-q, input.student-ans-r')) {
+                // 移除之前的 focus 樣式
+                if (activeInput) activeInput.classList.remove('ring-2', 'ring-indigo-400');
+                
+                activeInput = e.target;
+                activeInput.classList.add('ring-2', 'ring-indigo-400'); // 加入發光效果提示
+                
+                // 定位鍵盤到輸入框正下方
+                const rect = activeInput.getBoundingClientRect();
+                numpad.style.left = `${rect.left + window.scrollX - 20}px`;
+                numpad.style.top = `${rect.bottom + window.scrollY + 8}px`;
+                numpad.classList.remove('hidden');
+            } 
+            // 點擊到小鍵盤外部時隱藏鍵盤 (不包含小鍵盤本身或輸入框)
+            else if (!numpad.contains(e.target) && e.target.id !== 'virtual-numpad' && !e.target.matches('.check-ans-btn')) {
+                numpad.classList.add('hidden');
+                if (activeInput) activeInput.classList.remove('ring-2', 'ring-indigo-400');
+                activeInput = null;
+            }
+
+            // 點擊對答案按鈕
+            if (e.target.matches('.check-ans-btn')) {
+                let idx = parseInt(e.target.dataset.qidx);
+                checkStudentAnswer(idx);
+            }
+        });
+
+        // 防止點擊小鍵盤時觸發 document 的點擊事件而關閉
+        numpad.addEventListener('click', e => e.stopPropagation());
+
+        // 小鍵盤按鈕輸入邏輯
+        document.querySelectorAll('.numpad-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (!activeInput) return;
+                const val = btn.dataset.val;
+                if (val === 'del') {
+                    activeInput.value = activeInput.value.slice(0, -1);
+                } else {
+                    activeInput.value += val;
+                }
+            });
+        });
+
+        // 小鍵盤手動關閉按鈕
+        document.getElementById('numpad-close').addEventListener('click', (e) => {
+            e.stopPropagation();
+            numpad.classList.add('hidden');
+            if (activeInput) activeInput.classList.remove('ring-2', 'ring-indigo-400');
+            activeInput = null;
+        });
+
+        // 檢查單題答案邏輯
+        function checkStudentAnswer(idx) {
+            let q = currentQuestions[idx];
+            let p = q.precision;
+            
+            // 計算正確答案數值
+            let mult = 10n ** BigInt(p);
+            let dividend = q.num1 * mult;
+            let correctQ = dividend / q.num2;
+            let correctR = dividend % q.num2;
+            
+            // 建立標準的字串比對基準 (包含小數點與補零邏輯)
+            let expectedQStr = correctQ.toString();
+            if (p > 0) {
+                expectedQStr = expectedQStr.padStart(p + 1, '0');
+                expectedQStr = expectedQStr.slice(0, -p) + "." + expectedQStr.slice(-p);
+            }
+            
+            let expectedRStr = correctR.toString();
+            if (p > 0 && correctR !== 0n) {
+                expectedRStr = expectedRStr.padStart(p + 1, '0');
+                expectedRStr = "0." + expectedRStr.slice(-p);
+            } else if (correctR === 0n) {
+                expectedRStr = "0";
+            }
+            
+            // 取得學生的輸入值
+            let qInput = document.querySelector(`.student-ans-q[data-qidx="${idx}"]`);
+            let rInput = document.querySelector(`.student-ans-r[data-qidx="${idx}"]`);
+            let feedback = document.getElementById(`feedback-${idx}`);
+            
+            if (!qInput.value.trim()) {
+                feedback.innerHTML = '❓';
+                return;
+            }
+
+            // 將使用者輸入與正確答案轉為 Number 做比較 (防止 003 == 3 這種被判錯)
+            let isQCorrect = Number(qInput.value) === Number(expectedQStr);
+            let isRCorrect = true;
+            
+            // 如果這題有餘數輸入框，就要順便檢查餘數
+            if (rInput) {
+                let rVal = rInput.value.trim() === "" ? 0 : Number(rInput.value);
+                isRCorrect = (rVal === Number(expectedRStr));
+            }
+            
+            if (isQCorrect && isRCorrect) {
+                feedback.innerHTML = '✅';
+                feedback.className = "feedback-icon text-xl w-6 text-center font-bold text-emerald-500 animate-bounce";
+            } else {
+                feedback.innerHTML = '❌';
+                feedback.className = "feedback-icon text-xl w-6 text-center font-bold text-red-500";
+            }
+        }
+        
         // 動態建構供 PDF 匯出的特殊排版 (A4 橫向、左右對稱雙欄)
         function buildPDFLayout(isAnswerMode) {
             const container = document.createElement('div');
@@ -566,7 +763,8 @@
                     console.error("PDF Generate Error", err);
                     btn.innerHTML = originalText;
                     btn.disabled = false;
-                    alert("匯出 PDF 時發生錯誤，請重試。");
+                    // 使用網頁渲染提示代替系統 alert
+                    alert("匯出 PDF 時發生錯誤，請重試。"); 
                 });
             }, 300);
         }
