@@ -37,7 +37,7 @@
         
         <div id="controls-section">
             <h1 class="text-3xl md:text-4xl font-bold text-center mb-2 text-indigo-600 tracking-wide">自訂除法練習題產生器</h1>
-            <p class="text-center text-gray-500 mb-8 font-medium">8 題模式 / 支援橫向 A4 對半裁切設計 / 支援各類題型與大小關係指定</p>
+            <p class="text-center text-gray-500 mb-8 font-medium">8 題模式 / 支援橫向 A4 裁切 / 附完整直式與驗算過程</p>
             
             <!-- 設定區塊 -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
@@ -92,7 +92,7 @@
                                 </optgroup>
                                 <optgroup label="【進階】商算到小數第 1 位">
                                     <option value="1-zero">商到小數第 1 位，整除 (沒有餘數)</option>
-                                    <option value="1-has">商到小數第 1 位，有餘數</option>
+                                    <option value="1-has" selected>商到小數第 1 位，有餘數</option>
                                     <option value="1-rnd">商到小數第 1 位，隨機出題</option>
                                 </optgroup>
                                 <optgroup label="【進階】商算到小數第 2 位">
@@ -112,7 +112,7 @@
                     🎲 產生新題目
                 </button>
                 <button id="btn-show-answer" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-8 rounded-lg shadow-md transition duration-200 transform hover:-translate-y-0.5 text-lg">
-                    👀 顯示解答
+                    👀 顯示解答與驗算
                 </button>
                 <button id="btn-export-q" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-200 transform hover:-translate-y-0.5 flex items-center">
                     <span>📄 匯出題目 (PDF)</span>
@@ -184,29 +184,22 @@
             let bDig = parseInt(divisorSel.value);
             let sizeRelOpts = Array.from(sizeRelationSel.options);
 
-            // 1. 重設大小關係的停用狀態
             sizeRelOpts.forEach(opt => opt.disabled = false);
 
-            // 檢查位數是否已經強制決定了大小關係
             if (aDig > bDig) {
-                // 位數較大，被除數必定 > 除數，停用「小除大」
                 sizeRelOpts.find(o => o.value === 'lt').disabled = true;
                 if (sizeRelationSel.value === 'lt') sizeRelationSel.value = 'gt';
             } else if (aDig < bDig) {
-                // 位數較小，被除數必定 < 除數，停用「大除小」
                 sizeRelOpts.find(o => o.value === 'gt').disabled = true;
                 if (sizeRelationSel.value === 'gt') sizeRelationSel.value = 'lt';
             }
 
-            // 2. 處理題型選項防呆
             let effectiveSizeRel = sizeRelationSel.value;
-            if (aDig < bDig) effectiveSizeRel = 'lt'; // 即使選隨機，位數小就是小除大
+            if (aDig < bDig) effectiveSizeRel = 'lt'; 
             
             let qTypeOpts = Array.from(questionTypeSel.options);
             qTypeOpts.forEach(opt => opt.disabled = false);
 
-            // 如果是「小除大 (被除數 < 除數)」，個位數不可能整除 (除非被除數是0，但我們最小是1)
-            // 所以停用「商到個位數，整除」選項
             if (effectiveSizeRel === 'lt') {
                 let opt0Zero = qTypeOpts.find(o => o.value === '0-zero');
                 if (opt0Zero) {
@@ -216,13 +209,11 @@
             }
         }
 
-        // 綁定設定變更事件以觸發防呆機制
         dividendSel.addEventListener('change', updateUIConstraints);
         divisorSel.addEventListener('change', updateUIConstraints);
         sizeRelationSel.addEventListener('change', updateUIConstraints);
         questionTypeSel.addEventListener('change', updateUIConstraints);
 
-        // 產生特定位數的隨機數字串
         function getRandomString(digits) {
             let result = (Math.floor(Math.random() * 9) + 1).toString();
             for (let i = 1; i < digits; i++) {
@@ -231,7 +222,6 @@
             return result;
         }
 
-        // 求最大公因數 (用於整除建構法)
         function gcd(a, b) {
             while (b !== 0n) {
                 let temp = b;
@@ -241,16 +231,14 @@
             return a;
         }
 
-        // 產生單一除法題目
         function generateDivisionQuestion(usedNumbers) {
             let A_digits = parseInt(dividendSel.value);
             let B_digits = parseInt(divisorSel.value);
             let sizeRel = sizeRelationSel.value;
             
-            // 解析題型與商的設定 (例如 "1-zero" 代表 小數第1位 + 整除)
             let typeParts = questionTypeSel.value.split('-');
-            let prec = parseInt(typeParts[0]); // 精確度 (0, 1, 2)
-            let remType = typeParts[1];        // 餘數型態 (zero, has, rnd)
+            let prec = parseInt(typeParts[0]); 
+            let remType = typeParts[1];        
             
             let maxAttempts = 50000;
             let attempts = 0;
@@ -260,11 +248,10 @@
                 attempts++;
                 
                 if (remType === 'zero') {
-                    // 要求整除：採用數學建構法確保 100% 成功，而不依賴純隨機盲測
                     num2 = BigInt(getRandomString(B_digits));
                     let multiplier = 10n ** BigInt(prec);
                     let gcdVal = gcd(num2, multiplier);
-                    let requiredFactor = num2 / gcdVal; // A 必須是這個數的倍數
+                    let requiredFactor = num2 / gcdVal; 
                     
                     let minA = 10n ** BigInt(A_digits - 1);
                     if (A_digits === 1) minA = 1n;
@@ -273,19 +260,17 @@
                     let minK = minA / requiredFactor + (minA % requiredFactor === 0n ? 0n : 1n);
                     let maxK = maxA / requiredFactor;
                     
-                    if (minK > maxK) continue; // 該除數條件下無法構造，重試
+                    if (minK > maxK) continue; 
                     
                     let range = maxK - minK + 1n;
                     let k = minK + BigInt(Math.floor(Math.random() * Number(range))); 
                     num1 = requiredFactor * k;
                     
-                    // 確保不會提早整除 (例如要求小數第2位才整除，不能在小數第1位就整除了)
                     if (prec > 0) {
                         let prevMult = 10n ** BigInt(prec - 1);
                         if ((num1 * prevMult) % num2 === 0n) continue;
                     }
                 } else {
-                    // 隨機或要求有餘數：用隨機產生後驗證
                     num1 = BigInt(getRandomString(A_digits));
                     num2 = BigInt(getRandomString(B_digits));
                     
@@ -295,14 +280,11 @@
                     if (remType === 'has' && isZeroRem) continue;
                 }
                 
-                // 驗證大小關係 (老師指定的限制)
                 if (sizeRel === 'gt' && num1 <= num2) continue;
                 if (sizeRel === 'lt' && num1 >= num2) continue;
                 
-                // 驗證數字獨立性 (避免 8 題內出現完全一樣的組合)
                 let pairKey = num1.toString() + "/" + num2.toString();
                 if (usedNumbers.has(pairKey)) {
-                    // 若條件極端嚴苛，嘗試 4 萬次後放行重複以防無限迴圈當機
                     if (attempts < 40000) continue; 
                 }
                 
@@ -310,14 +292,11 @@
                 return { num1, num2, precision: prec };
             }
             
-            // 極端防呆退路 (在合理的設定下不會觸發)
-            console.warn("條件過於嚴苛，已退回預設題目");
             let fallbackA = 10n * (10n ** BigInt(prec));
             let fallbackB = 2n;
             return { num1: fallbackA, num2: fallbackB, precision: prec };
         }
 
-        // 產生 8 題測驗
         function generateQuestions() {
             currentQuestions = [];
             let usedNumbers = new Set();
@@ -330,6 +309,15 @@
             renderQuestionsForWeb();
         }
 
+        // === 修正：精準的數值小數點字串格式化 ===
+        // 將數值根據 precision (P) 正確轉為含小數點的字串，避免錯誤補零
+        function formatDecimalStr(val, P) {
+            if (P === 0) return val.toString();
+            let s = val.toString();
+            s = s.padStart(P + 1, '0');
+            return s.slice(0, -P) + "." + s.slice(-P);
+        }
+
         // 格式化橫式答案 (含餘數顯示)
         function formatAnswer(A, B, P) {
             let mult = 10n ** BigInt(P);
@@ -337,20 +325,9 @@
             let q = dividend / B;
             let r = dividend % B;
             
-            let qStr = q.toString();
-            if (P > 0) {
-                qStr = qStr.padStart(P + 1, '0');
-                qStr = qStr.slice(0, -P) + "." + qStr.slice(-P);
-            }
-            
+            let qStr = formatDecimalStr(q, P);
             if (r === 0n) return qStr;
-            
-            let rStr = r.toString();
-            if (P > 0) {
-                rStr = rStr.padStart(P + 1, '0');
-                rStr = "0." + rStr.slice(-P); // 確保餘數小數點位置正確
-            }
-            
+            let rStr = formatDecimalStr(r, P);
             return `${qStr} ... ${rStr}`;
         }
 
@@ -374,22 +351,20 @@
             let decIndex = dividendStr.indexOf(".");
             if (decIndex === -1) decIndex = dividendStr.length;
             
-            let offset = divisorStr.length + 3; // 除數長度 + " ) " 長度
-            let totalCols = offset + dividendStr.length; // 總格數
+            let offset = divisorStr.length + 3; 
+            let totalCols = offset + dividendStr.length; 
             
             let firstStep = true;
             
-            // 模擬直式計算步驟
             for (let i = 0; i < dividendDigits.length; i++) {
                 current = current * 10n + BigInt(dividendDigits[i]);
                 let qDigit = current / b;
                 quotientStr += qDigit.toString();
                 let sub = qDigit * b;
                 
-                // 只有在商數大於 0 或已經是最後一步時才顯示減法過程
                 if (qDigit > 0n || (i === dividendDigits.length - 1 && current > 0n && firstStep)) {
                     let offsetIdx = i;
-                    if (P > 0 && i >= decIndex) offsetIdx++; // 越過小數點，索引向右偏移
+                    if (P > 0 && i >= decIndex) offsetIdx++; 
                     
                     if (!firstStep) {
                         stepRows.push({ text: current.toString(), endIdx: offsetIdx, border: false });
@@ -405,21 +380,18 @@
             if (P > 0) finalRemOffset++;
             stepRows.push({ text: current.toString(), endIdx: finalRemOffset, border: false, color: '#2563eb' });
             
-            // 處理商數 (補零與小數點)
             let finalQ = quotientStr.substring(0, decIndex) + (P > 0 ? "." + quotientStr.substring(decIndex) : "");
             finalQ = finalQ.replace(/^0+(?=\d)/, "");
             if (finalQ.startsWith(".")) finalQ = "0" + finalQ;
             
-            // 設定視覺參數
             let fontSize = isCompact ? "13px" : "18px";
             let html = `<div style="font-family: 'Courier New', Courier, monospace; font-size: ${fontSize}; line-height: 1.3; display: flex; flex-direction: column; align-items: flex-start; letter-spacing: 0.1em;">`;
             
-            // 輔助函式：建立精準對齊的每一行字串
             function buildLine(valStr, endIdx, hasBorder) {
                 let chars = Array(totalCols).fill('&nbsp;');
                 let currCol = offset + endIdx;
                 for (let i = valStr.length - 1; i >= 0; i--) {
-                    if (currCol === offset + decIndex) currCol--; // 跳過小數點的直欄
+                    if (currCol === offset + decIndex) currCol--; 
                     chars[currCol] = valStr[i];
                     currCol--;
                 }
@@ -458,20 +430,28 @@
             let divStrSpan = `<span style="border-top: 2px solid #374151; padding-top: 1px;">${dividendStr.split('').join('')}</span>`;
             html += `<div>${divBefore}${divStrSpan}</div>`;
             
-            // 3. 減法步驟與餘數
+            // 3. 減法步驟與餘數 (修復餘數小數點對齊)
             stepRows.forEach(row => {
-                 if (row.color) { // 最終餘數，處理小數點自然落下的效果
+                 if (row.color) { 
                      let chars = Array(totalCols).fill('&nbsp;');
                      let currCol = offset + row.endIdx;
-                     for (let i = row.text.length - 1; i >= 0; i--) {
+                     let remText = row.text; 
+                     
+                     // 補齊長度，避免高位數被小數點吃掉
+                     if (P > 0 && current !== 0n) {
+                         remText = remText.padStart(P + 1, '0');
+                     }
+                     
+                     for (let i = remText.length - 1; i >= 0; i--) {
                          if (currCol === offset + decIndex) currCol--;
-                         chars[currCol] = row.text[i];
+                         chars[currCol] = remText[i];
                          currCol--;
                      }
+                     
                      if (P > 0 && current !== 0n) {
                          chars[offset + decIndex] = '.';
-                         chars[offset + decIndex - 1] = '0';
                      }
+                     
                      html += `<div style="color: ${row.color}; font-weight: bold;">${chars.join('')}</div>`;
                  } else {
                      html += buildLine(row.text, row.endIdx, row.border);
@@ -482,11 +462,33 @@
             return html;
         }
 
+        // 產生驗算邏輯 HTML (除數 × 商 + 餘數 = 被除數)
+        function generateVerificationHTML(q) {
+            let P = q.precision;
+            let mult = 10n ** BigInt(P);
+            let dividend = q.num1 * mult;
+            let correctQ = dividend / q.num2;
+            let correctR = dividend % q.num2;
+            
+            let qStr = formatDecimalStr(correctQ, P);
+            let rStr = formatDecimalStr(correctR, P);
+            let qTimesBStr = formatDecimalStr(correctQ * q.num2, P);
+            let dividendStr = formatDecimalStr(dividend, P);
+            
+            let html = `<div class="mt-4 p-3 bg-blue-50/70 border border-blue-200 rounded-lg text-sm text-gray-700 font-mono w-full max-w-[280px]">`;
+            html += `<div class="font-bold text-blue-700 mb-1 text-center tracking-widest">【 驗算過程 】</div>`;
+            html += `<div class="text-center">${q.num2.toString()} &times; ${qStr} = ${qTimesBStr}</div>`;
+            if (correctR !== 0n) {
+                html += `<div class="text-center">${qTimesBStr} + <span class="text-blue-600 font-bold">${rStr}</span> = ${dividendStr}</div>`;
+            }
+            html += `</div>`;
+            return html;
+        }
+
         // 渲染網頁畫面上的題目
         function renderQuestionsForWeb() {
             questionsContainer.innerHTML = ''; 
             
-            // 取得目前的題型設定，判斷是否需要餘數輸入框
             let typeParts = questionTypeSel.value.split('-');
             let needsRem = typeParts[1] !== 'zero';
 
@@ -500,10 +502,8 @@
                 let displayAns = answersShown ? formatAnswer(q.num1, q.num2, q.precision) : '';
                 
                 if (answersShown) {
-                    // 解答模式下，直接顯示答案字串
                     header.innerHTML = `<span class="text-indigo-500 mr-2 text-xl">(${index + 1})</span> ${q.num1.toString()} &divide; ${q.num2.toString()} = <span class="text-blue-600 font-bold ml-1">${displayAns}</span>`;
                 } else {
-                    // 題目模式下，顯示學生作答區
                     header.innerHTML = `
                         <div class="mb-3 truncate"><span class="text-indigo-500 mr-2 text-xl">(${index + 1})</span> ${q.num1.toString()} &divide; ${q.num2.toString()} = </div>
                         <div class="flex items-center gap-1.5 mt-2 text-sm bg-indigo-50/40 p-2 rounded-lg border border-indigo-100">
@@ -521,17 +521,26 @@
                 card.appendChild(header);
 
                 const answerDiv = document.createElement('div');
-                answerDiv.className = `mt-auto flex justify-center py-2 ${answersShown ? '' : 'hidden'}`;
+                answerDiv.className = `mt-auto flex flex-col items-center justify-center py-2 ${answersShown ? '' : 'hidden'}`;
+                
                 const innerBox = document.createElement('div');
                 innerBox.className = 'vertical-math shadow-inner';
                 innerBox.innerHTML = generateVerticalDivisionHTML(q, false);
                 answerDiv.appendChild(innerBox);
+
+                // 顯示驗算區塊
+                if (answersShown) {
+                    const verifyBox = document.createElement('div');
+                    verifyBox.className = "w-full flex justify-center";
+                    verifyBox.innerHTML = generateVerificationHTML(q);
+                    answerDiv.appendChild(verifyBox);
+                }
+
                 card.appendChild(answerDiv);
-                
                 questionsContainer.appendChild(card);
             });
             
-            btnShowAnswer.innerHTML = answersShown ? "🙈 隱藏解答" : "👀 顯示解答";
+            btnShowAnswer.innerHTML = answersShown ? "🙈 隱藏解答" : "👀 顯示解答與驗算";
             if(answersShown) {
                 btnShowAnswer.className = "bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-8 rounded-lg shadow-md transition duration-200 transform hover:-translate-y-0.5 text-lg";
             } else {
@@ -541,40 +550,32 @@
 
         // --- 虛擬鍵盤與對答案邏輯 ---
 
-        // 點擊事件代理：顯示鍵盤或對答案
         document.addEventListener('click', (e) => {
-            // 點擊作答框顯示鍵盤
             if (e.target.matches('input.student-ans-q, input.student-ans-r')) {
-                // 移除之前的 focus 樣式
                 if (activeInput) activeInput.classList.remove('ring-2', 'ring-indigo-400');
                 
                 activeInput = e.target;
-                activeInput.classList.add('ring-2', 'ring-indigo-400'); // 加入發光效果提示
+                activeInput.classList.add('ring-2', 'ring-indigo-400'); 
                 
-                // 定位鍵盤到輸入框正下方
                 const rect = activeInput.getBoundingClientRect();
                 numpad.style.left = `${rect.left + window.scrollX - 20}px`;
                 numpad.style.top = `${rect.bottom + window.scrollY + 8}px`;
                 numpad.classList.remove('hidden');
             } 
-            // 點擊到小鍵盤外部時隱藏鍵盤 (不包含小鍵盤本身或輸入框)
             else if (!numpad.contains(e.target) && e.target.id !== 'virtual-numpad' && !e.target.matches('.check-ans-btn')) {
                 numpad.classList.add('hidden');
                 if (activeInput) activeInput.classList.remove('ring-2', 'ring-indigo-400');
                 activeInput = null;
             }
 
-            // 點擊對答案按鈕
             if (e.target.matches('.check-ans-btn')) {
                 let idx = parseInt(e.target.dataset.qidx);
                 checkStudentAnswer(idx);
             }
         });
 
-        // 防止點擊小鍵盤時觸發 document 的點擊事件而關閉
         numpad.addEventListener('click', e => e.stopPropagation());
 
-        // 小鍵盤按鈕輸入邏輯
         document.querySelectorAll('.numpad-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -588,7 +589,6 @@
             });
         });
 
-        // 小鍵盤手動關閉按鈕
         document.getElementById('numpad-close').addEventListener('click', (e) => {
             e.stopPropagation();
             numpad.classList.add('hidden');
@@ -596,33 +596,19 @@
             activeInput = null;
         });
 
-        // 檢查單題答案邏輯
         function checkStudentAnswer(idx) {
             let q = currentQuestions[idx];
             let p = q.precision;
             
-            // 計算正確答案數值
             let mult = 10n ** BigInt(p);
             let dividend = q.num1 * mult;
             let correctQ = dividend / q.num2;
             let correctR = dividend % q.num2;
             
-            // 建立標準的字串比對基準 (包含小數點與補零邏輯)
-            let expectedQStr = correctQ.toString();
-            if (p > 0) {
-                expectedQStr = expectedQStr.padStart(p + 1, '0');
-                expectedQStr = expectedQStr.slice(0, -p) + "." + expectedQStr.slice(-p);
-            }
+            // 使用共用的格式化函式，確保驗證基準一致
+            let expectedQStr = formatDecimalStr(correctQ, p);
+            let expectedRStr = correctR === 0n ? "0" : formatDecimalStr(correctR, p);
             
-            let expectedRStr = correctR.toString();
-            if (p > 0 && correctR !== 0n) {
-                expectedRStr = expectedRStr.padStart(p + 1, '0');
-                expectedRStr = "0." + expectedRStr.slice(-p);
-            } else if (correctR === 0n) {
-                expectedRStr = "0";
-            }
-            
-            // 取得學生的輸入值
             let qInput = document.querySelector(`.student-ans-q[data-qidx="${idx}"]`);
             let rInput = document.querySelector(`.student-ans-r[data-qidx="${idx}"]`);
             let feedback = document.getElementById(`feedback-${idx}`);
@@ -632,11 +618,9 @@
                 return;
             }
 
-            // 將使用者輸入與正確答案轉為 Number 做比較 (防止 003 == 3 這種被判錯)
             let isQCorrect = Number(qInput.value) === Number(expectedQStr);
             let isRCorrect = true;
             
-            // 如果這題有餘數輸入框，就要順便檢查餘數
             if (rInput) {
                 let rVal = rInput.value.trim() === "" ? 0 : Number(rInput.value);
                 isRCorrect = (rVal === Number(expectedRStr));
@@ -651,7 +635,7 @@
             }
         }
         
-        // 動態建構供 PDF 匯出的特殊排版 (A4 橫向、左右對稱雙欄)
+        // PDF 版面建構 (現在也會包含驗算過程)
         function buildPDFLayout(isAnswerMode) {
             const container = document.createElement('div');
             container.style.width = '1123px';
@@ -703,7 +687,7 @@
                     header.style.fontWeight = 'bold';
                     header.style.borderBottom = '1.5px solid #f3f4f6';
                     header.style.paddingBottom = '8px';
-                    header.style.marginBottom = '12px';
+                    header.style.marginBottom = '8px';
                     
                     let answerStr = isAnswerMode ? formatAnswer(q.num1, q.num2, q.precision) : '';
                     header.innerHTML = `<span style="color: #6366f1; margin-right: 6px; font-size: 18px;">(${index + 1})</span> ${q.num1.toString()} &divide; ${q.num2.toString()} = <span style="color: #2563eb; margin-left: 2px;">${answerStr}</span>`;
@@ -712,10 +696,40 @@
                     if (isAnswerMode) {
                         const answerDiv = document.createElement('div');
                         answerDiv.style.display = 'flex';
-                        answerDiv.style.justifyContent = 'center';
+                        answerDiv.style.flexDirection = 'column'; // 改成直列排版以容納驗算
+                        answerDiv.style.justifyContent = 'flex-start';
                         answerDiv.style.alignItems = 'center';
                         answerDiv.style.flexGrow = '1';
-                        answerDiv.innerHTML = generateVerticalDivisionHTML(q, true);
+                        
+                        // 直式計算
+                        const mathDiv = document.createElement('div');
+                        mathDiv.innerHTML = generateVerticalDivisionHTML(q, true);
+                        answerDiv.appendChild(mathDiv);
+                        
+                        // 驗算區塊 (客製化 PDF 行內樣式)
+                        const verDiv = document.createElement('div');
+                        verDiv.style.marginTop = '8px';
+                        verDiv.style.padding = '4px 10px';
+                        verDiv.style.border = '1px dashed #93c5fd';
+                        verDiv.style.borderRadius = '6px';
+                        verDiv.style.backgroundColor = '#eff6ff';
+                        verDiv.style.fontSize = '12px';
+                        verDiv.style.fontFamily = 'monospace';
+                        verDiv.style.textAlign = 'center';
+                        
+                        let P = q.precision;
+                        let mult = 10n ** BigInt(P);
+                        let dividend = q.num1 * mult;
+                        let correctQ = dividend / q.num2;
+                        let correctR = dividend % q.num2;
+                        
+                        verDiv.innerHTML = `<div style="font-weight:bold; color:#1d4ed8; margin-bottom:2px;">【驗算】</div>
+                        <div>${q.num2.toString()} &times; ${formatDecimalStr(correctQ, P)} = ${formatDecimalStr(correctQ * q.num2, P)}</div>`;
+                        if (correctR !== 0n) {
+                            verDiv.innerHTML += `<div>${formatDecimalStr(correctQ * q.num2, P)} + <span style="color:#2563eb; font-weight:bold;">${formatDecimalStr(correctR, P)}</span> = ${formatDecimalStr(dividend, P)}</div>`;
+                        }
+                        
+                        answerDiv.appendChild(verDiv);
                         card.appendChild(answerDiv);
                     }
 
@@ -763,7 +777,6 @@
                     console.error("PDF Generate Error", err);
                     btn.innerHTML = originalText;
                     btn.disabled = false;
-                    // 使用網頁渲染提示代替系統 alert
                     alert("匯出 PDF 時發生錯誤，請重試。"); 
                 });
             }, 300);
