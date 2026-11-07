@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>✨ 班級打掃工作分配器</title>
+
+  <!-- 引入 Google Fonts: Noto Sans TC (思源黑體) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+
+  <!-- 引入 Tailwind CSS 進行快速排版與樣式設定 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Noto Sans TC"', 'sans-serif'], // 強制套用漂亮的中文字型
+          },
+          colors: {
+            brand: { 50: '#f0f9ff', 100: '#e0f2fe', 500: '#0ea5e9', 600: '#0284c7' }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- 引入 React 與 ReactDOM (用於邏輯處理與組件化) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  
+  <!-- 引入 Babel (讓瀏覽器可以直接解析 JSX) -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- 引入 html2pdf (用於匯出 PDF 功能) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+  <style>
+    /* 全域自訂樣式設定 */
+    body {
+      background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
+      min-height: 100vh;
+      color: #333;
+    }
+    
+    /* 隱藏捲軸但保留捲動功能 */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+    /* 名牌拖曳時的游標與特效 */
+    .student-pill {
+      transition: all 0.2s ease;
+    }
+    .student-pill:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+    .student-pill:active {
+      transform: translateY(0);
+      cursor: grabbing !important;
+    }
+
+    /* 列印與匯出 PDF 的預設背景 */
+    #print-area {
+      background-color: #ffffff;
+      background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23f1f5f9' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    }
+  </style>
+</head>
+<body class="antialiased">
+  <div id="root"></div>
+
+  <!-- React 應用程式碼開始 -->
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const PRESET_TASKS = [
+      "掃地", "拖地", "倒垃圾", "資源回收", "擦窗戶", 
+      "擦黑板與講台", "排桌椅", "走廊打掃", "廁所清潔", "外掃區"
+    ];
+
+    function App() {
+      // 狀態管理
+      const [studentsInput, setStudentsInput] = useState('');
+      const [tasks, setTasks] = useState([]); 
+      const [assignments, setAssignments] = useState({ unassigned: [] });
+      const [startDate, setStartDate] = useState('');
+      const [newTaskName, setNewTaskName] = useState('');
+      const [newTaskCapacity, setNewTaskCapacity] = useState(2);
+      const [isLoaded, setIsLoaded] = useState(false);
+
+      // 載入 Local Storage
+      useEffect(() => {
+        const savedData = localStorage.getItem('cleaning_duty_settings_v2');
+        if (savedData) {
+          try {
+            const parsed = JSON.parse(savedData);
+            setStudentsInput(parsed.studentsInput || '');
+            setTasks(parsed.tasks || []);
+            setAssignments(parsed.assignments || { unassigned: [] });
+            setStartDate(parsed.startDate || '');
+          } catch (e) {
+            console.error("載入設定失敗", e);
+          }
+        }
+        setIsLoaded(true);
+      }, []);
+
+      // 自動存檔至 Local Storage
+      useEffect(() => {
+        if (isLoaded) {
+          const dataToSave = { studentsInput, tasks, assignments, startDate };
+          localStorage.setItem('cleaning_duty_settings_v2', JSON.stringify(dataToSave));
+        }
+      }, [studentsInput, tasks, assignments, startDate, isLoaded]);
+
+      const getStudentList = () => {
+        return studentsInput
+          .split(/[\n,，]+/)
+          .map(s => s.trim())
+          .filter(s => s !== '');
+      };
+
+      const handleAddTask = () => {
+        if (!newTaskName.trim()) return;
+        const newTask = {
+          id: 'task_' + Date.now(),
+          name: newTaskName.trim(),
+          capacity: parseInt(newTaskCapacity) || 1
+        };
+        setTasks([...tasks, newTask]);
+        setAssignments(prev => ({ ...prev, [newTask.id]: [] }));
+        setNewTaskName('');
+      };
+
+      const handleRemoveTask = (taskId) => {
+        setTasks(tasks.filter(t => t.id !== taskId));
+        setAssignments(prev => {
+          const newAssign = { ...prev };
+          const orphaned = newAssign[taskId] || [];
+          newAssign.unassigned = [...(newAssign.unassigned || []), ...orphaned];
+          delete newAssign[taskId];
+          return newAssign;
+        });
+      };
+
+      const handleRandomAssign = () => {
+        const allStudents = getStudentList();
+        if (allStudents.length === 0) {
+          alert("請先輸入學生名單！");
+          return;
+        }
+        if (tasks.length === 0) {
+          alert("請先設定至少一項打掃工作！");
+          return;
+        }
+
+        let shuffled = [...allStudents];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+
+        const newAssignments = { unassigned: [] };
+        tasks.forEach(t => { newAssignments[t.id] = []; });
+
+        let currentIndex = 0;
+        tasks.forEach(task => {
+          for (let i = 0; i < task.capacity; i++) {
+            if (currentIndex < shuffled.length) {
+              newAssignments[task.id].push(shuffled[currentIndex]);
+              currentIndex++;
+            }
+          }
+        });
+
+        while (currentIndex < shuffled.length) {
+          newAssignments.unassigned.push(shuffled[currentIndex]);
+          currentIndex++;
+        }
+
+        setAssignments(newAssignments);
+      };
+
+      // 拖曳邏輯
+      const handleDragStart = (e, studentName, sourceZoneId) => {
+        e.dataTransfer.setData('studentName', studentName);
+        e.dataTransfer.setData('sourceZoneId', sourceZoneId);
+        e.target.style.opacity = '0.4';
+      };
+
+      const handleDragEnd = (e) => {
+        e.target.style.opacity = '1';
+      };
+
+      const handleDragOver = (e) => {
+        e.preventDefault();
+      };
+
+      const handleDrop = (e, targetZoneId, targetStudentName = null) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const studentName = e.dataTransfer.getData('studentName');
+        const sourceZoneId = e.dataTransfer.getData('sourceZoneId');
+
+        if (!studentName || (sourceZoneId === targetZoneId && !targetStudentName)) return;
+
+        setAssignments(prev => {
+          const newAssign = JSON.parse(JSON.stringify(prev));
+          
+          if (targetStudentName && studentName !== targetStudentName) {
+            const sourceIndex = newAssign[sourceZoneId].indexOf(studentName);
+            const targetIndex = newAssign[targetZoneId].indexOf(targetStudentName);
+            
+            if (sourceIndex !== -1 && targetIndex !== -1) {
+              newAssign[sourceZoneId][sourceIndex] = targetStudentName;
+              newAssign[targetZoneId][targetIndex] = studentName;
+              return newAssign;
+            }
+          }
+
+          if (sourceZoneId !== targetZoneId) {
+            newAssign[sourceZoneId] = newAssign[sourceZoneId].filter(name => name !== studentName);
+            if (!newAssign[targetZoneId]) newAssign[targetZoneId] = [];
+            newAssign[targetZoneId].push(studentName);
+          }
+
+          return newAssign;
+        });
+      };
+
+      const handleExportPDF = () => {
+        const element = document.getElementById('print-area');
+        const opt = {
+          margin:       12,
+          filename:     `打掃分配表_${startDate || '未定'}.pdf`,
+          image:        { type: 'jpeg', quality: 1 },
+          html2canvas:  { scale: 2, useCORS: true, logging: false },
+          jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+        html2pdf().set(opt).from(element).save();
+      };
+
+      if (!isLoaded) return <div className="h-screen flex items-center justify-center text-gray-500 font-bold text-xl">系統載入中...</div>;
+
+      const totalStudents = getStudentList().length;
+      const unassignedCount = assignments.unassigned?.length || 0;
+      const assignedCount = totalStudents - unassignedCount;
+
+      return (
+        <div className="h-screen w-full bg-gray-100 p-2 md:p-4 flex flex-col xl:flex-row gap-4 overflow-hidden">
+          
+          {/* 左側：控制面板 */}
+          <div className="w-full xl:w-[320px] bg-white rounded-xl shadow-lg p-4 flex flex-col gap-4 h-full shrink-0 border border-gray-100 overflow-y-auto">
+            <div className="flex items-center gap-2 border-b-2 border-brand-100 pb-2">
+              <span className="text-2xl">✨</span>
+              <h2 className="text-xl font-black text-gray-800 tracking-wide">分配設定</h2>
+            </div>
+
+            {/* 1. 日期設定 */}
+            <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+              <label className="block text-sm font-bold text-gray-700 mb-1">📅 開始實施日期</label>
+              <input 
+                type="date" 
+                value={startDate} 
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full border-gray-300 rounded-md p-1.5 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 bg-white transition-all shadow-sm"
+              />
+            </div>
+
+            {/* 2. 匯入名單 */}
+            <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 flex flex-col">
+              <label className="flex justify-between items-center text-sm font-bold text-gray-700 mb-1">
+                <span>👥 學生名單</span>
+                <span className="bg-brand-100 text-brand-600 px-2 py-0.5 rounded-full text-xs font-bold">共 {totalStudents} 人</span>
+              </label>
+              <textarea 
+                rows="3" 
+                value={studentsInput}
+                onChange={(e) => setStudentsInput(e.target.value)}
+                placeholder="在此貼上全班名單 (支援換行或逗號分隔)..."
+                className="w-full border-gray-300 rounded-md p-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 bg-white transition-all shadow-sm resize-y"
+              ></textarea>
+            </div>
+
+            {/* 3. 工作設定 */}
+            <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 flex-1 flex flex-col min-h-0">
+              <label className="block text-sm font-bold text-gray-700 mb-1">🧹 打掃工作設定</label>
+              <p className="text-xs text-brand-600 mb-2 font-medium">💡 提示：工作內容文字可自行修改與輸入</p>
+              
+              <div className="flex flex-col gap-2 mb-2">
+                <input 
+                  type="text" 
+                  list="preset-tasks"
+                  value={newTaskName}
+                  onChange={(e) => setNewTaskName(e.target.value)}
+                  placeholder="自訂名稱或選擇預設..."
+                  className="w-full border-gray-300 rounded-md p-1.5 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 shadow-sm"
+                />
+                <datalist id="preset-tasks">
+                  {PRESET_TASKS.map(pt => <option key={pt} value={pt} />)}
+                </datalist>
+                
+                <div className="flex gap-2 items-center">
+                  <span className="text-xs font-medium text-gray-600 whitespace-nowrap">需要:</span>
+                  <input 
+                    type="number" 
+                    min="1" 
+                    value={newTaskCapacity}
+                    onChange={(e) => setNewTaskCapacity(e.target.value)}
+                    className="w-16 border-gray-300 rounded-md p-1.5 text-center text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 shadow-sm"
+                  />
+                  <span className="text-xs font-medium text-gray-600">人</span>
+                  <button 
+                    onClick={handleAddTask}
+                    className="ml-auto bg-green-500 hover:bg-green-600 text-white rounded-md px-3 py-1.5 text-xs font-bold transition-transform active:scale-95 shadow-md flex items-center gap-1"
+                  >
+                    <span>➕</span> 新增
+                  </button>
+                </div>
+              </div>
+
+              {/* 任務列表清單 */}
+              <div className="bg-white border rounded-md p-2 flex-1 overflow-y-auto shadow-inner min-h-[100px]">
+                {tasks.length === 0 ? (
+                  <div className="h-full flex items-center justify-center text-xs text-gray-400">尚未設定任何工作</div>
+                ) : (
+                  tasks.map(t => (
+                    <div key={t.id} className="flex justify-between items-center bg-gray-50 border border-gray-100 rounded p-1.5 mb-1.5 hover:bg-gray-100 transition-colors">
+                      <span className="truncate flex-1 font-bold text-gray-700 text-xs">{t.name}</span>
+                      <span className="bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded text-[10px] font-bold mx-1">{t.capacity} 人</span>
+                      <button onClick={() => handleRemoveTask(t.id)} className="text-red-400 hover:text-red-600 hover:bg-red-50 rounded px-1.5 py-0.5 transition-colors text-xs">✖</button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* 4. 動作按鈕 */}
+            <div className="flex flex-col gap-2 pt-1 shrink-0">
+              <button 
+                onClick={handleRandomAssign}
+                className="w-full bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 text-white rounded-lg py-2.5 font-black text-base shadow-md hover:shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
+              >
+                <span>🎲</span> 一鍵亂數分配
+              </button>
+              <button 
+                onClick={handleExportPDF}
+                className="w-full bg-gray-800 hover:bg-gray-900 text-white rounded-lg py-2 font-bold text-sm shadow-md transition-all active:scale-95 flex items-center justify-center gap-2"
+              >
+                <span>📄</span> 匯出排版為 PDF 存檔
+              </button>
+            </div>
+          </div>
+
+          {/* 右側：互動排版與預覽區 (列印目標) */}
+          <div className="flex-1 overflow-y-auto bg-white rounded-xl drop-shadow-xl border border-gray-200">
+            <div 
+              id="print-area" 
+              className="p-4 md:p-6 min-w-[700px] flex flex-col gap-4 min-h-full"
+            >
+              {/* 標題與統計區 */}
+              <div className="text-center relative border-b border-gray-100 pb-4">
+                <h1 className="text-2xl font-black text-gray-900 mb-2 tracking-widest">班級打掃工作分配表</h1>
+                <div className="inline-block bg-gray-900 text-white px-4 py-1 rounded-full text-xs font-medium tracking-wider shadow-sm mb-3">
+                  實施日期：{startDate ? startDate.replace(/-/g, ' / ') : '____ 年 __ 月 __ 日起'}
+                </div>
+                
+                {/* 狀態統計：總人數與剩餘人數 */}
+                <div className="flex justify-center items-center gap-6 text-sm font-bold bg-gray-50 py-2.5 rounded-lg border border-gray-200 w-max mx-auto px-8 shadow-sm">
+                  <span className="text-gray-700">總人數: {totalStudents} 人</span>
+                  <span className="text-brand-600">已排定: {assignedCount} 人</span>
+                  <span className={unassignedCount > 0 ? "text-red-600 bg-red-100 px-2 py-0.5 rounded-md animate-pulse" : "text-emerald-600"}>
+                    剩餘未排定: {unassignedCount} 人
+                  </span>
+                </div>
+              </div>
+
+              {/* 未分配名單區塊 (置頂顯示，隨時可見誰還沒排) */}
+              {unassignedCount > 0 && (
+                <div className="border-2 border-dashed border-red-300 bg-red-50/60 rounded-xl p-3 shadow-inner">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-base">⚠️</span>
+                    <h3 className="font-bold text-sm text-red-800">尚未排定名單 (請將他們拖曳至下方工作區)：</h3>
+                  </div>
+                  <div 
+                    className="flex flex-wrap gap-2 min-h-[36px]"
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, 'unassigned')}
+                  >
+                    {(assignments.unassigned || []).map(student => (
+                      <div 
+                        key={student}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, student, 'unassigned')}
+                        onDragEnd={handleDragEnd}
+                        onDragOver={handleDragOver}
+                        onDrop={(e) => handleDrop(e, 'unassigned', student)}
+                        className="student-pill bg-white border border-red-200 shadow-sm rounded-md px-2.5 py-1 text-[13px] font-bold text-red-700 cursor-grab flex items-center gap-1 select-none"
+                      >
+                        <span className="text-red-300 cursor-grab text-[10px]">⠿</span>
+                        {student}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 隱藏的退回放置區塊 (當全部排完時提供將名牌退回的地方) */}
+              {unassignedCount === 0 && totalStudents > 0 && (
+                 <div 
+                 className="border-2 border-dashed border-emerald-200 bg-emerald-50/50 rounded-xl p-3 flex justify-center items-center text-emerald-700 text-sm font-bold shadow-inner"
+                 onDragOver={handleDragOver}
+                 onDrop={(e) => handleDrop(e, 'unassigned')}
+               >
+                 ✅ 完美！全數分配完畢。(您仍可將下方名牌拖曳至此處退回未排定狀態)
+               </div>
+              )}
+
+              {/* 工作區塊 Grid (版面縮小，顯示更多格) */}
+              <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {tasks.map(task => {
+                  const assignedStudents = assignments[task.id] || [];
+                  const isFull = assignedStudents.length === task.capacity;
+                  const isOver = assignedStudents.length > task.capacity;
+                  const isUnder = assignedStudents.length < task.capacity;
+
+                  let cardStyle = "border-gray-200 bg-gray-50/50 shadow-sm";
+                  let badgeStyle = "bg-gray-200 text-gray-700 border-gray-300";
+                  
+                  if (isOver) {
+                    cardStyle = "border-red-300 bg-red-50/50 shadow-sm";
+                    badgeStyle = "bg-red-100 text-red-700 border-red-200";
+                  } else if (isFull) {
+                    cardStyle = "border-emerald-300 bg-emerald-50/50 shadow-sm";
+                    badgeStyle = "bg-emerald-100 text-emerald-700 border-emerald-200";
+                  } else if (isUnder && assignedStudents.length > 0) {
+                    cardStyle = "border-blue-300 bg-blue-50/50 shadow-sm";
+                    badgeStyle = "bg-blue-100 text-blue-700 border-blue-200";
+                  }
+
+                  return (
+                    <div 
+                      key={task.id} 
+                      className={`border-2 rounded-xl p-3 flex flex-col transition-all duration-300 ${cardStyle}`}
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDrop(e, task.id)}
+                    >
+                      <div className="flex justify-between items-center mb-2 border-b border-gray-200/60 pb-2">
+                        <h3 className="font-bold text-sm text-gray-800 tracking-wide truncate pr-2" title={task.name}>{task.name}</h3>
+                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap ${badgeStyle}`}>
+                          {assignedStudents.length} / {task.capacity}
+                        </span>
+                      </div>
+
+                      {/* 放置學生的容器 */}
+                      <div className="flex-1 min-h-[48px] flex flex-wrap gap-1.5 content-start">
+                        {assignedStudents.map(student => (
+                          <div 
+                            key={student}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, student, task.id)}
+                            onDragEnd={handleDragEnd}
+                            onDragOver={handleDragOver}
+                            onDrop={(e) => handleDrop(e, task.id, student)}
+                            className="student-pill bg-white border border-gray-200 shadow-sm rounded px-2 py-1 text-[13px] font-bold text-gray-700 cursor-grab flex items-center gap-1 select-none"
+                            title="拖曳以移動，或疊到其他人身上互換位置"
+                          >
+                            <span className="text-gray-300 cursor-grab text-[10px]">⠿</span>
+                            {student}
+                          </div>
+                        ))}
+                        {assignedStudents.length === 0 && (
+                          <div className="w-full text-center text-[11px] font-medium text-gray-400 py-3 border-2 border-dashed border-gray-200 rounded-md bg-white/50 pointer-events-none">
+                            拖曳名牌至此
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+
+<!-- 專屬版權宣告頁尾 (乾淨、單行設計) -->
+    <div class="text-center text-gray-400 text-sm mt-8 mb-4 tracking-wider">
+        &copy; 谷宗芸老師設計 / AI 輔助生成
+    </div>
+
+
+</body>
+</html>
