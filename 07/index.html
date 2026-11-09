@@ -647,7 +647,7 @@
             } else {
                 container.style.width = '1123px';
                 container.style.height = '794px';
-                container.style.padding = '25px 15px'; 
+                container.style.padding = '10px 15px'; // 【修改】大幅縮小上下左右邊界
                 container.style.flexDirection = 'row';
                 container.style.backgroundColor = 'white';
                 container.style.display = 'flex';
@@ -657,22 +657,22 @@
             // 建立單一題目的卡片元件函式
             const createQuestionCard = (q, index) => {
                 const card = document.createElement('div');
-                card.style.border = '2px solid #e5e7eb';
-                card.style.borderRadius = '10px';
-                card.style.padding = '12px 15px';
+                // 【修改】移除獨立圓角框，改為只有右、下邊框，與容器配合形成單一隔線
+                card.style.borderRight = '1px solid #9ca3af';
+                card.style.borderBottom = '1px solid #9ca3af';
+                card.style.padding = '8px 12px'; // 【修改】縮小題目內留白
                 card.style.display = 'flex';
                 card.style.flexDirection = 'column';
                 card.style.overflow = 'hidden';
+                card.style.boxSizing = 'border-box';
 
                 const header = document.createElement('div');
                 header.style.fontSize = '16px';
                 header.style.fontWeight = 'bold';
-                header.style.borderBottom = '1.5px solid #f3f4f6';
-                header.style.paddingBottom = '8px';
-                header.style.marginBottom = '8px';
+                header.style.marginBottom = '4px'; // 【修改】移除底線與多餘的標題留白
                 
                 let answerStr = isAnswerMode ? formatAnswer(q.num1, q.num2, q.precision) : '';
-                header.innerHTML = `<span style="color: #6366f1; margin-right: 6px; font-size: 18px;">(${index + 1})</span> ${q.num1.toString()} &divide; ${q.num2.toString()} = <span style="color: #2563eb; margin-left: 2px;">${answerStr}</span>`;
+                header.innerHTML = `<span style="color: #6366f1; margin-right: 6px; font-size: 16px;">(${index + 1})</span> ${q.num1.toString()} &divide; ${q.num2.toString()} = <span style="color: #2563eb; margin-left: 2px;">${answerStr}</span>`;
                 card.appendChild(header);
 
                 if (isAnswerMode) {
@@ -690,8 +690,8 @@
                     
                     // 驗算區塊
                     const verDiv = document.createElement('div');
-                    verDiv.style.marginTop = '8px';
-                    verDiv.style.padding = '4px 10px';
+                    verDiv.style.marginTop = '6px'; // 稍微縮小間距
+                    verDiv.style.padding = '2px 6px';
                     verDiv.style.border = '1px dashed #93c5fd';
                     verDiv.style.borderRadius = '6px';
                     verDiv.style.backgroundColor = '#eff6ff';
@@ -723,7 +723,7 @@
                     const page = document.createElement('div');
                     page.style.width = '794px';
                     page.style.height = '1123px'; // 強制鎖定 A4 單頁高度
-                    page.style.padding = '30px 40px';
+                    page.style.padding = '15px 25px'; // 【修改】大幅縮小整頁的上下左右邊界
                     page.style.boxSizing = 'border-box';
                     page.style.display = 'flex';
                     page.style.flexDirection = 'column';
@@ -732,19 +732,21 @@
                     // 標題
                     const title = document.createElement('h2');
                     title.style.textAlign = 'center';
-                    title.style.fontSize = '26px';
+                    title.style.fontSize = '18px'; // 【修改】縮小標題字體
                     title.style.fontWeight = 'bold';
-                    title.style.margin = '0 0 25px 0';
+                    title.style.margin = '0 0 10px 0'; // 【修改】縮小標題下方間距
                     title.style.color = '#1f2937';
-                    title.style.letterSpacing = '2px';
+                    title.style.letterSpacing = '1px';
                     title.innerText = isFirstPage ? '除法練習題 (解答卷)' : '除法練習題 (解答卷) - 續';
                     page.appendChild(title);
 
                     const grid = document.createElement('div');
                     grid.style.display = 'grid';
                     grid.style.gridTemplateColumns = '1fr 1fr'; 
-                    grid.style.gridTemplateRows = 'repeat(2, 1fr)'; // 一頁只放 2 列 (共 4 題)，垂直空間超級大
-                    grid.style.gap = '20px 25px'; 
+                    grid.style.gridTemplateRows = 'repeat(2, 1fr)'; // 一頁只放 2 列 (共 4 題)
+                    grid.style.gap = '0'; // 【修改】完全移除題與題之間的空隙
+                    grid.style.borderTop = '1px solid #9ca3af'; // 【新增】搭配卡片形成單線框
+                    grid.style.borderLeft = '1px solid #9ca3af'; // 【新增】搭配卡片形成單線框
                     grid.style.flexGrow = '1'; 
 
                     for (let i = startIndex; i < endIndex; i++) {
@@ -771,23 +773,23 @@
                 container.appendChild(page2);
 
             } else {
-                // 題目版：橫向左右兩半排版 (保持不變)
+                // 題目版：橫向左右兩半排版
                 const buildHalfPage = () => {
                     const half = document.createElement('div');
                     half.style.width = '50%';
                     half.style.height = '100%';
                     half.style.display = 'flex';
                     half.style.flexDirection = 'column';
-                    half.style.padding = '0 30px';
+                    half.style.padding = '0 15px'; // 【修改】縮小左右分半的兩側空白
                     half.style.boxSizing = 'border-box';
 
                     const title = document.createElement('h2');
                     title.style.textAlign = 'center';
-                    title.style.fontSize = '26px';
+                    title.style.fontSize = '18px'; // 【修改】縮小標題字體
                     title.style.fontWeight = 'bold';
-                    title.style.margin = '0 0 25px 0';
+                    title.style.margin = '0 0 10px 0'; // 【修改】縮小標題下方間距
                     title.style.color = '#1f2937';
-                    title.style.letterSpacing = '2px';
+                    title.style.letterSpacing = '1px';
                     title.innerText = '除法練習題 (題目卷)';
                     half.appendChild(title);
 
@@ -795,7 +797,9 @@
                     grid.style.display = 'grid';
                     grid.style.gridTemplateColumns = '1fr 1fr'; 
                     grid.style.gridTemplateRows = 'repeat(4, minmax(0, 1fr))'; 
-                    grid.style.gap = '20px 15px'; 
+                    grid.style.gap = '0'; // 【修改】完全移除題與題之間的空隙
+                    grid.style.borderTop = '1px solid #9ca3af'; // 【新增】搭配卡片形成單線框
+                    grid.style.borderLeft = '1px solid #9ca3af'; // 【新增】搭配卡片形成單線框
                     grid.style.flexGrow = '1'; 
 
                     currentQuestions.forEach((q, index) => {
