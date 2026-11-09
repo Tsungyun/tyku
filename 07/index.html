@@ -217,6 +217,10 @@
         questionTypeSel.addEventListener('change', updateUIConstraints);
 
         function getRandomString(digits) {
+            if (digits === 1) {
+                // 只有一位數時，產生 2~9，避開 1
+                return (Math.floor(Math.random() * 8) + 2).toString();
+            }
             let result = (Math.floor(Math.random() * 9) + 1).toString();
             for (let i = 1; i < digits; i++) {
                 result += Math.floor(Math.random() * 10).toString();
@@ -256,7 +260,7 @@
                     let requiredFactor = num2 / gcdVal; 
                     
                     let minA = 10n ** BigInt(A_digits - 1);
-                    if (A_digits === 1) minA = 1n;
+                    if (A_digits === 1) minA = 2n; // 1位數時避開 1，從 2 開始
                     let maxA = (10n ** BigInt(A_digits)) - 1n;
                     
                     let minK = minA / requiredFactor + (minA % requiredFactor === 0n ? 0n : 1n);
