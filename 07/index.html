@@ -21,13 +21,15 @@
             max-width: 100%;
         }
 
-        /* 隱藏區塊，專門用於在背景建構 PDF 排版 */
+        /* 修正 PDF 隱藏容器：改用 absolute 定位，並在產出前強迫滾動到頂部 */
         #pdf-export-container {
             position: absolute;
-            top: -9999px;
-            left: -9999px;
+            top: 0;
+            left: 0;
             opacity: 0;
             pointer-events: none;
+            z-index: -9999;
+            /* 確保不會被 overflow 限制高度 */
         }
     </style>
 </head>
@@ -309,8 +311,7 @@
             renderQuestionsForWeb();
         }
 
-        // === 修正：精準的數值小數點字串格式化 ===
-        // 將數值根據 precision (P) 正確轉為含小數點的字串，避免錯誤補零
+        // 精準的數值小數點字串格式化
         function formatDecimalStr(val, P) {
             if (P === 0) return val.toString();
             let s = val.toString();
@@ -437,7 +438,6 @@
                      let currCol = offset + row.endIdx;
                      let remText = row.text; 
                      
-                     // 補齊長度，避免高位數被小數點吃掉
                      if (P > 0 && current !== 0n) {
                          remText = remText.padStart(P + 1, '0');
                      }
@@ -635,117 +635,184 @@
             }
         }
         
-        // PDF 版面建構 (現在也會包含驗算過程)
+        // PDF 版面建構 (嚴格約束排版)
         function buildPDFLayout(isAnswerMode) {
             const container = document.createElement('div');
-            container.style.width = '1123px';
-            container.style.height = '794px';
-            container.style.backgroundColor = 'white';
-            container.style.display = 'flex';
-            container.style.flexDirection = 'row';
-            container.style.padding = '25px 15px'; 
-            container.style.boxSizing = 'border-box';
+            
+            // 根據模式決定 A4 方向與尺寸 (解答版: 直向, 題目版: 橫向)
+            if (isAnswerMode) {
+                container.style.width = '794px';
+                container.style.backgroundColor = 'transparent';
+                container.style.display = 'block'; // 解答版改為 block，支援多頁擴張
+            } else {
+                container.style.width = '1123px';
+                container.style.height = '794px';
+                container.style.padding = '25px 15px'; 
+                container.style.flexDirection = 'row';
+                container.style.backgroundColor = 'white';
+                container.style.display = 'flex';
+                container.style.boxSizing = 'border-box';
+            }
+            
+            // 建立單一題目的卡片元件函式
+            const createQuestionCard = (q, index) => {
+                const card = document.createElement('div');
+                card.style.border = '2px solid #e5e7eb';
+                card.style.borderRadius = '10px';
+                card.style.padding = '12px 15px';
+                card.style.display = 'flex';
+                card.style.flexDirection = 'column';
+                card.style.overflow = 'hidden';
 
-            let titleText = '除法練習題' + (isAnswerMode ? ' (解答卷)' : ' (題目卷)');
+                const header = document.createElement('div');
+                header.style.fontSize = '16px';
+                header.style.fontWeight = 'bold';
+                header.style.borderBottom = '1.5px solid #f3f4f6';
+                header.style.paddingBottom = '8px';
+                header.style.marginBottom = '8px';
+                
+                let answerStr = isAnswerMode ? formatAnswer(q.num1, q.num2, q.precision) : '';
+                header.innerHTML = `<span style="color: #6366f1; margin-right: 6px; font-size: 18px;">(${index + 1})</span> ${q.num1.toString()} &divide; ${q.num2.toString()} = <span style="color: #2563eb; margin-left: 2px;">${answerStr}</span>`;
+                card.appendChild(header);
 
-            const buildHalfPage = () => {
-                const half = document.createElement('div');
-                half.style.width = '50%';
-                half.style.height = '100%';
-                half.style.display = 'flex';
-                half.style.flexDirection = 'column';
-                half.style.padding = '0 30px';
-                half.style.boxSizing = 'border-box';
-
-                const title = document.createElement('h2');
-                title.style.textAlign = 'center';
-                title.style.fontSize = '26px';
-                title.style.fontWeight = 'bold';
-                title.style.marginBottom = '25px';
-                title.style.color = '#1f2937';
-                title.style.letterSpacing = '2px';
-                title.innerText = titleText;
-                half.appendChild(title);
-
-                const grid = document.createElement('div');
-                grid.style.display = 'grid';
-                grid.style.gridTemplateColumns = '1fr 1fr'; 
-                grid.style.gridTemplateRows = 'repeat(4, 1fr)'; 
-                grid.style.gap = '20px 15px'; 
-                grid.style.flexGrow = '1'; 
-
-                currentQuestions.forEach((q, index) => {
-                    const card = document.createElement('div');
-                    card.style.border = '2px solid #e5e7eb';
-                    card.style.borderRadius = '10px';
-                    card.style.padding = '12px 15px';
-                    card.style.display = 'flex';
-                    card.style.flexDirection = 'column';
-
-                    const header = document.createElement('div');
-                    header.style.fontSize = '16px';
-                    header.style.fontWeight = 'bold';
-                    header.style.borderBottom = '1.5px solid #f3f4f6';
-                    header.style.paddingBottom = '8px';
-                    header.style.marginBottom = '8px';
+                if (isAnswerMode) {
+                    const answerDiv = document.createElement('div');
+                    answerDiv.style.display = 'flex';
+                    answerDiv.style.flexDirection = 'column'; 
+                    answerDiv.style.justifyContent = 'flex-start';
+                    answerDiv.style.alignItems = 'center';
+                    answerDiv.style.flexGrow = '1';
                     
-                    let answerStr = isAnswerMode ? formatAnswer(q.num1, q.num2, q.precision) : '';
-                    header.innerHTML = `<span style="color: #6366f1; margin-right: 6px; font-size: 18px;">(${index + 1})</span> ${q.num1.toString()} &divide; ${q.num2.toString()} = <span style="color: #2563eb; margin-left: 2px;">${answerStr}</span>`;
-                    card.appendChild(header);
-
-                    if (isAnswerMode) {
-                        const answerDiv = document.createElement('div');
-                        answerDiv.style.display = 'flex';
-                        answerDiv.style.flexDirection = 'column'; // 改成直列排版以容納驗算
-                        answerDiv.style.justifyContent = 'flex-start';
-                        answerDiv.style.alignItems = 'center';
-                        answerDiv.style.flexGrow = '1';
-                        
-                        // 直式計算
-                        const mathDiv = document.createElement('div');
-                        mathDiv.innerHTML = generateVerticalDivisionHTML(q, true);
-                        answerDiv.appendChild(mathDiv);
-                        
-                        // 驗算區塊 (客製化 PDF 行內樣式)
-                        const verDiv = document.createElement('div');
-                        verDiv.style.marginTop = '8px';
-                        verDiv.style.padding = '4px 10px';
-                        verDiv.style.border = '1px dashed #93c5fd';
-                        verDiv.style.borderRadius = '6px';
-                        verDiv.style.backgroundColor = '#eff6ff';
-                        verDiv.style.fontSize = '12px';
-                        verDiv.style.fontFamily = 'monospace';
-                        verDiv.style.textAlign = 'center';
-                        
-                        let P = q.precision;
-                        let mult = 10n ** BigInt(P);
-                        let dividend = q.num1 * mult;
-                        let correctQ = dividend / q.num2;
-                        let correctR = dividend % q.num2;
-                        
-                        verDiv.innerHTML = `<div style="font-weight:bold; color:#1d4ed8; margin-bottom:2px;">【驗算】</div>
-                        <div>${q.num2.toString()} &times; ${formatDecimalStr(correctQ, P)} = ${formatDecimalStr(correctQ * q.num2, P)}</div>`;
-                        if (correctR !== 0n) {
-                            verDiv.innerHTML += `<div>${formatDecimalStr(correctQ * q.num2, P)} + <span style="color:#2563eb; font-weight:bold;">${formatDecimalStr(correctR, P)}</span> = ${formatDecimalStr(dividend, P)}</div>`;
-                        }
-                        
-                        answerDiv.appendChild(verDiv);
-                        card.appendChild(answerDiv);
+                    // 直式計算
+                    const mathDiv = document.createElement('div');
+                    mathDiv.innerHTML = generateVerticalDivisionHTML(q, true);
+                    answerDiv.appendChild(mathDiv);
+                    
+                    // 驗算區塊
+                    const verDiv = document.createElement('div');
+                    verDiv.style.marginTop = '8px';
+                    verDiv.style.padding = '4px 10px';
+                    verDiv.style.border = '1px dashed #93c5fd';
+                    verDiv.style.borderRadius = '6px';
+                    verDiv.style.backgroundColor = '#eff6ff';
+                    verDiv.style.fontSize = '12px';
+                    verDiv.style.fontFamily = 'monospace';
+                    verDiv.style.textAlign = 'center';
+                    
+                    let P = q.precision;
+                    let mult = 10n ** BigInt(P);
+                    let dividend = q.num1 * mult;
+                    let correctQ = dividend / q.num2;
+                    let correctR = dividend % q.num2;
+                    
+                    verDiv.innerHTML = `<div style="font-weight:bold; color:#1d4ed8; margin-bottom:2px;">【驗算】</div>
+                    <div>${q.num2.toString()} &times; ${formatDecimalStr(correctQ, P)} = ${formatDecimalStr(correctQ * q.num2, P)}</div>`;
+                    if (correctR !== 0n) {
+                        verDiv.innerHTML += `<div>${formatDecimalStr(correctQ * q.num2, P)} + <span style="color:#2563eb; font-weight:bold;">${formatDecimalStr(correctR, P)}</span> = ${formatDecimalStr(dividend, P)}</div>`;
                     }
-
-                    grid.appendChild(card);
-                });
-
-                half.appendChild(grid);
-                return half;
+                    
+                    answerDiv.appendChild(verDiv);
+                    card.appendChild(answerDiv);
+                }
+                return card;
             };
 
-            const leftHalf = buildHalfPage();
-            const rightHalf = buildHalfPage();
-            rightHalf.style.borderLeft = '2px dashed #9ca3af';
+            if (isAnswerMode) {
+                // 解答版：強制分成兩頁 (每頁 4 題)，徹底避免被裁切
+                const createPage = (startIndex, endIndex, isFirstPage) => {
+                    const page = document.createElement('div');
+                    page.style.width = '794px';
+                    page.style.height = '1123px'; // 強制鎖定 A4 單頁高度
+                    page.style.padding = '30px 40px';
+                    page.style.boxSizing = 'border-box';
+                    page.style.display = 'flex';
+                    page.style.flexDirection = 'column';
+                    page.style.backgroundColor = 'white';
+                    
+                    // 標題
+                    const title = document.createElement('h2');
+                    title.style.textAlign = 'center';
+                    title.style.fontSize = '26px';
+                    title.style.fontWeight = 'bold';
+                    title.style.margin = '0 0 25px 0';
+                    title.style.color = '#1f2937';
+                    title.style.letterSpacing = '2px';
+                    title.innerText = isFirstPage ? '除法練習題 (解答卷)' : '除法練習題 (解答卷) - 續';
+                    page.appendChild(title);
 
-            container.appendChild(leftHalf);
-            container.appendChild(rightHalf);
+                    const grid = document.createElement('div');
+                    grid.style.display = 'grid';
+                    grid.style.gridTemplateColumns = '1fr 1fr'; 
+                    grid.style.gridTemplateRows = 'repeat(2, 1fr)'; // 一頁只放 2 列 (共 4 題)，垂直空間超級大
+                    grid.style.gap = '20px 25px'; 
+                    grid.style.flexGrow = '1'; 
+
+                    for (let i = startIndex; i < endIndex; i++) {
+                        if (currentQuestions[i]) {
+                            grid.appendChild(createQuestionCard(currentQuestions[i], i));
+                        }
+                    }
+                    
+                    page.appendChild(grid);
+                    return page;
+                };
+
+                // 建立第一頁 (第 1~4 題)
+                const page1 = createPage(0, 4, true);
+                container.appendChild(page1);
+
+                // 加入 html2pdf 內建的換頁符號
+                const pageBreak = document.createElement('div');
+                pageBreak.className = 'html2pdf__page-break';
+                container.appendChild(pageBreak);
+
+                // 建立第二頁 (第 5~8 題)
+                const page2 = createPage(4, 8, false);
+                container.appendChild(page2);
+
+            } else {
+                // 題目版：橫向左右兩半排版 (保持不變)
+                const buildHalfPage = () => {
+                    const half = document.createElement('div');
+                    half.style.width = '50%';
+                    half.style.height = '100%';
+                    half.style.display = 'flex';
+                    half.style.flexDirection = 'column';
+                    half.style.padding = '0 30px';
+                    half.style.boxSizing = 'border-box';
+
+                    const title = document.createElement('h2');
+                    title.style.textAlign = 'center';
+                    title.style.fontSize = '26px';
+                    title.style.fontWeight = 'bold';
+                    title.style.margin = '0 0 25px 0';
+                    title.style.color = '#1f2937';
+                    title.style.letterSpacing = '2px';
+                    title.innerText = '除法練習題 (題目卷)';
+                    half.appendChild(title);
+
+                    const grid = document.createElement('div');
+                    grid.style.display = 'grid';
+                    grid.style.gridTemplateColumns = '1fr 1fr'; 
+                    grid.style.gridTemplateRows = 'repeat(4, minmax(0, 1fr))'; 
+                    grid.style.gap = '20px 15px'; 
+                    grid.style.flexGrow = '1'; 
+
+                    currentQuestions.forEach((q, index) => {
+                        grid.appendChild(createQuestionCard(q, index));
+                    });
+
+                    half.appendChild(grid);
+                    return half;
+                };
+
+                const leftHalf = buildHalfPage();
+                const rightHalf = buildHalfPage();
+                rightHalf.style.borderLeft = '2px dashed #9ca3af';
+
+                container.appendChild(leftHalf);
+                container.appendChild(rightHalf);
+            }
 
             return container;
         }
@@ -760,26 +827,43 @@
             const layout = buildPDFLayout(isAnswerMode);
             pdfExportContainer.appendChild(layout);
 
+            const pdfWidth = isAnswerMode ? 794 : 1123;
+            const pdfHeight = isAnswerMode ? 1123 : 794;
+            const pdfOrientation = isAnswerMode ? 'portrait' : 'landscape';
+
             const opt = {
-                margin:       0, 
+                margin:       0, // 改為 0，因我們的 page 容器內部已經寫死 padding
                 filename:     isAnswerMode ? '除法練習題_解答版.pdf' : '除法練習題_題目版.pdf',
                 image:        { type: 'jpeg', quality: 0.98 },
-                html2canvas:  { scale: 2, useCORS: true, logging: false },
-                jsPDF:        { unit: 'px', format: [1123, 794], orientation: 'landscape' } 
+                html2canvas:  { 
+                    scale: 2, 
+                    useCORS: true, 
+                    logging: false,
+                    scrollY: 0, 
+                    scrollX: 0
+                },
+                jsPDF:        { unit: 'px', format: [pdfWidth, pdfHeight], orientation: pdfOrientation },
+                pagebreak:    { mode: ['css', 'legacy'] } // 啟用內建的標籤分頁機制
             };
+
+            const originalScrollY = window.scrollY;
+            const originalScrollX = window.scrollX;
+            window.scrollTo(0, 0);
 
             setTimeout(() => {
                 html2pdf().set(opt).from(layout).save().then(() => {
                     pdfExportContainer.innerHTML = '';
                     btn.innerHTML = originalText;
                     btn.disabled = false;
+                    window.scrollTo(originalScrollX, originalScrollY); 
                 }).catch(err => {
                     console.error("PDF Generate Error", err);
                     btn.innerHTML = originalText;
                     btn.disabled = false;
+                    window.scrollTo(originalScrollX, originalScrollY); 
                     alert("匯出 PDF 時發生錯誤，請重試。"); 
                 });
-            }, 300);
+            }, 500); 
         }
 
         // 綁定事件
