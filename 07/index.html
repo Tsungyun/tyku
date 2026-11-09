@@ -233,7 +233,7 @@
             return a;
         }
 
-        function generateDivisionQuestion(usedNumbers) {
+        function generateDivisionQuestion(usedDividends, usedDivisors) {
             let A_digits = parseInt(dividendSel.value);
             let B_digits = parseInt(divisorSel.value);
             let sizeRel = sizeRelationSel.value;
@@ -285,26 +285,33 @@
                 if (sizeRel === 'gt' && num1 <= num2) continue;
                 if (sizeRel === 'lt' && num1 >= num2) continue;
                 
-                let pairKey = num1.toString() + "/" + num2.toString();
-                if (usedNumbers.has(pairKey)) {
-                    if (attempts < 40000) continue; 
+                let strA = num1.toString();
+                let strB = num2.toString();
+                
+                // 確保八題的被除數與除數都不會重複出現
+                if (usedDividends.has(strA) || usedDivisors.has(strB)) {
+                    if (attempts < 45000) continue; // 前 45000 次嘗試嚴格要求不重複，避免無解的極端設定導致卡死
                 }
                 
-                usedNumbers.add(pairKey);
+                usedDividends.add(strA);
+                usedDivisors.add(strB);
                 return { num1, num2, precision: prec };
             }
             
-            let fallbackA = 10n * (10n ** BigInt(prec));
-            let fallbackB = 2n;
+            let fallbackA = 10n * (10n ** BigInt(prec)) + BigInt(usedDividends.size);
+            let fallbackB = 2n + BigInt(usedDivisors.size);
+            usedDividends.add(fallbackA.toString());
+            usedDivisors.add(fallbackB.toString());
             return { num1: fallbackA, num2: fallbackB, precision: prec };
         }
 
         function generateQuestions() {
             currentQuestions = [];
-            let usedNumbers = new Set();
+            let usedDividends = new Set();
+            let usedDivisors = new Set();
             
             for (let i = 0; i < 8; i++) {
-                currentQuestions.push(generateDivisionQuestion(usedNumbers));
+                currentQuestions.push(generateDivisionQuestion(usedDividends, usedDivisors));
             }
             
             answersShown = false;
