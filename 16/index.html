@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>全等三角形(旋轉) - 練習卷產生器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 基礎設定與字體 */
+        body {
+            font-family: 'BiauKai', 'DFKai-SB', 'KaiTi', 'Times New Roman', serif;
+            background-color: #f3f4f6;
+            margin: 0;
+            padding: 0;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        /* 數學符號上橫線 (表示線段) */
+        .overline {
+            text-decoration: overline;
+        }
+
+        /* 空格與解答顯示邏輯 */
+        .ans {
+            color: transparent;
+            min-width: 24px;
+            display: inline-block;
+            text-align: center;
+            font-weight: bold;
+            font-family: sans-serif; /* 答案使用黑體較清晰 */
+        }
+        
+        .answer-mode .ans {
+            color: #ef4444; /* Tailwind red-500 */
+        }
+        
+        .answer-mode .overline-ans {
+            text-decoration: overline;
+        }
+
+        /* 頁面與列印排版 */
+        .page-container {
+            width: 297mm;
+            height: 210mm;
+            background: white;
+            margin: 0 auto;
+            display: flex;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            overflow: hidden;
+        }
+
+        .half-page {
+            width: 50%;
+            height: 100%;
+            padding: 12mm 15mm;
+            box-sizing: border-box;
+        }
+
+        .left-half {
+            border-right: 1px dashed #999;
+        }
+
+        /* 當切換為解答模式時，隱藏右半部，並讓左半部置中 (單頁 A4) */
+        .answer-mode .right-half {
+            display: none;
+        }
+        
+        .answer-mode .left-half {
+            width: 100%;
+            max-width: 50%;
+            margin: 0 auto;
+            border-right: none;
+        }
+
+        /* 列印專用樣式 */
+        @media print {
+            @page {
+                size: A4 landscape;
+                margin: 0;
+            }
+            body {
+                background: white;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .page-container {
+                box-shadow: none;
+                width: 100%;
+                height: 100%;
+            }
+            .print-padding {
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
+            }
+        }
+
+        .problem-block {
+            break-inside: avoid;
+        }
+        
+        svg {
+            display: block;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body class="print-padding pt-20 pb-10">
+
+    <!-- 控制面板 (列印時隱藏) -->
+    <div class="fixed top-0 left-0 w-full bg-slate-800 p-4 flex gap-4 justify-center shadow-lg no-print z-50">
+        <button onclick="generateAll()" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded shadow transition">
+            重新出題 (隨機)
+        </button>
+        <button onclick="toggleAnswers()" id="ans-btn" class="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2 px-4 rounded shadow transition">
+            顯示解答版
+        </button>
+        <button onclick="window.print()" class="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 px-4 rounded shadow transition">
+            列印 / 輸出 PDF
+        </button>
+    </div>
+
+    <!-- A4 畫布區 -->
+    <div id="page" class="page-container">
+        <!-- 左半部 (題目卷/解答卷) -->
+        <div class="half-page left-half" id="pane-left">
+            <!-- 內容由 JS 動態生成 -->
+        </div>
+        
+        <!-- 右半部 (供裁切用之重複題目卷) -->
+        <div class="half-page right-half" id="pane-right">
+            <!-- 內容由 JS 動態複製左半部 -->
+        </div>
+    </div>
+
+    <script>
+        // 確保線段字母順序為字母表順序，符合一般數學書寫習慣
+        const sortEdge = (e) => e.split('').sort().join('');
+
+        // 產生單一題目的資料與幾何參數
+        function generateProblemData(index) {
+            // 隨機產生三個角度，確保畫出來是個合理的三角形 (類似原圖的不等邊三角形)
+            let a1 = (150 + Math.random() * 30) * Math.PI / 180;
+            let a2 = (250 + Math.random() * 40) * Math.PI / 180;
+            let a3 = (10 + Math.random() * 30) * Math.PI / 180;
+
+            let r1 = 35 + Math.random() * 10;
+            let r2 = 25 + Math.random() * 10;
+            let r3 = 45 + Math.random() * 10;
+
+            // 針對形心的相對座標
+            let relA = { x: r1 * Math.cos(a1), y: r1 * Math.sin(a1) };
+            let relB = { x: r2 * Math.cos(a2), y: r2 * Math.sin(a2) };
+            let relC = { x: r3 * Math.cos(a3), y: r3 * Math.sin(a3) };
+
+            // 甲圖的中心點設在 (70, 65)
+            let cx1 = 70, cy1 = 65;
+            let pA = { x: cx1 + relA.x, y: cy1 + relA.y };
+            let pB = { x: cx1 + relB.x, y: cy1 + relB.y };
+            let pC = { x: cx1 + relC.x, y: cy1 + relC.y };
+
+            // 隨機旋轉角度 (120度 ~ 240度)
+            let rot = (120 + Math.random() * 120) * Math.PI / 180;
+            let rotPt = (p) => ({
+                x: p.x * Math.cos(rot) - p.y * Math.sin(rot),
+                y: p.x * Math.sin(rot) + p.y * Math.cos(rot)
+            });
+
+            let rA = rotPt(relA);
+            let rB = rotPt(relB);
+            let rC = rotPt(relC);
+
+            // 乙圖的中心點設在 (240, 65)
+            let cx2 = 240, cy2 = 65;
+            let pA2 = { x: cx2 + rA.x, y: cy2 + rA.y };
+            let pB2 = { x: cx2 + rB.x, y: cy2 + rB.y };
+            let pC2 = { x: cx2 + rC.x, y: cy2 + rC.y };
+
+            // 隨機對應頂點標籤 (D, E, F 打亂)
+            let labels2 = ['D', 'E', 'F'];
+            labels2.sort(() => Math.random() - 0.5);
+            
+            // 對應關係 M (Map) 與 R (Reverse Map)
+            let M = { 'A': labels2[0], 'B': labels2[1], 'C': labels2[2] };
+            let R = { [labels2[0]]: 'A', [labels2[1]]: 'B', [labels2[2]]: 'C' };
+
+            // 取出各頂點物件
+            let pts2 = {
+                [labels2[0]]: { pt: pA2, rel: rA },
+                [labels2[1]]: { pt: pB2, rel: rB },
+                [labels2[2]]: { pt: pC2, rel: rC }
+            };
+
+            // 隨機產生題目數值
+            let vertices = ['A', 'B', 'C'];
+            
+            // 題目給定角度
+            let givenAngleVertex = vertices[Math.floor(Math.random() * 3)];
+            let givenAngleVal = Math.floor(Math.random() * 85) + 15; // 15度 到 100度
+
+            // 題目給定線段1 (甲圖)
+            let edges1 = ['AB', 'BC', 'CA'];
+            let givenSide1Edge = sortEdge(edges1[Math.floor(Math.random() * 3)]);
+            let givenSide1Val = (Math.random() * 6 + 3).toFixed(1); // 3.0 ~ 9.0 公分
+
+            // 題目給定線段2 (乙圖) - 確保不是給定線段1的對應邊
+            let corrEdge1 = sortEdge(M[givenSide1Edge[0]] + M[givenSide1Edge[1]]);
+            let edges2 = ['DE', 'EF', 'FD'].map(sortEdge);
+            let validEdges2 = edges2.filter(e => e !== corrEdge1);
+            let givenSide2Edge = validEdges2[Math.floor(Math.random() * validEdges2.length)];
+            let givenSide2Val = (Math.random() * 6 + 2).toFixed(1); // 2.0 ~ 8.0 公分
+
+            // 第1題的提示與空缺
+            let hintVertex = vertices[Math.floor(Math.random() * 3)];
+            let otherVertices = vertices.filter(v => v !== hintVertex);
+
+            // 第3題的反推對應邊
+            let corrSide2 = sortEdge(R[givenSide2Edge[0]] + R[givenSide2Edge[1]]);
+            let corrSide1 = corrEdge1;
+
+            // 第4題的目標
+            let q4Vertices = [...vertices].sort(() => Math.random() - 0.5).slice(0, 2);
+            let q4Edge = edges2[Math.floor(Math.random() * edges2.length)]; // 隨機乙圖邊
+            let corrQ4Edge = sortEdge(R[q4Edge[0]] + R[q4Edge[1]]); // 對應的甲圖邊
+
+            return {
+                index,
+                pA, pB, pC, relA, relB, relC,
+                cx1, cy1, cx2, cy2,
+                pts2, M, R,
+                givenAngleVertex, givenAngleVal,
+                givenSide1Edge, givenSide1Val,
+                givenSide2Edge, givenSide2Val,
+                hintVertex, otherVertices,
+                corrSide2, corrSide1,
+                q4Vertices, q4Edge, corrQ4Edge
+            };
+        }
+
+        // 生成 SVG 圖形
+        function generateSVG(p) {
+            // 計算標籤位置的輔助函數 (根據相對向量往外推)
+            const getLab = (pt, rel, offset = 16) => {
+                let len = Math.hypot(rel.x, rel.y);
+                return { x: pt.x + (rel.x / len) * offset, y: pt.y + (rel.y / len) * offset };
+            };
+
+            let lA = getLab(p.pA, p.relA);
+            let lB = getLab(p.pB, p.relB);
+            let lC = getLab(p.pC, p.relC);
+
+            let lD = getLab(p.pts2['D'].pt, p.pts2['D'].rel);
+            let lE = getLab(p.pts2['E'].pt, p.pts2['E'].rel);
+            let lF = getLab(p.pts2['F'].pt, p.pts2['F'].rel);
+
+            return `
+            <svg viewBox="0 0 310 130" class="w-full h-full">
+                <!-- 甲圖 -->
+                <polygon points="${p.pA.x},${p.pA.y} ${p.pB.x},${p.pB.y} ${p.pC.x},${p.pC.y}" fill="none" stroke="#333" stroke-width="1.5" stroke-linejoin="round"/>
+                <text x="${p.cx1}" y="${p.cy1}" text-anchor="middle" dominant-baseline="middle" font-size="14" fill="#555">甲</text>
+                <text x="${lA.x}" y="${lA.y}" text-anchor="middle" dominant-baseline="middle" font-size="14">A</text>
+                <text x="${lB.x}" y="${lB.y}" text-anchor="middle" dominant-baseline="middle" font-size="14">B</text>
+                <text x="${lC.x}" y="${lC.y}" text-anchor="middle" dominant-baseline="middle" font-size="14">C</text>
+
+                <!-- 乙圖 -->
+                <polygon points="${p.pts2['D'].pt.x},${p.pts2['D'].pt.y} ${p.pts2['E'].pt.x},${p.pts2['E'].pt.y} ${p.pts2['F'].pt.x},${p.pts2['F'].pt.y}" fill="none" stroke="#333" stroke-width="1.5" stroke-linejoin="round"/>
+                <text x="${p.cx2}" y="${p.cy2}" text-anchor="middle" dominant-baseline="middle" font-size="14" fill="#555">乙</text>
+                <text x="${lD.x}" y="${lD.y}" text-anchor="middle" dominant-baseline="middle" font-size="14">D</text>
+                <text x="${lE.x}" y="${lE.y}" text-anchor="middle" dominant-baseline="middle" font-size="14">E</text>
+                <text x="${lF.x}" y="${lF.y}" text-anchor="middle" dominant-baseline="middle" font-size="14">F</text>
+            </svg>
+            `;
+        }
+
+        // 將生成的資料組合成 HTML 結構
+        function buildPaneHTML() {
+            const problems = [1, 2, 3, 4].map(i => generateProblemData(i));
+            
+            let html = `
+                <div class="flex justify-between items-end mb-3 border-b-2 border-black pb-2">
+                    <h1 class="text-lg font-bold tracking-widest">全等三角形(旋轉) 練習卷</h1>
+                    <div class="text-[11pt] tracking-widest">姓名：___________ 座號：___ 分數：_______</div>
+                </div>
+            `;
+            
+            problems.forEach(p => {
+                html += `
+                    <div class="mb-4 problem-block">
+                        <div class="flex items-start text-[11pt] mb-1 leading-snug">
+                            <span class="inline-block bg-slate-700 text-white rounded-full min-w-[20px] h-5 text-center leading-5 mr-2 text-sm italic font-serif flex-shrink-0">${p.index}</span>
+                            <span>旋轉甲圖後，可以和乙圖完全疊合。&ang;${p.givenAngleVertex} 是 ${p.givenAngleVal}&deg;，<span class="overline">${p.givenSide1Edge}</span> 是 ${p.givenSide1Val} 公分，<span class="overline">${p.givenSide2Edge}</span> 是 ${p.givenSide2Val} 公分：</span>
+                        </div>
+                        
+                        <div class="h-[105px] w-full">
+                            ${generateSVG(p)}
+                        </div>
+                        
+                        <div class="pl-7 space-y-1.5 text-[11pt] tracking-wide">
+                            <p>1. &ang;${p.hintVertex} 的對應角是 &ang;${p.M[p.hintVertex]}，&ang;${p.otherVertices[0]} 的對應角是 (&nbsp;<span class="ans">${p.M[p.otherVertices[0]]}</span>&nbsp;)，<br>&nbsp;&nbsp;&nbsp;&nbsp;&ang;${p.otherVertices[1]} 的對應角是 (&nbsp;<span class="ans">${p.M[p.otherVertices[1]]}</span>&nbsp;)。</p>
+                            <p>2. &ang;${p.M[p.givenAngleVertex]} 是 (&nbsp;<span class="ans">${p.givenAngleVal}</span>&nbsp;) 度。</p>
+                            <p>3. <span class="overline">${p.corrSide2}</span> 是 (&nbsp;<span class="ans">${p.givenSide2Val}</span>&nbsp;) 公分，<span class="overline">${p.corrSide1}</span> 是 (&nbsp;<span class="ans">${p.givenSide1Val}</span>&nbsp;) 公分。</p>
+                            <p>4. 點 ${p.q4Vertices[0]} 的對應點是點 (&nbsp;<span class="ans">${p.M[p.q4Vertices[0]]}</span>&nbsp;)，點 ${p.q4Vertices[1]} 的對應點是點<br>&nbsp;&nbsp;&nbsp;&nbsp;(&nbsp;<span class="ans">${p.M[p.q4Vertices[1]]}</span>&nbsp;)，<span class="overline">${p.q4Edge}</span> 的對應邊是 (&nbsp;<span class="ans overline-ans">${p.corrQ4Edge}</span>&nbsp;)。</p>
+                        </div>
+                    </div>
+                `;
+            });
+            return html;
+        }
+
+        // 初始化與重新出題
+        function generateAll() {
+            const paneHTML = buildPaneHTML();
+            
+            // 左邊寫入內容
+            document.getElementById('pane-left').innerHTML = paneHTML;
+            // 右邊直接複製左邊內容，讓左右一樣供裁切
+            document.getElementById('pane-right').innerHTML = paneHTML;
+        }
+
+        // 切換解答模式
+        function toggleAnswers() {
+            const page = document.getElementById('page');
+            const btn = document.getElementById('ans-btn');
+            
+            if (page.classList.contains('answer-mode')) {
+                page.classList.remove('answer-mode');
+                btn.innerHTML = '顯示解答版';
+                btn.classList.replace('bg-orange-500', 'bg-emerald-500');
+                btn.classList.replace('hover:bg-orange-600', 'hover:bg-emerald-600');
+            } else {
+                page.classList.add('answer-mode');
+                btn.innerHTML = '隱藏解答版 (回到題目)';
+                btn.classList.replace('bg-emerald-500', 'bg-orange-500');
+                btn.classList.replace('hover:bg-emerald-600', 'hover:bg-orange-600');
+            }
+        }
+
+        // 頁面載入時先出一次題
+        window.onload = () => {
+            generateAll();
+        };
+    </script>
+</body>
+</html>
