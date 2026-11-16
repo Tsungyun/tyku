@@ -50,6 +50,16 @@
             text-decoration: overline;
         }
 
+        /* 答對與答錯樣式 */
+        .blank-input.correct {
+            color: #16a34a !important; /* 綠色 */
+            border-bottom-color: #16a34a !important;
+        }
+        .blank-input.incorrect {
+            color: #dc2626 !important; /* 紅色 */
+            border-bottom-color: #dc2626 !important;
+        }
+
         /* 網頁版排版 */
         @media screen {
             #print-container {
@@ -60,7 +70,7 @@
                 gap: 1.5rem;
                 padding: 1rem;
                 padding-top: 5rem; /* 閃避上方固定按鈕 */
-                padding-bottom: 18rem; /* 閃避下方小鍵盤 */
+                padding-bottom: 8rem; /* 閃避下方縮小後的小鍵盤 */
             }
             .problem-block {
                 background: white;
@@ -132,28 +142,36 @@
             margin: 0 auto;
         }
 
-        /* 小鍵盤動畫 */
+        /* 小鍵盤動畫與縮小懸浮樣式 */
         #keypad {
-            transition: transform 0.3s ease-in-out;
-            transform: translateY(100%);
+            position: fixed;
+            bottom: 1rem;
+            left: 50%;
+            transform: translate(-50%, 150%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            width: 320px;
+            border-radius: 0.75rem;
         }
         #keypad.show {
-            transform: translateY(0);
+            transform: translate(-50%, 0);
         }
     </style>
 </head>
 <body class="bg-gray-100">
 
     <!-- 控制面板 (列印時隱藏) -->
-    <div class="fixed top-0 left-0 w-full bg-slate-800 p-3 flex gap-3 justify-center shadow-lg no-print z-50 flex-wrap">
-        <button onclick="generateAll()" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded shadow transition text-sm">
-            重新出題 (隨機4題)
+    <div class="fixed top-0 left-0 w-full bg-slate-800 p-3 flex gap-2 justify-center shadow-lg no-print z-50 flex-wrap">
+        <button onclick="generateAll()" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1.5 px-3 rounded shadow transition text-sm">
+            重新出題
         </button>
-        <button onclick="toggleAnswers()" id="ans-btn" class="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-2 px-4 rounded shadow transition text-sm">
+        <button onclick="checkAnswers()" class="bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-1.5 px-3 rounded shadow transition text-sm">
+            核對答案
+        </button>
+        <button onclick="toggleAnswers()" id="ans-btn" class="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-1.5 px-3 rounded shadow transition text-sm">
             顯示解答版
         </button>
-        <button onclick="window.print()" class="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-2 px-4 rounded shadow transition text-sm">
-            輸出 PDF (A4橫向)
+        <button onclick="window.print()" class="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-1.5 px-3 rounded shadow transition text-sm">
+            輸出 PDF
         </button>
     </div>
 
@@ -164,37 +182,36 @@
         </div>
     </div>
 
-    <!-- 虛擬小鍵盤 (預設隱藏) -->
-    <div id="keypad" class="fixed bottom-0 left-0 w-full bg-gray-200 border-t border-gray-300 shadow-[0_-4px_6px_rgba(0,0,0,0.1)] p-2 no-print z-50">
-        <div class="max-w-md mx-auto">
-            <div class="flex justify-between items-center mb-2 px-1">
-                <span class="text-sm font-bold text-gray-600">小鍵盤作答區</span>
-                <button onclick="closeKeypad()" class="text-red-500 font-bold px-3 py-1 bg-red-100 rounded hover:bg-red-200">關閉</button>
-            </div>
-            <div class="grid grid-cols-5 gap-2">
-                <!-- 數字鍵 -->
-                <button onclick="typeChar('1')" class="bg-white py-3 rounded shadow font-bold text-lg hover:bg-gray-50">1</button>
-                <button onclick="typeChar('2')" class="bg-white py-3 rounded shadow font-bold text-lg hover:bg-gray-50">2</button>
-                <button onclick="typeChar('3')" class="bg-white py-3 rounded shadow font-bold text-lg hover:bg-gray-50">3</button>
-                <button onclick="typeChar('A')" class="bg-blue-100 py-3 rounded shadow font-bold text-lg hover:bg-blue-200 text-blue-700">A</button>
-                <button onclick="typeChar('D')" class="bg-blue-100 py-3 rounded shadow font-bold text-lg hover:bg-blue-200 text-blue-700">D</button>
+    <!-- 虛擬小鍵盤 (縮小懸浮版) -->
+    <div id="keypad" class="bg-gray-200/95 backdrop-blur border border-gray-300 shadow-2xl p-2.5 no-print z-50">
+        <div class="flex justify-between items-center mb-1.5 px-1">
+            <span class="text-xs font-bold text-gray-600">作答小鍵盤</span>
+            <button onclick="closeKeypad()" class="text-red-500 font-bold px-2 py-0.5 text-xs bg-red-100 rounded hover:bg-red-200">隱藏</button>
+        </div>
+        <div class="grid grid-cols-5 gap-1">
+            <!-- 數字鍵 -->
+            <button onclick="typeChar('1')" class="bg-white py-1.5 rounded shadow-sm font-bold text-sm hover:bg-gray-50">1</button>
+            <button onclick="typeChar('2')" class="bg-white py-1.5 rounded shadow-sm font-bold text-sm hover:bg-gray-50">2</button>
+            <button onclick="typeChar('3')" class="bg-white py-1.5 rounded shadow-sm font-bold text-sm hover:bg-gray-50">3</button>
+            <button onclick="typeChar('A')" class="bg-blue-100 py-1.5 rounded shadow-sm font-bold text-sm hover:bg-blue-200 text-blue-700">A</button>
+            <button onclick="typeChar('D')" class="bg-blue-100 py-1.5 rounded shadow-sm font-bold text-sm hover:bg-blue-200 text-blue-700">D</button>
 
-                <button onclick="typeChar('4')" class="bg-white py-3 rounded shadow font-bold text-lg hover:bg-gray-50">4</button>
-                <button onclick="typeChar('5')" class="bg-white py-3 rounded shadow font-bold text-lg hover:bg-gray-50">5</button>
-                <button onclick="typeChar('6')" class="bg-white py-3 rounded shadow font-bold text-lg hover:bg-gray-50">6</button>
-                <button onclick="typeChar('B')" class="bg-blue-100 py-3 rounded shadow font-bold text-lg hover:bg-blue-200 text-blue-700">B</button>
-                <button onclick="typeChar('E')" class="bg-blue-100 py-3 rounded shadow font-bold text-lg hover:bg-blue-200 text-blue-700">E</button>
+            <button onclick="typeChar('4')" class="bg-white py-1.5 rounded shadow-sm font-bold text-sm hover:bg-gray-50">4</button>
+            <button onclick="typeChar('5')" class="bg-white py-1.5 rounded shadow-sm font-bold text-sm hover:bg-gray-50">5</button>
+            <button onclick="typeChar('6')" class="bg-white py-1.5 rounded shadow-sm font-bold text-sm hover:bg-gray-50">6</button>
+            <button onclick="typeChar('B')" class="bg-blue-100 py-1.5 rounded shadow-sm font-bold text-sm hover:bg-blue-200 text-blue-700">B</button>
+            <button onclick="typeChar('E')" class="bg-blue-100 py-1.5 rounded shadow-sm font-bold text-sm hover:bg-blue-200 text-blue-700">E</button>
 
-                <button onclick="typeChar('7')" class="bg-white py-3 rounded shadow font-bold text-lg hover:bg-gray-50">7</button>
-                <button onclick="typeChar('8')" class="bg-white py-3 rounded shadow font-bold text-lg hover:bg-gray-50">8</button>
-                <button onclick="typeChar('9')" class="bg-white py-3 rounded shadow font-bold text-lg hover:bg-gray-50">9</button>
-                <button onclick="typeChar('C')" class="bg-blue-100 py-3 rounded shadow font-bold text-lg hover:bg-blue-200 text-blue-700">C</button>
-                <button onclick="typeChar('F')" class="bg-blue-100 py-3 rounded shadow font-bold text-lg hover:bg-blue-200 text-blue-700">F</button>
+            <button onclick="typeChar('7')" class="bg-white py-1.5 rounded shadow-sm font-bold text-sm hover:bg-gray-50">7</button>
+            <button onclick="typeChar('8')" class="bg-white py-1.5 rounded shadow-sm font-bold text-sm hover:bg-gray-50">8</button>
+            <button onclick="typeChar('9')" class="bg-white py-1.5 rounded shadow-sm font-bold text-sm hover:bg-gray-50">9</button>
+            <button onclick="typeChar('C')" class="bg-blue-100 py-1.5 rounded shadow-sm font-bold text-sm hover:bg-blue-200 text-blue-700">C</button>
+            <button onclick="typeChar('F')" class="bg-blue-100 py-1.5 rounded shadow-sm font-bold text-sm hover:bg-blue-200 text-blue-700">F</button>
 
-                <button onclick="typeChar('.')" class="bg-white py-3 rounded shadow font-bold text-lg hover:bg-gray-50">.</button>
-                <button onclick="typeChar('0')" class="bg-white py-3 rounded shadow font-bold text-lg hover:bg-gray-50">0</button>
-                <button onclick="delChar()" class="bg-yellow-100 py-3 rounded shadow font-bold text-sm hover:bg-yellow-200 text-yellow-700 col-span-3">刪除 (DEL)</button>
-            </div>
+            <button onclick="typeChar('.')" class="bg-white py-1.5 rounded shadow-sm font-bold text-sm hover:bg-gray-50">.</button>
+            <button onclick="typeChar('0')" class="bg-white py-1.5 rounded shadow-sm font-bold text-sm hover:bg-gray-50">0</button>
+            <button onclick="delChar()" class="bg-yellow-100 py-1.5 rounded shadow-sm font-bold text-xs hover:bg-yellow-200 text-yellow-700 col-span-2">刪除</button>
+            <button onclick="checkAnswers()" class="bg-green-100 py-1.5 rounded shadow-sm font-bold text-xs hover:bg-green-200 text-green-700 col-span-1">核對</button>
         </div>
     </div>
 
@@ -207,15 +224,17 @@
             let a2 = (250 + Math.random() * 40) * Math.PI / 180;
             let a3 = (10 + Math.random() * 30) * Math.PI / 180;
 
-            let r1 = 35 + Math.random() * 10;
-            let r2 = 25 + Math.random() * 10;
-            let r3 = 45 + Math.random() * 10;
+            // 縮小半徑，避免旋轉後點跑到視圖外被裁切
+            let r1 = 25 + Math.random() * 10; 
+            let r2 = 15 + Math.random() * 10;
+            let r3 = 35 + Math.random() * 10;
 
             let relA = { x: r1 * Math.cos(a1), y: r1 * Math.sin(a1) };
             let relB = { x: r2 * Math.cos(a2), y: r2 * Math.sin(a2) };
             let relC = { x: r3 * Math.cos(a3), y: r3 * Math.sin(a3) };
 
-            let cx1 = 70, cy1 = 60;
+            // 調整中心點
+            let cx1 = 80, cy1 = 70;
             let pA = { x: cx1 + relA.x, y: cy1 + relA.y };
             let pB = { x: cx1 + relB.x, y: cy1 + relB.y };
             let pC = { x: cx1 + relC.x, y: cy1 + relC.y };
@@ -230,7 +249,7 @@
             let rB = rotPt(relB);
             let rC = rotPt(relC);
 
-            let cx2 = 240, cy2 = 60;
+            let cx2 = 250, cy2 = 70;
             let pA2 = { x: cx2 + rA.x, y: cy2 + rA.y };
             let pB2 = { x: cx2 + rB.x, y: cy2 + rB.y };
             let pC2 = { x: cx2 + rC.x, y: cy2 + rC.y };
@@ -292,8 +311,9 @@
             let lE = getLab(p.pts2['E'].pt, p.pts2['E'].rel);
             let lF = getLab(p.pts2['F'].pt, p.pts2['F'].rel);
 
+            // 擴大 viewBox 確保所有字母跟邊緣都能被畫出
             return `
-            <svg viewBox="0 0 310 120" class="w-full h-full">
+            <svg viewBox="0 0 330 140" class="w-full h-full">
                 <polygon points="${p.pA.x},${p.pA.y} ${p.pB.x},${p.pB.y} ${p.pC.x},${p.pC.y}" fill="none" stroke="#333" stroke-width="1.5" stroke-linejoin="round"/>
                 <text x="${p.cx1}" y="${p.cy1}" text-anchor="middle" dominant-baseline="middle" font-size="14" fill="#555">甲</text>
                 <text x="${lA.x}" y="${lA.y}" text-anchor="middle" dominant-baseline="middle" font-size="14">A</text>
@@ -364,20 +384,45 @@
                 btn.classList.replace('bg-orange-500', 'bg-emerald-500');
                 btn.classList.replace('hover:bg-orange-600', 'hover:bg-emerald-600');
                 
-                // 清空作答
-                document.querySelectorAll('.blank-input').forEach(el => el.innerText = '');
+                // 清空作答與顏色
+                document.querySelectorAll('.blank-input').forEach(el => {
+                    el.innerText = '';
+                    el.classList.remove('correct', 'incorrect');
+                });
             } else {
                 app.classList.add('answer-mode');
                 btn.innerHTML = '隱藏解答版 (回到題目)';
                 btn.classList.replace('bg-emerald-500', 'bg-orange-500');
                 btn.classList.replace('hover:bg-emerald-600', 'hover:bg-orange-600');
                 
-                // 填入解答
+                // 填入解答並清除正誤顏色
                 document.querySelectorAll('.blank-input').forEach(el => {
                     el.innerText = el.getAttribute('data-ans');
+                    el.classList.remove('correct', 'incorrect');
                 });
                 closeKeypad();
             }
+        }
+
+        // --- 核對答案 ---
+        function checkAnswers() {
+            // 如果在解答模式則不處理
+            if(document.getElementById('app').classList.contains('answer-mode')) return;
+
+            document.querySelectorAll('.blank-input').forEach(el => {
+                let userVal = el.innerText.trim();
+                let correctAns = el.getAttribute('data-ans').trim();
+                
+                el.classList.remove('correct', 'incorrect');
+                
+                if (userVal !== '') {
+                    if (userVal === correctAns) {
+                        el.classList.add('correct');
+                    } else {
+                        el.classList.add('incorrect');
+                    }
+                }
+            });
         }
 
         // --- 小鍵盤操作 ---
@@ -406,6 +451,7 @@
                 // 限制最多字數避免破版
                 if(activeInput.innerText.length < 5) {
                     activeInput.innerText += char;
+                    activeInput.classList.remove('correct', 'incorrect'); // 重新輸入時清除顏色
                 }
             }
         }
@@ -413,6 +459,7 @@
         function delChar() {
             if (activeInput && activeInput.innerText.length > 0) {
                 activeInput.innerText = activeInput.innerText.slice(0, -1);
+                activeInput.classList.remove('correct', 'incorrect'); // 刪除時清除顏色
             }
         }
 
