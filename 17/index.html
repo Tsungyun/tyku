@@ -91,11 +91,27 @@
             <!-- 左側：生字輸入區 -->
             <div class="bg-white rounded-xl shadow-md p-6 border-t-4 border-blue-500">
                 <h2 class="text-xl font-bold mb-3 flex items-center"><span class="text-2xl mr-2">1.</span> 輸入正確生字</h2>
-                <p class="text-sm text-gray-500 mb-3">請貼上至少 20 個<strong class="text-blue-600">正確的字</strong>。系統會透過 AI 自動為您寫出通順的文章，並替換常見的同音/形似錯字。<br>(內建 AI 連線，<strong class="text-red-600">免填 API 金鑰</strong>，可直接點擊下方按鈕)</p>
-                <textarea id="vocab-input" class="w-full h-80 border border-gray-300 rounded p-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-kai" spellcheck="false"></textarea>
+                <p class="text-sm text-gray-500 mb-3">請貼上至少 20 個<strong class="text-blue-600">正確的字</strong>。系統會透過 AI 自動為您寫出通順的文章，並替換常見的同音/形似錯字。</p>
+                <textarea id="vocab-input" class="w-full h-64 border border-gray-300 rounded p-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-kai" spellcheck="false"></textarea>
+                
+                <!-- 新增：API 金鑰欄位與說明 -->
+                <div class="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg text-sm">
+                    <label class="block text-gray-700 font-bold mb-1 flex items-center">
+                        <svg class="w-4 h-4 mr-1 text-yellow-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
+                        電腦獨立執行專用 (選填)
+                    </label>
+                    <p class="text-gray-500 mb-2">若您是<strong class="text-red-500">下載到自己電腦上</strong>打開，Google 會阻擋未授權連線，請在此填入 Gemini API 金鑰。<br>*(若在原網頁的右側預覽畫面中操作，請保持空白)*</p>
+                    <input type="password" id="api-key-input" class="w-full border border-gray-300 rounded p-2 focus:ring-blue-500" placeholder="在此貼上 API Key (AIzaSy...)">
+                </div>
+
                 <button onclick="generateDrafts()" class="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded shadow transition flex justify-center items-center">
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
                     呼叫 AI 生成通順文章與錯字
+                </button>
+                
+                <!-- 新增：保底測試按鈕 -->
+                <button onclick="loadMockData()" class="w-full mt-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded shadow transition text-sm flex justify-center items-center">
+                    測試排版功能 (載入範例文章)
                 </button>
             </div>
 
@@ -167,6 +183,13 @@
             document.getElementById('loading-modal').classList.add('hidden');
         }
 
+        // 新增：載入範例文章 (避免 AI 故障時完全卡死，確保隨時可排版)
+        function loadMockData() {
+            document.getElementById('draft-1').value = "在一個風和日麗的{情|晴}天，我們全家人去市中心遊玩。早上，媽媽幫我準備了{簿|薄}片般的餅乾當點心。我們來到一棟非常高的商業大{樓|樓}，並搭乘電梯直達頂樓的觀景{踏|塔}。從上面往下看，可以看到一條壯觀的大{瞧|橋}橫跨在寬廣的河面上。中午吃飯時，我不小心{站|沾}到了衣服，因為我正在吃美味的番茄肉{獎|醬}義大利{綿|麵}。吃飽後，爸爸點了一杯熱呼呼的{加|咖}啡，突然感覺到一陣輕微的地{陣|震}，幸好平安無事。";
+            document.getElementById('draft-2').value = "上個週末，我們在電視上看到關於日本東{驚|京}的旅遊資{迅|訊}，這讓我留下深刻的{映|印}象。由於爸爸最近工作一直坐在電腦前，導致肩{景|頸}痠痛，於是我們決定去參加一場有{易|益}身心的健行活動。這次活動是由當地的經{記|濟}發展局舉辦。中午，我們在山下吃{獸|壽}司，飯裡拌了微酸的{錯|醋}，十分爽口。店裡擺放著精緻的瓷{氣|器}，看起來非常漂亮。我們聽著老闆說哪{理|哩}有好玩的景點，度過充實的下午。";
+            showAlert("✅ 已為您載入預設的範例文章！\n\n您可以直接點擊右下角的「預覽並建立考卷」來檢視 A4 排版效果，確認系統排版功能正常運作！");
+        }
+
         // 陣列洗牌 (Fisher-Yates)
         function shuffle(array) {
             let currentIndex = array.length, randomIndex;
@@ -178,31 +201,13 @@
             return array;
         }
 
-        // 指數退避重試機制 (Exponential Backoff) 處理 API 節流
-        async function fetchWithRetry(url, options, maxRetries = 4) {
-            let retries = 0;
-            while (retries < maxRetries) {
-                try {
-                    const response = await fetch(url, options);
-                    // 遇到 429(限流) 或 5xx(伺服器錯誤) 拋出錯誤以觸發重試
-                    if (response.status === 429 || response.status >= 500) {
-                        throw new Error(`伺服器繁忙或錯誤 (HTTP ${response.status})`);
-                    }
-                    return response;
-                } catch (error) {
-                    retries++;
-                    if (retries >= maxRetries) throw error; // 最後一次重試失敗才真正拋出
-                    // 指數退避等待：1.5秒, 3秒, 6秒...
-                    const delay = Math.pow(2, retries - 1) * 1500;
-                    console.warn(`連線不穩或限流，正在進行第 ${retries} 次重試...`);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                }
-            }
-        }
-
-        // 透過 AI 生成草稿
+        // 透過 AI 生成草稿 (全面強化版)
         async function generateDrafts() {
             const text = document.getElementById('vocab-input').value;
+            // 抓取 API 金鑰
+            const apiKeyInput = document.getElementById('api-key-input').value.trim();
+            const apiKey = apiKeyInput || "";
+
             // 過濾掉非中文字元並去重
             const chars = [...new Set(text.replace(/[^\u4E00-\u9FA5]/g, '').split(''))];
             
@@ -211,10 +216,7 @@
                 return;
             }
 
-            // 打亂所有生字，確保每次抽出不同
             shuffle(chars);
-
-            // 挑選前 10 個給第一篇，接下 10 個給第二篇
             const group1 = chars.slice(0, 10);
             const group2 = chars.slice(10, 20);
 
@@ -223,40 +225,25 @@
             const prompt = `你是一個專業的國小國語老師，擅長編寫「改錯字練習」的文章。
 我將給你兩組生字，請你分別為這兩組生字撰寫兩篇語意通順、自然、符合國小學生生活或遊記情境的短文。
 
-群組一的 10 個生字：${group1.join(', ')}
-群組二的 10 個生字：${group2.join(', ')}
+群組一的生字：${group1.join(', ')}
+群組二的生字：${group2.join(', ')}
 
 【任務要求】：
-1. 第一篇文章必須「完美融入」群組一的 10 個生字；第二篇文章必須「完美融入」群組二的 10 個生字。文章必須非常通順合理，不能有拼湊感。
-2. 每篇文章長度約 100 到 150 字之間。
-3. 對於指定的這 10 個生字，請把它們替換為小學生常見的「同音錯字」或「形似錯字」。
-4. 請在文章中，直接用 \`{錯字|正確字}\` 的格式來呈現這些被替換的字。錯字必須直接融入句子中，絕對不要在文章中使用引號「」來凸顯它們。
-5. 【重要】挑選的「錯字」必須是常用的字，絕對不可以使用罕用字、生僻字。例如「晴」可以錯寫成「情」，「薄」錯寫成「簿」。
-
-請回傳 JSON 格式，必須包含以下兩個欄位：
-- draft1: 包含群組一考點的第一篇文章草稿
-- draft2: 包含群組二考點的第二篇文章草稿`;
+1. 第一篇文章必須完美融入群組一的10個字；第二篇文章必須完美融入群組二的10個字。文章必須通順。
+2. 對於指定的生字，請把它們替換為小學生常見的「同音錯字」或「形似錯字」。錯字必須是常用字。
+3. 格式：在文章中，請直接用 \`{錯字|正確字}\` 的格式來呈現這些被替換的字，絕對不要加引號。
+4. 回傳要求：請回傳嚴格的 JSON 格式，必須包含 draft1 和 draft2 兩個欄位。`;
 
             const payload = {
                 contents: [{ parts: [{ text: prompt }] }],
                 generationConfig: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: "OBJECT",
-                        properties: {
-                            draft1: { type: "STRING" },
-                            draft2: { type: "STRING" }
-                        },
-                        required: ["draft1", "draft2"]
-                    }
+                    responseMimeType: "application/json"
                 }
             };
 
-            const apiKey = ""; // Canvas 執行時會自動帶入 API Key
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
 
             try {
-                // 使用帶有自動重試機制的 fetch
                 const response = await fetchWithRetry(apiUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -265,21 +252,18 @@
                 
                 if (!response.ok) {
                     const errText = await response.text();
-                    throw new Error(`API 請求被拒絕 (${response.status}): ${errText}`);
+                    throw new Error(`HTTP ${response.status}: ${errText}`);
                 }
 
                 const result = await response.json();
                 
                 if (!result.candidates || result.candidates.length === 0) {
-                    throw new Error("AI 未回傳任何內容，可能是被內容安全機制阻擋。請嘗試更換幾個生字。");
+                    throw new Error("AI 未回傳任何內容。");
                 }
 
                 const candidate = result.candidates[0];
                 if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
-                    
                     let jsonStr = candidate.content.parts[0].text;
-                    
-                    // 【強化版 JSON 解析】尋找並提取最外層的 { }，避免 AI 回傳了多餘的解說文字
                     const match = jsonStr.match(/\{[\s\S]*\}/);
                     if (match) {
                         jsonStr = match[0];
@@ -288,19 +272,25 @@
                     const data = JSON.parse(jsonStr.trim());
                     
                     if (!data.draft1 || !data.draft2) {
-                        throw new Error("AI 回傳的資料缺少了其中一篇文章。");
+                        throw new Error("JSON 格式缺少 draft1 或 draft2。");
                     }
 
                     document.getElementById('draft-1').value = data.draft1;
                     document.getElementById('draft-2').value = data.draft2;
-                    showAlert("AI 已為您撰寫完成！\n這是一篇專門為您提供的通順短文，並且已自動配置好常用錯字。\n您可以直接預覽考卷，或在這邊做最後微調。");
+                    showAlert("🎉 AI 已成功為您撰寫完成！\n這是一篇專門為您提供的通順短文。\n您可以直接預覽考卷，或在這邊做最後微調。");
                 } else {
-                    throw new Error("AI 回傳的格式中找不到文字內容。");
+                    throw new Error("找不到文字內容。");
                 }
             } catch (error) {
                 console.error("生成錯誤細節:", error);
-                // 這裡會顯示確切的報錯訊息 (error.message)，幫助我們釐清問題
-                showAlert(`生成文章時發生錯誤：\n\n${error.message}\n\n請再次點擊按鈕重試！`);
+                
+                let errorMsg = error.message;
+                // 針對沒有權限 (通常發生在下載到桌面，且未填 API Key 時) 的超清晰提示
+                if (errorMsg.includes('PERMISSION_DENIED') || errorMsg.includes('API_KEY_INVALID') || errorMsg.includes('403') || errorMsg.includes('400')) {
+                    showAlert(`⚠️ AI 授權失敗 (權限遭拒絕)！\n\n系統偵測到您將網頁「下載到了自己的電腦上」。脫離了目前的 AI 平台，Google 會阻擋未具名的連線。\n\n【解決方案】：\n1. 請在左側輸入您的 Gemini API 金鑰。\n2. 若您沒有金鑰，請「不要下載檔案」，直接在網頁右側的預覽畫面中使用。\n3. 若只想確認排版功能，可直接點擊『測試排版功能』按鈕。`);
+                } else {
+                    showAlert(`⚠️ 發生未知連線異常：\n\n${errorMsg}\n\n建議重整網頁稍後再試，或先點擊『測試排版功能』體驗列印效果。`);
+                }
             } finally {
                 hideLoading();
             }
