@@ -178,6 +178,27 @@
             return array;
         }
 
+        // 指數退避重試機制 (Exponential Backoff) 處理 API 節流
+        async function fetchWithRetry(url, options, maxRetries = 3) {
+            let retries = 0;
+            while (retries < maxRetries) {
+                try {
+                    const response = await fetch(url, options);
+                    // 遇到 429(限流) 或 5xx(伺服器錯誤) 拋出錯誤以觸發重試
+                    if (response.status === 429 || response.status >= 500) {
+                        throw new Error(`Server error or throttling: ${response.status}`);
+                    }
+                    return response;
+                } catch (error) {
+                    retries++;
+                    if (retries >= maxRetries) throw error; // 最後一次重試失敗才真正拋出
+                    // 指數退避等待：1秒, 2秒...
+                    const delay = Math.pow(2, retries - 1) * 1000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+
         // 透過 AI 生成草稿
         async function generateDrafts() {
             const text = document.getElementById('vocab-input').value;
@@ -234,27 +255,38 @@
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
 
             try {
-                const response = await fetch(apiUrl, {
+                // 使用帶有自動重試機制的 fetch
+                const response = await fetchWithRetry(apiUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
                 
+                if (!response.ok) {
+                    throw new Error(`API 請求失敗，狀態碼: ${response.status}`);
+                }
+
                 const result = await response.json();
                 
-                if (result.candidates && result.candidates.length > 0) {
-                    const jsonStr = result.candidates[0].content.parts[0].text;
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    
+                    let jsonStr = result.candidates[0].content.parts[0].text;
+                    // 強制清理多餘的 Markdown 標記，避免 JSON 解析失敗
+                    jsonStr = jsonStr.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+                    
                     const data = JSON.parse(jsonStr);
                     
                     document.getElementById('draft-1').value = data.draft1;
                     document.getElementById('draft-2').value = data.draft2;
                     showAlert("AI 已為您撰寫完成！\n這是一篇專門為您提供的通順短文，並且已自動配置好常用錯字。\n您可以直接預覽考卷，或在這邊做最後微調。");
                 } else {
-                    throw new Error("API 回傳格式錯誤");
+                    throw new Error("API 回傳格式錯誤或無內容");
                 }
             } catch (error) {
-                console.error(error);
-                showAlert("生成文章時發生錯誤，請稍後再試。");
+                console.error("生成錯誤細節:", error);
+                showAlert("生成文章時發生錯誤（伺服器繁忙，已重試）。請再次點擊按鈕生成！");
             } finally {
                 hideLoading();
             }
