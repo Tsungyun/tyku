@@ -73,6 +73,13 @@
         </div>
     </div>
 
+    <!-- AI 載入中提示框 -->
+    <div id="loading-modal" class="fixed inset-0 bg-black bg-opacity-70 flex flex-col items-center justify-center z-50 hidden no-print">
+        <div class="animate-spin rounded-full h-20 w-20 border-t-4 border-b-4 border-blue-400 mb-6"></div>
+        <h3 class="text-2xl font-bold text-white tracking-widest font-kai">AI 老師正在為您編寫文章...</h3>
+        <p class="text-gray-200 mt-2 text-lg">系統正根據您的生字撰寫語意通順的短文，並自動配置常見錯字，請稍候約 5~10 秒。</p>
+    </div>
+
     <!-- 設定與操作介面 (列印時隱藏) -->
     <div id="setup-view" class="container mx-auto p-4 max-w-5xl no-print">
         <header class="text-center mb-8 mt-4">
@@ -84,18 +91,18 @@
             <!-- 左側：生字輸入區 -->
             <div class="bg-white rounded-xl shadow-md p-6 border-t-4 border-blue-500">
                 <h2 class="text-xl font-bold mb-3 flex items-center"><span class="text-2xl mr-2">1.</span> 輸入正確生字</h2>
-                <p class="text-sm text-gray-500 mb-3">請貼上至少 20 個<strong class="text-blue-600">正確的字</strong>。系統會自動幫您尋找同音或形似的錯字。<br>(可用空白隔開或直接連續貼上)</p>
+                <p class="text-sm text-gray-500 mb-3">請貼上至少 20 個<strong class="text-blue-600">正確的字</strong>。系統會透過 AI 自動為您寫出通順的文章，並替換常見的同音/形似錯字。<br>(可用空白隔開或直接連續貼上)</p>
                 <textarea id="vocab-input" class="w-full h-80 border border-gray-300 rounded p-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-kai" spellcheck="false"></textarea>
                 <button onclick="generateDrafts()" class="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded shadow transition flex justify-center items-center">
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-                    隨機生成文章草稿
+                    呼叫 AI 生成通順文章與錯字
                 </button>
             </div>
 
             <!-- 右側：文章草稿區 -->
             <div class="lg:col-span-2 bg-white rounded-xl shadow-md p-6 border-t-4 border-green-500">
                 <h2 class="text-xl font-bold mb-3 flex items-center"><span class="text-2xl mr-2">2.</span> 確認與編輯文章</h2>
-                <p class="text-sm text-gray-500 mb-3">系統已自動配對錯字並打亂順序。<br><strong class="text-red-600">注意：由於生字是隨機的，請務必手動修改草稿上下文，讓文章通順！</strong><br>請保留 <strong class="text-green-600">{錯字|正確字}</strong> 的格式。若出現 <strong class="text-red-500">{?|正確字}</strong> 代表需手動輸入錯字。</p>
+                <p class="text-sm text-gray-500 mb-3">AI 已為您撰寫通順的短文並配置好常見的錯別字！<br>您可以在這裡檢視或微調文章內容。格式為 <strong class="text-green-600">{錯字|正確字}</strong>。</p>
                 
                 <div class="mb-4">
                     <label class="block text-gray-700 font-bold mb-2">【第一篇】草稿 (包含 10 個考點)：</label>
@@ -137,21 +144,7 @@
 
     <script>
         // 預設填入的生字 (測試用)
-        const defaultVocab = "晴 薄 樓 塔 橋 沾 醬 麵 咖 震 京 訊 印 頸 義 濟 壽 醋 器 哩 幻 厲 型 斑 撥 辨 慕 燥 買 待 毫 暑 候";
-
-        // 常見錯別字與同音字字典 (採用常用形似字與同音字)
-        const typoData = "晴:情,薄:簿,樓:摟,塔:踏,橋:瞧,沾:站,醬:獎,麵:綿,咖:加,震:陣,京:驚,訊:迅,印:映,頸:景,義:易,濟:記,壽:獸,醋:錯,器:氣,哩:理,幻:幼,幼:幻,厲:歷,歷:厲,型:形,形:型,斑:班,班:斑,撥:拔,拔:撥,辨:辯,辯:辨,慕:幕,幕:慕,燥:躁,躁:燥,買:賣,賣:買,待:侍,侍:待,毫:豪,豪:毫,暑:署,署:暑,候:侯,侯:候,既:即,即:既,練:鍊,鍊:練,蜜:密,密:蜜,幸:辛,辛:幸,底:低,低:底,渴:喝,喝:渴,座:坐,坐:座,採:彩,彩:採,峰:鋒,鋒:峰,籃:藍,藍:籃,響:嚮,嚮:響,具:俱,俱:具,免:兔,兔:免,孤:狐,狐:孤,崇:祟,祟:崇,盆:盤,盤:盆,塵:晨,晨:塵,在:再,再:在,的:得,得:的,是:事,事:是,已:以,以:已,名:明,明:名,做:作,作:做,其:期,期:其,這:著,著:這,知:支,支:知,覺:角,角:覺,特:寺,別:列,美:每,味:妹,遊:游,玩:完,高:膏,商:滴,業:亞,觀:歡,壯:狀,寬:玩,廣:廠,河:何,衣:依,服:報,熱:熟,呼:乎,離:璃,開:關,輕:青,微:徵,虛:處,平:坪,安:按,結:潔,束:速,旅:裡,程:呈,週:周,末:未,電:店,視:示,留:流,深:伸,刻:克,導:道,致:至,痠:酸,痛:通,決:絕,定:訂,參:慘,加:家,身:伸,心:辛,健:建,行:形,活:話,動:凍,局:桔,舉:矩,辦:伴,山:出,下:上,料:科,理:裡,飯:板,拌:伴,酸:痠,爽:夾,口:日,擺:罷,放:仿,精:睛,緻:致,瓷:磁,漂:標,亮:高,邊:編,聽:廳,老:考,闆:板,哪:那,好:號,點:佔,度:渡,過:鍋,充:允,實:食,步:部,帶:戴,戴:帶,紀:記,記:紀,竟:競,競:竟,像:相,相:像,應:因,因:應,該:孩,孩:該,慢:漫,漫:慢,根:跟,跟:根,腦:惱,惱:腦,穿:川,川:穿,突:然,然:突,棵:顆,顆:棵";
-        
-        const errorDict = {};
-        typoData.split(',').forEach(pair => {
-            let parts = pair.split(':');
-            if(parts.length === 2) errorDict[parts[0]] = parts[1];
-        });
-
-        // 通用文章模板，不再使用引號提示，並改寫為一般的生活/遊記情境
-        const template1 = "今天的天氣非常{{0}}，我們全家人一起出門。在路上，我看到了一個很特別的{{1}}，旁邊還有{{2}}和{{3}}。中午時，我們吃著美味的{{4}}，感覺非常{{5}}。下午，我們去參觀了{{6}}，那裡有很多{{7}}。這真是一趟{{8}}的旅程，讓我感到十分{{9}}。";
-        
-        const template2 = "上個週末，我參加了一個{{0}}的活動。活動中，大家一起{{1}}，氣氛十分{{2}}。我認識了新朋友，他跟我分享了關於{{3}}的故事。我們還一起完成了{{4}}的任務，雖然有點{{5}}，但大家都覺得很{{6}}。最後，我們獲得了{{7}}作為獎勵，並拍了許多{{8}}的照片。這是一個充滿{{9}}的回憶。";
+        const defaultVocab = "晴 薄 樓 塔 橋 沾 醬 麵 咖 震 京 訊 印 頸 義 濟 壽 醋 器 哩 幻 厲 型 斑 撥 辨 慕 燥 買 待 毫 暑 候 既 練 蜜 幸 底 渴 座 採 峰 籃 響 具 免 孤 崇 盆 塵";
 
         // 初始化
         window.onload = () => {
@@ -166,28 +159,12 @@
         function closeAlert() {
             document.getElementById('alert-modal').classList.add('hidden');
         }
-
-        // 自動獲取同音字/形似字
-        function getWrongChar(correctChar) {
-            if (errorDict[correctChar]) {
-                return errorDict[correctChar];
-            }
-            // 取消 Unicode 偏移演算法，避免產生罕用字、生僻字。
-            // 找不到時直接回傳「?」，讓老師手動修改為常用的錯字，避免誤導學生。
-            return '?';
+        
+        function showLoading() {
+            document.getElementById('loading-modal').classList.remove('hidden');
         }
-
-        // 解析輸入的生字 (只取正確的字)
-        function parseVocab(text) {
-            // 過濾掉非中文字元
-            const chars = text.replace(/[^\u4E00-\u9FA5]/g, '').split('');
-            // 使用 Set 移除重複的字
-            const uniqueChars = [...new Set(chars)];
-            
-            let pairs = uniqueChars.map(c => {
-                return { correct: c, wrong: getWrongChar(c) };
-            });
-            return pairs;
+        function hideLoading() {
+            document.getElementById('loading-modal').classList.add('hidden');
         }
 
         // 陣列洗牌 (Fisher-Yates)
@@ -201,46 +178,85 @@
             return array;
         }
 
-        // 生成草稿
-        function generateDrafts() {
+        // 透過 AI 生成草稿
+        async function generateDrafts() {
             const text = document.getElementById('vocab-input').value;
-            let pairs = parseVocab(text);
+            // 過濾掉非中文字元並去重
+            const chars = [...new Set(text.replace(/[^\u4E00-\u9FA5]/g, '').split(''))];
             
-            if (pairs.length < 20) {
-                showAlert(`您目前只輸入了 ${pairs.length} 個不重複的字。系統需要至少 20 個字來生成兩篇文章。請補充更多生字！`);
+            if (chars.length < 20) {
+                showAlert(`您目前只輸入了 ${chars.length} 個不重複的字。系統需要至少 20 個字來生成兩篇文章。請補充更多生字！`);
                 return;
             }
 
             // 打亂所有生字，確保每次抽出不同
-            shuffle(pairs);
+            shuffle(chars);
 
             // 挑選前 10 個給第一篇，接下 10 個給第二篇
-            const group1 = pairs.slice(0, 10);
-            const group2 = pairs.slice(10, 20);
+            const group1 = chars.slice(0, 10);
+            const group2 = chars.slice(10, 20);
 
-            // 再次打亂這 10 個字，讓它們在文章中錯亂出現
-            shuffle(group1);
-            shuffle(group2);
+            showLoading();
 
-            // 替換模板
-            let draft1 = template1;
-            let draft2 = template2;
+            const prompt = `你是一個專業的國小國語老師，擅長編寫「改錯字練習」的文章。
+我將給你兩組生字，請你分別為這兩組生字撰寫兩篇語意通順、自然、符合國小學生生活或遊記情境的短文。
 
-            for (let i = 0; i < 10; i++) {
-                // 將錯字與正確字組合成 {錯|正} 的標記
-                let marker1 = `{${group1[i].wrong}|${group1[i].correct}}`;
-                let marker2 = `{${group2[i].wrong}|${group2[i].correct}}`;
-                draft1 = draft1.replace(`{{${i}}}`, marker1);
-                draft2 = draft2.replace(`{{${i}}}`, marker2);
-            }
+群組一的 10 個生字：${group1.join(', ')}
+群組二的 10 個生字：${group2.join(', ')}
 
-            document.getElementById('draft-1').value = draft1;
-            document.getElementById('draft-2').value = draft2;
-            
-            if (draft1.includes('{?') || draft2.includes('{?')) {
-                showAlert("草稿生成成功！\n\n系統已配對錯字，但部分生字不在內建字典中，已標示為「?」。\n請手動在草稿區將 {?|正確字} 內的「?」修改為常用的錯字。\n\n另外，請務必手動修改文章上下文，使其符合邏輯喔！");
-            } else {
-                showAlert("草稿生成成功！\n\n系統已自動為您配對同音/形似錯字。\n由於生字是隨機挑選的，請務必手動修改草稿區的文章，讓句子變得通順合理！\n(請保留 {錯字|正確字} 標籤)");
+【任務要求】：
+1. 第一篇文章必須「完美融入」群組一的 10 個生字；第二篇文章必須「完美融入」群組二的 10 個生字。文章必須非常通順合理，不能有拼湊感。
+2. 每篇文章長度約 100 到 150 字之間。
+3. 對於指定的這 10 個生字，請把它們替換為小學生常見的「同音錯字」或「形似錯字」。
+4. 請在文章中，直接用 \`{錯字|正確字}\` 的格式來呈現這些被替換的字。錯字必須直接融入句子中，絕對不要在文章中使用引號「」來凸顯它們。
+5. 【重要】挑選的「錯字」必須是常用的字，絕對不可以使用罕用字、生僻字。例如「晴」可以錯寫成「情」，「薄」錯寫成「簿」。
+
+請回傳 JSON 格式，必須包含以下兩個欄位：
+- draft1: 包含群組一考點的第一篇文章草稿
+- draft2: 包含群組二考點的第二篇文章草稿`;
+
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "OBJECT",
+                        properties: {
+                            draft1: { type: "STRING" },
+                            draft2: { type: "STRING" }
+                        },
+                        required: ["draft1", "draft2"]
+                    }
+                }
+            };
+
+            const apiKey = ""; // Canvas 執行時會自動帶入 API Key
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const result = await response.json();
+                
+                if (result.candidates && result.candidates.length > 0) {
+                    const jsonStr = result.candidates[0].content.parts[0].text;
+                    const data = JSON.parse(jsonStr);
+                    
+                    document.getElementById('draft-1').value = data.draft1;
+                    document.getElementById('draft-2').value = data.draft2;
+                    showAlert("AI 已為您撰寫完成！\n這是一篇專門為您提供的通順短文，並且已自動配置好常用錯字。\n您可以直接預覽考卷，或在這邊做最後微調。");
+                } else {
+                    throw new Error("API 回傳格式錯誤");
+                }
+            } catch (error) {
+                console.error(error);
+                showAlert("生成文章時發生錯誤，請稍後再試。");
+            } finally {
+                hideLoading();
             }
         }
 
