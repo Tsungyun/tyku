@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>改錯字練習卷產生器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 定義教育用標準楷體 */
+        .font-kai {
+            font-family: 'BiauKai', 'DFKai-SB', 'Kaiti TC', 'Kaiti', 'TW-Kai', '楷體', serif;
+        }
+        
+        /* 列印與 A4 頁面設定 */
+        body {
+            background-color: #f3f4f6;
+            margin: 0;
+            padding: 0;
+        }
+
+        .a4-page {
+            width: 210mm;
+            height: 297mm;
+            padding: 15mm 18mm;
+            background: white;
+            margin: 20px auto;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+            page-break-after: always;
+            position: relative;
+        }
+
+        /* 列印模式下隱藏不必要的 UI */
+        @media print {
+            body { background: white; }
+            .no-print { display: none !important; }
+            .a4-page { 
+                margin: 0; 
+                box-shadow: none; 
+                border: none;
+                padding: 12mm 15mm; 
+            }
+        }
+
+        /* 考卷表格樣式 */
+        .test-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .test-table th, .test-table td {
+            border: 2px solid #000;
+            text-align: center;
+            height: 40px; /* 統一格子高度 */
+        }
+
+        /* 隱藏捲軸但可滾動 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <!-- 系統提示框 -->
+    <div id="alert-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden no-print">
+        <div class="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-2xl transform transition-all">
+            <h3 class="text-xl font-bold mb-4 text-red-600">系統提示</h3>
+            <p id="alert-message" class="mb-6 text-gray-700"></p>
+            <div class="flex justify-end">
+                <button onclick="closeAlert()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">確定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 設定與操作介面 (列印時隱藏) -->
+    <div id="setup-view" class="container mx-auto p-4 max-w-5xl no-print">
+        <header class="text-center mb-8 mt-4">
+            <h1 class="text-4xl font-extrabold text-blue-800 mb-2">📄 改錯字練習卷產生器</h1>
+            <p class="text-gray-600">自動生成同音/形似字，一鍵排版成 PDF 格式</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- 左側：生字輸入區 -->
+            <div class="bg-white rounded-xl shadow-md p-6 border-t-4 border-blue-500">
+                <h2 class="text-xl font-bold mb-3 flex items-center"><span class="text-2xl mr-2">1.</span> 輸入正確生字</h2>
+                <p class="text-sm text-gray-500 mb-3">請貼上至少 20 個<strong class="text-blue-600">正確的字</strong>。系統會自動幫您尋找同音或形似的錯字。<br>(可用空白隔開或直接連續貼上)</p>
+                <textarea id="vocab-input" class="w-full h-80 border border-gray-300 rounded p-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-kai" spellcheck="false"></textarea>
+                <button onclick="generateDrafts()" class="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded shadow transition flex justify-center items-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                    隨機生成文章草稿
+                </button>
+            </div>
+
+            <!-- 右側：文章草稿區 -->
+            <div class="lg:col-span-2 bg-white rounded-xl shadow-md p-6 border-t-4 border-green-500">
+                <h2 class="text-xl font-bold mb-3 flex items-center"><span class="text-2xl mr-2">2.</span> 確認與編輯文章</h2>
+                <p class="text-sm text-gray-500 mb-3">系統已自動為您配對錯字並打亂順序。您可以自由修改文句，但請務必保留 <strong class="text-green-600">{錯字|正確字}</strong> 的格式。如果對自動生成的錯字不滿意，可直接在此手動修改。</p>
+                
+                <div class="mb-4">
+                    <label class="block text-gray-700 font-bold mb-2">【第一篇】草稿 (包含 10 個考點)：</label>
+                    <textarea id="draft-1" class="w-full h-32 border border-gray-300 rounded p-3 focus:outline-none focus:ring-2 focus:ring-green-500 font-kai text-lg leading-relaxed" spellcheck="false"></textarea>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="block text-gray-700 font-bold mb-2">【第二篇】草稿 (包含 10 個考點)：</label>
+                    <textarea id="draft-2" class="w-full h-32 border border-gray-300 rounded p-3 focus:outline-none focus:ring-2 focus:ring-green-500 font-kai text-lg leading-relaxed" spellcheck="false"></textarea>
+                </div>
+
+                <div class="flex justify-end mt-6">
+                    <button onclick="previewWorksheet()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded shadow-lg transition text-lg flex items-center">
+                        <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                        預覽並建立考卷
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 考卷預覽與列印區 -->
+    <div id="preview-view" class="hidden pb-20">
+        <div class="no-print bg-gray-800 text-white p-4 sticky top-0 z-40 shadow-md flex justify-between items-center">
+            <button onclick="backToSetup()" class="bg-gray-600 hover:bg-gray-500 px-4 py-2 rounded transition">
+                ← 返回修改
+            </button>
+            <div class="text-xl font-bold">考卷預覽模式 (按 PDF 樣式排版)</div>
+            <button onclick="window.print()" class="bg-blue-500 hover:bg-blue-400 text-white font-bold px-6 py-2 rounded shadow transition flex items-center">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                列印考卷 / 存成 PDF
+            </button>
+        </div>
+
+        <div id="print-pages-container" class="font-kai text-black">
+            <!-- JS 將在這裡生成 Page 1 (題目版) 和 Page 2 (解答版) -->
+        </div>
+    </div>
+
+    <script>
+        // 預設填入的生字 (測試用)
+        const defaultVocab = "晴 薄 樓 塔 橋 沾 醬 麵 咖 震 京 訊 印 頸 義 濟 壽 醋 器 哩 幻 厲 型 斑 撥 辨 慕 燥 買 待 毫 暑 候";
+
+        // 常見錯別字與同音字字典
+        const errorDict = {
+            '晴':'情', '薄':'簿', '樓':'摟', '塔':'踏', '橋':'瞧', '沾':'站', '醬':'獎', '麵':'綿', '咖':'加', '震':'陣',
+            '京':'驚', '訊':'迅', '印':'映', '頸':'景', '義':'易', '濟':'記', '壽':'獸', '醋':'錯', '器':'氣', '哩':'理',
+            '幻':'幼', '幼':'幻', '厲':'歷', '歷':'厲', '型':'形', '形':'型', '斑':'班', '班':'斑', '撥':'拔', '拔':'撥',
+            '辨':'辯', '辯':'辨', '慕':'幕', '幕':'慕', '燥':'躁', '躁':'燥', '買':'賣', '賣':'買', '待':'侍', '侍':'待',
+            '毫':'豪', '豪':'毫', '暑':'署', '署':'暑', '候':'侯', '侯':'候', '既':'即', '即':'既', '練':'鍊', '鍊':'練',
+            '蜜':'密', '密':'蜜', '幸':'辛', '辛':'幸', '底':'低', '低':'底', '渴':'喝', '喝':'渴', '座':'坐', '坐':'座',
+            '採':'彩', '彩':'採', '峰':'鋒', '鋒':'峰', '籃':'藍', '藍':'籃', '響':'嚮', '嚮':'響', '具':'俱', '俱':'具',
+            '免':'兔', '兔':'免', '孤':'狐', '狐':'孤', '崇':'祟', '祟':'崇', '盆':'盤', '盤':'盆', '塵':'晨', '晨':'塵'
+        };
+
+        // 通用文章模板，使用 {{0}} ~ {{9}} 作為佔位符
+        // 由於輸入字是隨機的，文章情境設計為「學習認字」或「尋找生活中的字」，確保任何字填入皆通順。
+        const template1 = "今天天氣很好，我們上國語課時，老師教了許多新字。首先，老師在黑板上寫下了一個大大的「{{0}}」字，要我們跟著念。接著，小明站起來造句，他用「{{1}}」字造了一個很有趣的句子，讓全班哈哈大笑。後來，我們分組練習，我和小華一起查字典，發現「{{2}}」字的部首很特別。這時，老師發下學習單，上面有一題是要我們寫出「{{3}}」的相似字，大家都覺得有點難。下課前，老師提醒我們回家要多練習「{{4}}」字，因為這很容易寫錯。放學後，我走在路上，無意間看到路邊的招牌上居然也有「{{5}}」字，真是太巧了！回到家，我拿出作業本，認真地寫下「{{6}}」字。媽媽看到後，誇獎我字寫得很端正，尤其是「{{7}}」字寫得最漂亮。睡前，我閱讀了一本故事書，書裡剛好出現了「{{8}}」字，讓我感到很親切。今天的國語課真是收穫滿滿，我已經完全記住「{{9}}」字了！";
+        
+        const template2 = "週末的時候，我去了圖書館看書。在一本古老的童話書裡，我遇到了一個不認識的字，長得很像「{{0}}」。我趕緊去問圖書館的志工阿姨，阿姨笑著說這個字和「{{1}}」有關係。我拿出筆記本，把「{{2}}」抄下來，準備回家查清楚。旁邊的書架上，有一本關於歷史的書，封面上印著金色的「{{3}}」字，閃閃發光。我隨手翻開一頁，裡面有一段話用到了「{{4}}」，我覺得這句話很有道理。後來，我在報紙的副刊上，又發現了「{{5}}」這個字，看來這是一個很常用的字呢。回家後，我迫不及待地把今天學到的字告訴爸爸，爸爸則考了我怎麼寫「{{6}}」。我很有自信地寫出來，並且順便練習了「{{7}}」。晚上，我們全家一起看電視，字幕上出現了「{{8}}」，我馬上指著電視說我認識它！這兩天下來，我不僅學會了許多知識，更對「{{9}}」這個字留下了深刻的印象。";
+
+        // 初始化
+        window.onload = () => {
+            document.getElementById('vocab-input').value = defaultVocab;
+        };
+
+        // 自訂提示框
+        function showAlert(msg) {
+            document.getElementById('alert-message').innerText = msg;
+            document.getElementById('alert-modal').classList.remove('hidden');
+        }
+        function closeAlert() {
+            document.getElementById('alert-modal').classList.add('hidden');
+        }
+
+        // 自動獲取同音字/形似字
+        function getWrongChar(correctChar) {
+            if (errorDict[correctChar]) {
+                return errorDict[correctChar];
+            }
+            // 演算法備案：利用 Unicode 內碼偏移 +1
+            // 漢字編碼大多按部首與筆畫排列，+1 通常會得到部首相同、形狀相似的字，非常適合作為形似錯字！
+            const code = correctChar.charCodeAt(0);
+            if (code >= 0x4E00 && code <= 0x9FFF) {
+                return String.fromCharCode(code + 1);
+            }
+            return '？';
+        }
+
+        // 解析輸入的生字 (只取正確的字)
+        function parseVocab(text) {
+            // 過濾掉非中文字元
+            const chars = text.replace(/[^\u4E00-\u9FA5]/g, '').split('');
+            // 使用 Set 移除重複的字
+            const uniqueChars = [...new Set(chars)];
+            
+            let pairs = uniqueChars.map(c => {
+                return { correct: c, wrong: getWrongChar(c) };
+            });
+            return pairs;
+        }
+
+        // 陣列洗牌 (Fisher-Yates)
+        function shuffle(array) {
+            let currentIndex = array.length, randomIndex;
+            while (currentIndex !== 0) {
+                randomIndex = Math.floor(Math.random() * currentIndex);
+                currentIndex--;
+                [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+            }
+            return array;
+        }
+
+        // 生成草稿
+        function generateDrafts() {
+            const text = document.getElementById('vocab-input').value;
+            let pairs = parseVocab(text);
+            
+            if (pairs.length < 20) {
+                showAlert(`您目前只輸入了 ${pairs.length} 個不重複的字。系統需要至少 20 個字來生成兩篇文章。請補充更多生字！`);
+                return;
+            }
+
+            // 打亂所有生字，確保每次抽出不同
+            shuffle(pairs);
+
+            // 挑選前 10 個給第一篇，接下 10 個給第二篇
+            const group1 = pairs.slice(0, 10);
+            const group2 = pairs.slice(10, 20);
+
+            // 再次打亂這 10 個字，讓它們在文章中錯亂出現
+            shuffle(group1);
+            shuffle(group2);
+
+            // 替換模板
+            let draft1 = template1;
+            let draft2 = template2;
+
+            for (let i = 0; i < 10; i++) {
+                // 將錯字與正確字組合成 {錯|正} 的標記
+                let marker1 = `{${group1[i].wrong}|${group1[i].correct}}`;
+                let marker2 = `{${group2[i].wrong}|${group2[i].correct}}`;
+                draft1 = draft1.replace(`{{${i}}}`, marker1);
+                draft2 = draft2.replace(`{{${i}}}`, marker2);
+            }
+
+            document.getElementById('draft-1').value = draft1;
+            document.getElementById('draft-2').value = draft2;
+            
+            showAlert("草稿生成成功！\n系統已自動為您配對錯字。若對自動生成的錯字不滿意，請直接在草稿區修改 {錯字|正確字} 標籤內的文字。");
+        }
+
+        // 解析草稿中的標記並生成對應格式
+        function parseDraft(text) {
+            const regex = /\{([^|]+)\|([^}]+)\}/g;
+            let answers = [];
+            
+            // 題目版文字：替換標記為「錯字」，不加任何樣式
+            let questionText = text.replace(regex, (match, wrong, correct) => {
+                answers.push({ wrong, correct });
+                return wrong;
+            });
+
+            // 解答版文字：保留錯字，但標示紅色與底線讓老師方便對答案
+            let answerText = text.replace(regex, (match, wrong, correct) => {
+                return `<span class="text-red-600 font-extrabold underline decoration-red-400 decoration-2 underline-offset-4">${wrong}</span>`;
+            });
+
+            return { questionText, answerText, answers };
+        }
+
+        // 建立考卷表格 HTML (依照 PDF 橫式樣式)
+        function buildTableHTML(answers, isAnswerKey) {
+            let tableHTML = `<table class="test-table text-xl font-bold font-kai mb-6">
+                <tr>
+                    <th class="py-2 w-20">題號</th>`;
+            for(let i = 1; i <= 10; i++) {
+                tableHTML += `<th class="w-12">${i}</th>`;
+            }
+            tableHTML += `</tr><tr>
+                    <th class="py-4">答案</th>`;
+            for(let i = 0; i < 10; i++) {
+                let cellContent = '';
+                if (isAnswerKey && answers[i]) {
+                    // 解答版表格填入正確字，紅色標示
+                    cellContent = `<span class="text-red-600 text-2xl">${answers[i].correct}</span>`;
+                }
+                tableHTML += `<td>${cellContent}</td>`;
+            }
+            tableHTML += `</tr></table>`;
+            return tableHTML;
+        }
+
+        // 預覽與排版考卷
+        function previewWorksheet() {
+            const draft1 = document.getElementById('draft-1').value.trim();
+            const draft2 = document.getElementById('draft-2').value.trim();
+
+            if (!draft1 || !draft2) {
+                showAlert("草稿不可為空，請先生成草稿。");
+                return;
+            }
+
+            const parsed1 = parseDraft(draft1);
+            const parsed2 = parseDraft(draft2);
+
+            if (parsed1.answers.length !== 10 || parsed2.answers.length !== 10) {
+                showAlert(`警告：\n第一篇偵測到 ${parsed1.answers.length} 個考點。\n第二篇偵測到 ${parsed2.answers.length} 個考點。\n建議修改確保每篇皆為 10 個考點，以符合百分制計算。`);
+            }
+            
+            // 產生 Page 1 (題目版) - 完整一頁包含兩篇
+            let page1HTML = `
+            <div class="a4-page">
+                <div class="flex justify-between items-end mb-2">
+                    <h1 class="text-2xl font-bold tracking-widest font-kai">標題:改錯字練習</h1>
+                    <div class="text-lg font-bold tracking-widest flex items-center font-kai">
+                        4年<span class="w-8 border-b border-black inline-block mx-1"></span>班
+                        <span class="w-8 border-b border-black inline-block mx-1"></span>號
+                        <span class="ml-2">姓名:</span><span class="w-24 border-b border-black inline-block"></span>
+                    </div>
+                </div>
+                <div class="mb-4 text-base font-bold leading-relaxed font-kai">
+                    從文章中圈出錯別字,寫進下方的表格裡改成正確的字。<br>
+                    (按文字出現順序寫,寫錯順序每字扣1分。順序和字都對得5分,共100分)
+                </div>
+                
+                <h2 class="text-xl font-bold mb-2 font-kai">【第一篇】</h2>
+                <div class="text-xl leading-[2.1] tracking-[0.1em] mb-4 text-justify text-gray-900 indent-8 font-kai">
+                    ${parsed1.questionText}
+                </div>
+                ${buildTableHTML(parsed1.answers, false)}
+
+                <h2 class="text-xl font-bold mb-2 font-kai">【第二篇】</h2>
+                <div class="text-xl leading-[2.1] tracking-[0.1em] mb-4 text-justify text-gray-900 indent-8 font-kai">
+                    ${parsed2.questionText}
+                </div>
+                ${buildTableHTML(parsed2.answers, false)}
+            </div>`;
+
+            // 產生 Page 2 (解答版) - 樣式與第一頁相同，但帶有紅字解答
+            let page2HTML = `
+            <div class="a4-page">
+                <div class="flex justify-between items-end mb-2">
+                    <h1 class="text-2xl font-bold tracking-widest font-kai">改錯字練習(解答版)</h1>
+                    <div class="text-lg font-bold tracking-widest flex items-center font-kai">
+                        4年<span class="w-8 border-b border-black inline-block mx-1"></span>班
+                        <span class="w-8 border-b border-black inline-block mx-1"></span>號
+                        <span class="ml-2">姓名:</span><span class="w-24 border-b border-black inline-block"></span>
+                    </div>
+                </div>
+                <div class="mb-4 text-base font-bold leading-relaxed font-kai">
+                    從文章中圈出錯別字,寫進下方的表格裡改成正確的字。<br>
+                    (按文字出現順序寫,寫錯順序每字扣1分。順序和字都對得5分,共100分)
+                </div>
+                
+                <h2 class="text-xl font-bold mb-2 font-kai">【第一篇】</h2>
+                <div class="text-xl leading-[2.1] tracking-[0.1em] mb-4 text-justify text-gray-900 indent-8 font-kai">
+                    ${parsed1.answerText}
+                </div>
+                ${buildTableHTML(parsed1.answers, true)}
+
+                <h2 class="text-xl font-bold mb-2 font-kai">【第二篇】</h2>
+                <div class="text-xl leading-[2.1] tracking-[0.1em] mb-4 text-justify text-gray-900 indent-8 font-kai">
+                    ${parsed2.answerText}
+                </div>
+                ${buildTableHTML(parsed2.answers, true)}
+            </div>`;
+
+            // 注入 DOM
+            document.getElementById('print-pages-container').innerHTML = page1HTML + page2HTML;
+
+            // 切換畫面
+            document.getElementById('setup-view').classList.add('hidden');
+            document.getElementById('preview-view').classList.remove('hidden');
+            window.scrollTo(0, 0);
+        }
+
+        // 返回修改
+        function backToSetup() {
+            document.getElementById('preview-view').classList.add('hidden');
+            document.getElementById('setup-view').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
