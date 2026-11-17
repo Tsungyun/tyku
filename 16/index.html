@@ -217,7 +217,8 @@
 
     <script>
         // --- 幾何與題目生成邏輯 ---
-        const sortEdge = (e) => e.split('').sort().join('');
+        const mapEdge = (edge, mapDict) => edge.split('').map(v => mapDict[v]).join('');
+        const randRev = (s) => Math.random() < 0.5 ? s : s.split('').reverse().join('');
 
         function generateProblemData(index) {
             let a1 = (150 + Math.random() * 30) * Math.PI / 180;
@@ -271,24 +272,28 @@
             let givenAngleVal = Math.floor(Math.random() * 85) + 15; 
 
             let edges1 = ['AB', 'BC', 'CA'];
-            let givenSide1Edge = sortEdge(edges1[Math.floor(Math.random() * 3)]);
+            let givenSide1Edge = randRev(edges1[Math.floor(Math.random() * 3)]);
             let givenSide1Val = (Math.random() * 6 + 3).toFixed(1); 
 
-            let corrEdge1 = sortEdge(M[givenSide1Edge[0]] + M[givenSide1Edge[1]]);
-            let edges2 = ['DE', 'EF', 'FD'].map(sortEdge);
-            let validEdges2 = edges2.filter(e => e !== corrEdge1);
-            let givenSide2Edge = validEdges2[Math.floor(Math.random() * validEdges2.length)];
+            let corrEdge1 = mapEdge(givenSide1Edge, M);
+            
+            let edges2 = ['DE', 'EF', 'FD'];
+            // 確保 givenSide2 和 givenSide1 不是同一組對應邊 (無視順序比對)
+            let baseEdge1Unordered = givenSide1Edge.split('').sort().join('');
+            let validEdges2 = edges2.filter(e => mapEdge(e, R).split('').sort().join('') !== baseEdge1Unordered);
+            
+            let givenSide2Edge = randRev(validEdges2[Math.floor(Math.random() * validEdges2.length)]);
             let givenSide2Val = (Math.random() * 6 + 2).toFixed(1); 
 
             let hintVertex = vertices[Math.floor(Math.random() * 3)];
             let otherVertices = vertices.filter(v => v !== hintVertex);
 
-            let corrSide2 = sortEdge(R[givenSide2Edge[0]] + R[givenSide2Edge[1]]);
+            let corrSide2 = mapEdge(givenSide2Edge, R);
             let corrSide1 = corrEdge1;
 
             let q4Vertices = [...vertices].sort(() => Math.random() - 0.5).slice(0, 2);
-            let q4Edge = edges2[Math.floor(Math.random() * edges2.length)]; 
-            let corrQ4Edge = sortEdge(R[q4Edge[0]] + R[q4Edge[1]]); 
+            let q4Edge = randRev(edges2[Math.floor(Math.random() * edges2.length)]); 
+            let corrQ4Edge = mapEdge(q4Edge, R); 
 
             return {
                 index, pA, pB, pC, relA, relB, relC, cx1, cy1, cx2, cy2, pts2, M, R,
@@ -479,5 +484,12 @@
             generateAll();
         };
     </script>
+
+<!-- 專屬版權宣告頁尾 (乾淨、單行設計) -->
+    <div class="text-center text-gray-400 text-sm mt-8 mb-4 tracking-wider">
+        &copy; 谷宗芸老師設計 / AI 輔助生成
+    </div>
+
+
 </body>
 </html>
