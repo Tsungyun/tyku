@@ -179,21 +179,22 @@
         }
 
         // 指數退避重試機制 (Exponential Backoff) 處理 API 節流
-        async function fetchWithRetry(url, options, maxRetries = 3) {
+        async function fetchWithRetry(url, options, maxRetries = 4) {
             let retries = 0;
             while (retries < maxRetries) {
                 try {
                     const response = await fetch(url, options);
                     // 遇到 429(限流) 或 5xx(伺服器錯誤) 拋出錯誤以觸發重試
                     if (response.status === 429 || response.status >= 500) {
-                        throw new Error(`Server error or throttling: ${response.status}`);
+                        throw new Error(`伺服器繁忙或錯誤 (HTTP ${response.status})`);
                     }
                     return response;
                 } catch (error) {
                     retries++;
                     if (retries >= maxRetries) throw error; // 最後一次重試失敗才真正拋出
-                    // 指數退避等待：1秒, 2秒...
-                    const delay = Math.pow(2, retries - 1) * 1000;
+                    // 指數退避等待：1.5秒, 3秒, 6秒...
+                    const delay = Math.pow(2, retries - 1) * 1500;
+                    console.warn(`連線不穩或限流，正在進行第 ${retries} 次重試...`);
                     await new Promise(resolve => setTimeout(resolve, delay));
                 }
             }
@@ -263,30 +264,43 @@
                 });
                 
                 if (!response.ok) {
-                    throw new Error(`API 請求失敗，狀態碼: ${response.status}`);
+                    const errText = await response.text();
+                    throw new Error(`API 請求被拒絕 (${response.status}): ${errText}`);
                 }
 
                 const result = await response.json();
                 
-                if (result.candidates && result.candidates.length > 0 &&
-                    result.candidates[0].content && result.candidates[0].content.parts &&
-                    result.candidates[0].content.parts.length > 0) {
+                if (!result.candidates || result.candidates.length === 0) {
+                    throw new Error("AI 未回傳任何內容，可能是被內容安全機制阻擋。請嘗試更換幾個生字。");
+                }
+
+                const candidate = result.candidates[0];
+                if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
                     
-                    let jsonStr = result.candidates[0].content.parts[0].text;
-                    // 強制清理多餘的 Markdown 標記，避免 JSON 解析失敗
-                    jsonStr = jsonStr.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+                    let jsonStr = candidate.content.parts[0].text;
                     
-                    const data = JSON.parse(jsonStr);
+                    // 【強化版 JSON 解析】尋找並提取最外層的 { }，避免 AI 回傳了多餘的解說文字
+                    const match = jsonStr.match(/\{[\s\S]*\}/);
+                    if (match) {
+                        jsonStr = match[0];
+                    }
                     
+                    const data = JSON.parse(jsonStr.trim());
+                    
+                    if (!data.draft1 || !data.draft2) {
+                        throw new Error("AI 回傳的資料缺少了其中一篇文章。");
+                    }
+
                     document.getElementById('draft-1').value = data.draft1;
                     document.getElementById('draft-2').value = data.draft2;
                     showAlert("AI 已為您撰寫完成！\n這是一篇專門為您提供的通順短文，並且已自動配置好常用錯字。\n您可以直接預覽考卷，或在這邊做最後微調。");
                 } else {
-                    throw new Error("API 回傳格式錯誤或無內容");
+                    throw new Error("AI 回傳的格式中找不到文字內容。");
                 }
             } catch (error) {
                 console.error("生成錯誤細節:", error);
-                showAlert("生成文章時發生錯誤（伺服器繁忙，已重試）。請再次點擊按鈕生成！");
+                // 這裡會顯示確切的報錯訊息 (error.message)，幫助我們釐清問題
+                showAlert(`生成文章時發生錯誤：\n\n${error.message}\n\n請再次點擊按鈕重試！`);
             } finally {
                 hideLoading();
             }
