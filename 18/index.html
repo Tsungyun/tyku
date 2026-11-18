@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>成語填充練習卷產生器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 定義台灣教育標準楷體 */
+        .font-kai {
+            font-family: 'BiauKai', 'DFKai-SB', 'Kaiti TC', 'Kaiti', 'TW-Kai', '楷體', serif;
+        }
+
+        /* 頁面基礎設定 */
+        body {
+            background-color: #f3f4f6;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* A4 考卷頁面設定 */
+        .a4-page {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 14mm 16mm;
+            background: white;
+            margin: 20px auto;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+            page-break-after: always;
+            position: relative;
+        }
+
+        /* 列印模式下隱藏介面，確保剛好印出乾淨 A4 */
+        @media print {
+            body {
+                background: white;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .a4-page {
+                margin: 0;
+                box-shadow: none;
+                border: none;
+                padding: 12mm 15mm;
+                height: 297mm;
+                overflow: hidden;
+            }
+        }
+
+        /* 讓學生直接書寫四字成語的寬大括號 */
+        .idiom-bracket {
+            display: inline-flex;
+            align-items: baseline;
+            white-space: nowrap;
+            margin: 0 2px;
+        }
+        .idiom-space {
+            display: inline-block;
+            min-width: 7.2em; /* 足夠書寫 4 個國字的寬裕空間 */
+            text-align: center;
+            padding: 0 4px;
+        }
+
+        /* 成語參考區外框 */
+        .word-bank-box {
+            border: 2px solid #000;
+            border-radius: 6px;
+            padding: 10px 14px;
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <!-- 自訂系統提示框 (不使用原生 alert) -->
+    <div id="alert-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden no-print">
+        <div class="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+            <h3 class="text-xl font-bold mb-3 text-blue-700">系統提示</h3>
+            <p id="alert-message" class="mb-6 text-gray-700 whitespace-pre-line leading-relaxed"></p>
+            <div class="flex justify-end">
+                <button onclick="closeAlert()" class="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 transition font-bold">確定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI 生成中遮罩 -->
+    <div id="loading-modal" class="fixed inset-0 bg-black bg-opacity-70 flex flex-col items-center justify-center z-50 hidden no-print px-4 text-center">
+        <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-400 mb-5"></div>
+        <h3 class="text-2xl font-bold text-white tracking-widest font-kai">AI 老師正在為您出題中...</h3>
+        <p class="text-gray-200 mt-2 text-base">系統正從 12 個成語中隨機挑選 10 個並撰寫自然通順的例句，請稍候約 5～10 秒。</p>
+    </div>
+
+    <!-- 設定與編輯介面 (列印時隱藏) -->
+    <div id="setup-view" class="container mx-auto p-4 max-w-6xl no-print">
+        <header class="text-center mb-6 mt-2">
+            <h1 class="text-3xl sm:text-4xl font-extrabold text-blue-800 mb-2">📝 成語填充練習卷產生器</h1>
+            <p class="text-gray-600">輸入或隨機挑選 12 個常用成語，AI 自動隨機抽取 10 個出題，一鍵排版 A4 題目卷與解答卷</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- 左側：成語設定與 API 金鑰區 -->
+            <div class="bg-white rounded-xl shadow-md p-6 border-t-4 border-blue-500 flex flex-col">
+                <h2 class="text-xl font-bold mb-2 flex items-center">
+                    <span class="text-2xl mr-2">1.</span> 設定 12 個成語
+                </h2>
+                <p class="text-sm text-gray-500 mb-3">
+                    請貼上 <strong class="text-blue-600">12 個成語</strong>（用空白、頓號、逗號或換行隔開皆可），或直接點擊下方按鈕由電腦隨機挑選常用成語。
+                </p>
+
+                <!-- 電腦隨機出 12 個常用成語按鈕 -->
+                <button onclick="pickRandomIdioms()" class="w-full mb-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-300 font-bold py-2.5 px-4 rounded-lg transition flex justify-center items-center">
+                    🎲 電腦隨機出 12 個常用成語
+                </button>
+
+                <textarea id="idiom-input" class="w-full h-44 border border-gray-300 rounded-lg p-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-kai leading-relaxed" placeholder="例如：一舉兩得、半途而廢、畫蛇添足..." spellcheck="false"></textarea>
+                <div class="text-right text-xs text-gray-500 mt-1">
+                    目前偵測到：<span id="idiom-count" class="font-bold text-blue-600">0</span> 個不重複成語
+                </div>
+
+                <!-- API 金鑰欄位 (自動記憶於 localStorage) -->
+                <div class="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                    <label class="block text-sm font-bold text-yellow-900 mb-1">🔑 設定 API 金鑰 (通行證)</label>
+                    <p class="text-xs text-yellow-700 mb-2">
+                        第一次使用請貼上金鑰，系統會自動記憶，下次不需重填。
+                        <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-600 underline font-bold hover:text-blue-800">點此免費取得</a>
+                    </p>
+                    <input type="password" id="api-key-input" placeholder="請貼上 AIza 開頭的金鑰..." class="w-full border border-yellow-300 rounded p-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500 font-mono bg-white">
+                </div>
+
+                <!-- AI 生成按鈕 -->
+                <button onclick="generateQuestions()" class="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow transition flex justify-center items-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    呼叫 AI 隨機抽 10 個成語出題
+                </button>
+
+                <!-- 測試排版保底按鈕 -->
+                <button onclick="loadMockData()" class="w-full mt-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-lg border border-gray-300 transition text-sm">
+                    測試排版功能 (載入範例題目)
+                </button>
+            </div>
+
+            <!-- 右側：10 題試題草稿編輯區 -->
+            <div class="lg:col-span-2 bg-white rounded-xl shadow-md p-6 border-t-4 border-green-500 flex flex-col">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 gap-2">
+                    <h2 class="text-xl font-bold flex items-center">
+                        <span class="text-2xl mr-2">2.</span> 確認與微調題目（共 10 題）
+                    </h2>
+                    <button onclick="reshuffleBankOrder()" class="text-sm bg-green-50 hover:bg-green-100 text-green-700 border border-green-300 px-3 py-1.5 rounded-lg font-bold transition">
+                        🔀 重新打亂上方選項順序
+                    </button>
+                </div>
+
+                <p class="text-sm text-gray-500 mb-3">
+                    題目中用 <strong class="text-green-600">{成語}</strong> 標記的地方，在考卷上會自動變成寬大的空白括號，並在解答版填入紅字。您可隨時手動修改句子內容。
+                </p>
+
+                <!-- 考卷上方參考區 12 個成語預覽 -->
+                <div class="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <div class="text-xs font-bold text-gray-600 mb-1.5">考卷【成語參考區】顯示順序（12 個選項，已與題目順序錯開）：</div>
+                    <div id="bank-preview" class="flex flex-wrap gap-2 font-kai text-base text-gray-800">
+                        <span class="text-gray-400 text-sm">尚未生成題目</span>
+                    </div>
+                </div>
+
+                <!-- 10 題編輯清單 -->
+                <div id="questions-editor" class="space-y-2.5 flex-1">
+                    <!-- JS 動態產生 1~10 題輸入框 -->
+                </div>
+
+                <div class="flex justify-end mt-6 pt-4 border-t border-gray-100">
+                    <button onclick="previewWorksheet()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg shadow-lg transition text-lg flex items-center">
+                        <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                        預覽並建立 A4 考卷
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- A4 考卷預覽與列印區 -->
+    <div id="preview-view" class="hidden pb-20">
+        <div class="no-print bg-gray-800 text-white p-4 sticky top-0 z-40 shadow-md flex flex-wrap justify-between items-center gap-3">
+            <button onclick="backToSetup()" class="bg-gray-600 hover:bg-gray-500 px-4 py-2 rounded-lg transition font-bold">
+                ← 返回修改題目
+            </button>
+            <div class="text-lg sm:text-xl font-bold">考卷預覽模式（共 2 頁：題目版 ＋ 解答版）</div>
+            <button onclick="window.print()" class="bg-blue-500 hover:bg-blue-400 text-white font-bold px-6 py-2 rounded-lg shadow transition flex items-center">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                列印考卷 / 存成 PDF
+            </button>
+        </div>
+
+        <div id="print-pages-container" class="font-kai text-black">
+            <!-- JS 動態生成 Page 1 (題目版) 與 Page 2 (解答版) -->
+        </div>
+    </div>
+
+    <script>
+        // 內建常用國小/國中成語庫（皆為高頻率、實用的常見成語，絕無偏僻冷門字）
+        const COMMON_IDIOMS = [
+            "一舉兩得", "半途而廢", "畫蛇添足", "守株待兔", "對牛彈琴", "井底之蛙",
+            "狐假虎威", "亡羊補牢", "刻舟求劍", "掩耳盜鈴", "自相矛盾", "拔苗助長",
+            "塞翁失馬", "水落石出", "一目十行", "專心致志", "持之以恆", "事半功倍",
+            "雪中送炭", "錦上添花", "同舟共濟", "飲水思源", "知足常樂", "居安思危",
+            "未雨綢繆", "胸有成竹", "神采奕奕", "興高采烈", "眉開眼笑", "垂頭喪氣",
+            "大驚小怪", "驚慌失措", "手忙腳亂", "從容不迫", "津津有味", "狼吞虎嚥",
+            "川流不息", "車水馬龍", "人山人海", "風和日麗", "鳥語花香", "山明水秀",
+            "五顏六色", "萬紫千紅", "一帆風順", "心滿意足", "全神貫注", "不恥下問",
+            "溫故知新", "循序漸進", "以身作則", "助人為樂", "拾金不昧", "精益求精",
+            "百折不撓", "眾志成城", "團結一致", "豁然開朗", "恍然大悟", "喜出望外",
+            "迫不及待", "流連忘返", "目不轉睛", "名列前茅", "全力以赴", "引人入勝",
+            "如魚得水", "大功告成", "馬到成功", "異口同聲", "不約而同", "實事求是"
+        ];
+
+        // 儲存目前考卷參考區的 12 個成語（已打亂順序）
+        let currentWordBank = [];
+
+        // 頁面初始化
+        window.onload = () => {
+            initQuestionInputs();
+            pickRandomIdioms(false); // 預設先載入 12 個常用成語方便使用
+
+            // 監聽輸入框變化以即時顯示成語數量
+            document.getElementById('idiom-input').addEventListener('input', updateIdiomCount);
+
+            // 自動讀取已儲存的 API 金鑰
+            const savedKey = localStorage.getItem('gemini_api_key');
+            if (savedKey) {
+                document.getElementById('api-key-input').value = savedKey;
+            }
+        };
+
+        // 初始化右側 10 題輸入框
+        function initQuestionInputs() {
+            const container = document.getElementById('questions-editor');
+            let html = '';
+            for (let i = 1; i <= 10; i++) {
+                html += `
+                <div class="flex items-start gap-2">
+                    <span class="font-bold text-gray-600 w-7 pt-2 text-right select-none">${i}.</span>
+                    <input type="text" id="q-input-${i}" placeholder="第 ${i} 題例句（答案請用 {成語} 包住）"
+                        class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-green-500 font-kai" spellcheck="false">
+                </div>`;
+            }
+            container.innerHTML = html;
+        }
+
+        // 提示視窗控制
+        function showAlert(msg) {
+            document.getElementById('alert-message').innerText = msg;
+            document.getElementById('alert-modal').classList.remove('hidden');
+        }
+        function closeAlert() {
+            document.getElementById('alert-modal').classList.add('hidden');
+        }
+        function showLoading() {
+            document.getElementById('loading-modal').classList.remove('hidden');
+        }
+        function hideLoading() {
+            document.getElementById('loading-modal').classList.add('hidden');
+        }
+
+        // Fisher-Yates 洗牌演算法
+        function shuffle(array) {
+            const arr = [...array];
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        }
+
+        // 解析使用者輸入的成語清單
+        function parseIdiomInput() {
+            const raw = document.getElementById('idiom-input').value;
+            const list = raw
+                .split(/[\s,，、;；。．\n\r\t]+/)
+                .map(s => s.replace(/[^\u4E00-\u9FA5]/g, '').trim())
+                .filter(s => s.length >= 2);
+            return [...new Set(list)]; // 去重
+        }
+
+        // 更新成語計數
+        function updateIdiomCount() {
+            const list = parseIdiomInput();
+            document.getElementById('idiom-count').innerText = list.length;
+        }
+
+        // 電腦隨機出 12 個常用成語
+        function pickRandomIdioms(notify = false) {
+            const picked = shuffle(COMMON_IDIOMS).slice(0, 12);
+            document.getElementById('idiom-input').value = picked.join('、');
+            updateIdiomCount();
+            if (notify) {
+                showAlert("✅ 已為您隨機挑選 12 個常用成語！\n接著點擊「呼叫 AI 隨機抽 10 個成語出題」即可生成考卷。");
+            }
+        }
+
+        // 渲染上方 12 個參考成語預覽
+        function renderBankPreview() {
+            const el = document.getElementById('bank-preview');
+            if (currentWordBank.length === 0) {
+                el.innerHTML = '<span class="text-gray-400 text-sm">尚未生成題目</span>';
+                return;
+            }
+            el.innerHTML = currentWordBank.map(idiom =>
+                `<span class="bg-white border border-gray-300 px-2.5 py-0.5 rounded shadow-sm">${idiom}</span>`
+            ).join('');
+        }
+
+        // 重新打亂上方 12 個選項的顯示順序
+        function reshuffleBankOrder() {
+            if (currentWordBank.length === 0) {
+                const list = parseIdiomInput();
+                if (list.length >= 12) {
+                    currentWordBank = shuffle(list).slice(0, 12);
+                } else {
+                    showAlert("請先生成題目或輸入至少 12 個成語。");
+                    return;
+                }
+            } else {
+                currentWordBank = shuffle(currentWordBank);
+            }
+            renderBankPreview();
+        }
+
+        // 載入範例題目（供離線測試 A4 排版用）
+        function loadMockData() {
+            const mockBank = [
+                "一舉兩得", "半途而廢", "風和日麗", "津津有味",
+                "興高采烈", "雪中送炭", "持之以恆", "專心致志",
+                "手忙腳亂", "水落石出", "飲水思源", "流連忘返"
+            ];
+            const mockQuestions = [
+                "在一個{風和日麗}的週末早晨，我們全家人一起到郊外踏青野餐。",
+                "學習任何才藝都必須{持之以恆}，如果三天打魚兩天曬網，是很難成功的。",
+                "弟弟一聽到明天要去遊樂園，立刻高興得{興高采烈}，連晚上都睡不著覺。",
+                "這道料理色香味俱全，妹妹吃得{津津有味}，一下子就把整碗飯吃光了。",
+                "這件懸案在警方細心抽絲剝繭的調查下，真相終於{水落石出}了。",
+                "騎腳踏車上學既能鍛鍊身體，又可以節省交通費，真是一項{一舉兩得}的好方法。",
+                "正當我們家遭遇困難時，熱心的鄰居主動伸出援手，真是{雪中送炭}。",
+                "上課時如果能{專心致志}地聽老師講解，回家複習功課就會輕鬆許多。",
+                "因為鬧鐘忘記設定，早上起床發現快遲到了，害我慌張得{手忙腳亂}。",
+                "遇到一點小挫折就輕易{半途而廢}，永遠無法體會達成目標的成就感。"
+            ];
+
+            document.getElementById('idiom-input').value = mockBank.join('、');
+            updateIdiomCount();
+
+            // 刻意打亂參考區順序，確保與題目順序不同
+            currentWordBank = shuffle(mockBank);
+            renderBankPreview();
+
+            mockQuestions.forEach((q, idx) => {
+                document.getElementById(`q-input-${idx + 1}`).value = q;
+            });
+
+            showAlert("✅ 已載入 12 個範例成語與 10 題範例試題！\n您可以直接點擊右下角的「預覽並建立 A4 考卷」檢視排版與列印效果。");
+        }
+
+        // 具有自動重試機制的 fetch
+        async function fetchWithRetry(url, options, retries = 3, delay = 2000) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const res = await fetch(url, options);
+                    if (!res.ok) {
+                        const errBody = await res.json().catch(() => ({}));
+                        throw new Error(errBody.error?.message || `HTTP 錯誤碼：${res.status}`);
+                    }
+                    return res;
+                } catch (e) {
+                    if (i === retries - 1) throw e;
+                    await new Promise(res => setTimeout(res, delay));
+                }
+            }
+        }
+
+        // 呼叫 AI 從 12 個成語中隨機挑 10 個並生成 10 句例句
+        async function generateQuestions() {
+            const apiKey = document.getElementById('api-key-input').value.trim();
+            if (!apiKey) {
+                showAlert("⛔ 請先在左下方填寫您的 API 金鑰（通行證），才能呼叫 AI 老師幫忙出題喔！\n\n如果還沒有金鑰，請點擊欄位上方的「點此免費取得」連結。");
+                return;
+            }
+            localStorage.setItem('gemini_api_key', apiKey);
+
+            const allIdioms = parseIdiomInput();
+            if (allIdioms.length < 12) {
+                showAlert(`目前只偵測到 ${allIdioms.length} 個不重複成語。\n請至少輸入 12 個成語，或點擊「🎲 電腦隨機出 12 個常用成語」。`);
+                return;
+            }
+
+            // 1. 先隨機取 12 個作為考卷上的「成語參考區」選項
+            const selected12 = shuffle(allIdioms).slice(0, 12);
+            // 2. 從這 12 個中隨機抽 10 個作為考題，並且再次徹底打亂順序，確保與選項順序不同
+            let question10 = shuffle(selected12).slice(0, 10);
+            // 雙重保險：確保題目順序與參考區前 10 個順序不完全相同
+            const bankOrder = shuffle(selected12);
+
+            showLoading();
+
+            const prompt = `你是一位專業的台灣國小國語老師。
+請針對以下指定的 10 個成語，依照給定的順序，各撰寫 1 句完整、自然、語意通順、適合國小學生閱讀與作答的繁體中文例句（每句約 22～38 字，語境提示要清楚明確，讓學生能精準判斷出應該填入哪一個成語）。
+
+指定的 10 個成語（請嚴格按照這個順序出第 1 題到第 10 題）：
+${question10.map((idiom, i) => `${i + 1}. ${idiom}`).join('\n')}
+
+【重要規則】：
+1. 每題句子中，請將該題對應的正確成語直接用大括號包起來，格式為 \`{成語}\`（例如：在一個{風和日麗}的週末，我們全家去郊遊。）。
+2. 除了答案本身用 \`{成語}\` 標示外，不要在句子裡加上額外的括號或引號。
+3. 每個句子只能包含 1 個 \`{成語}\`，且句子內容不可直接重複出現該成語裡的關鍵提示，避免答案太明顯，但上下文情境要夠明確，不會和其他成語混淆。
+4. 嚴格回傳 JSON 格式，包含一個名為 \`questions\` 的陣列，陣列內剛好有 10 個字串。`;
+
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    responseMimeType: "application/json"
+                }
+            };
+
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await fetchWithRetry(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                if (result.error) {
+                    throw new Error(`伺服器拒絕連線：${result.error.message || 'API 金鑰無效'}`);
+                }
+
+                if (result.candidates && result.candidates.length > 0) {
+                    let jsonStr = result.candidates[0].content.parts[0].text;
+                    jsonStr = jsonStr.replace(/```json/g, '').replace(/```/g, '').trim();
+                    const data = JSON.parse(jsonStr);
+
+                    if (!Array.isArray(data.questions) || data.questions.length < 10) {
+                        throw new Error("AI 回傳的題目數量不足 10 題，請再試一次。");
+                    }
+
+                    // 更新參考區與 10 題草稿
+                    currentWordBank = bankOrder;
+                    renderBankPreview();
+
+                    for (let i = 0; i < 10; i++) {
+                        document.getElementById(`q-input-${i + 1}`).value = data.questions[i].trim();
+                    }
+
+                    showAlert("🎉 AI 老師已成功出好 10 題成語填充題！\n上方 12 個參考選項已與題號順序打亂。\n您可以檢視或微調句子，確認無誤後即可預覽 A4 考卷。");
+                } else {
+                    throw new Error("API 沒有回傳預期的內容。");
+                }
+            } catch (error) {
+                console.error("生成錯誤:", error);
+                showAlert(`⚠️ 系統連線異常：\n\n${error.message}\n\n請檢查您的 API 金鑰是否正確，或稍後再試！`);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // 將句子中的 {成語} 轉換成考卷的寬大括號（題目版空白、解答版紅字）
+        function formatQuestionSentence(sentence, isAnswerKey) {
+            const regex = /\{([^}]+)\}/g;
+            return sentence.replace(regex, (match, idiom) => {
+                if (isAnswerKey) {
+                    return `<span class="idiom-bracket">（<span class="idiom-space text-red-600 font-bold">${idiom}</span>）</span>`;
+                } else {
+                    return `<span class="idiom-bracket">（<span class="idiom-space">&nbsp;</span>）</span>`;
+                }
+            });
+        }
+
+        // 建立單頁 A4 考卷 HTML（題目版或解答版）
+        function buildPageHTML(questions, bankIdioms, isAnswerKey) {
+            const titleText = isAnswerKey ? "成語填充練習（解答版）" : "成語填充練習";
+
+            // 12 個成語以 4 欄 x 3 列整齊排列
+            const bankGridHTML = bankIdioms.map(idiom =>
+                `<div class="text-center py-1 tracking-widest">${idiom}</div>`
+            ).join('');
+
+            // 10 題題目列表
+            const questionsHTML = questions.map((q, idx) => `
+                <div class="flex items-baseline text-[19px] leading-[2.05] tracking-[0.06em] text-justify mb-2">
+                    <span class="font-bold mr-2 shrink-0 w-7 text-right">${idx + 1}.</span>
+                    <div class="flex-1">${formatQuestionSentence(q, isAnswerKey)}</div>
+                </div>
+            `).join('');
+
+            return `
+            <div class="a4-page font-kai">
+                <!-- 標題與班級姓名（無底線，乾淨空格） -->
+                <div class="flex justify-between items-end mb-2">
+                    <h1 class="text-2xl font-bold tracking-widest">${titleText}</h1>
+                    <div class="text-lg font-bold tracking-widest flex items-center">
+                        <span class="w-8 inline-block mx-1"></span>年
+                        <span class="w-8 inline-block mx-1"></span>班
+                        <span class="w-8 inline-block mx-1"></span>號
+                        <span class="ml-3">姓名：</span><span class="w-24 inline-block"></span>
+                    </div>
+                </div>
+
+                <!-- 分數與家長簽名欄（無底線，留出足夠簽名空間） -->
+                <div class="flex justify-end items-center text-lg font-bold tracking-widest mb-3 pb-2 border-b-2 border-black">
+                    <span>分數：</span><span class="w-20 inline-block"></span>
+                    <span class="ml-6">家長簽名：</span><span class="w-40 inline-block"></span>
+                </div>
+
+                <!-- 作答與計分說明 -->
+                <div class="mb-3 text-[15px] font-bold leading-relaxed">
+                    請從下方的成語參考區中，選出最適合的成語填入括號內（請直接填入完整成語，每個成語最多使用一次）。<br>
+                    （一題 10 分，寫錯一個字扣 1 分，共 100 分）
+                </div>
+
+                <!-- 12 個成語參考區 -->
+                <div class="word-bank-box mb-5">
+                    <div class="text-sm font-bold mb-1 tracking-widest text-gray-800">【成語參考區】</div>
+                    <div class="grid grid-cols-4 gap-y-1 text-xl font-bold">
+                        ${bankGridHTML}
+                    </div>
+                </div>
+
+                <!-- 10 題填充題 -->
+                <div class="flex-1 flex flex-col justify-between">
+                    ${questionsHTML}
+                </div>
+            </div>`;
+        }
+
+        // 預覽並生成 A4 考卷
+        function previewWorksheet() {
+            const questions = [];
+            let missingCount = 0;
+
+            for (let i = 1; i <= 10; i++) {
+                const val = document.getElementById(`q-input-${i}`).value.trim();
+                if (!val) {
+                    missingCount++;
+                }
+                questions.push(val);
+            }
+
+            if (missingCount === 10) {
+                showAlert("題目區目前是空白的，請先點擊「呼叫 AI 隨機抽 10 個成語出題」或「測試排版功能」。");
+                return;
+            }
+            if (missingCount > 0) {
+                showAlert(`目前還有 ${missingCount} 題尚未填寫內容，請補齊全部 10 題後再建立考卷。`);
+                return;
+            }
+
+            // 若參考區尚未初始化，則自動從輸入框抓取 12 個並打亂
+            if (currentWordBank.length < 12) {
+                const parsed = parseIdiomInput();
+                if (parsed.length >= 12) {
+                    currentWordBank = shuffle(parsed).slice(0, 12);
+                    renderBankPreview();
+                } else {
+                    currentWordBank = parsed;
+                }
+            }
+
+            const page1HTML = buildPageHTML(questions, currentWordBank, false);
+            const page2HTML = buildPageHTML(questions, currentWordBank, true);
+
+            document.getElementById('print-pages-container').innerHTML = page1HTML + page2HTML;
+            document.getElementById('setup-view').classList.add('hidden');
+            document.getElementById('preview-view').classList.remove('hidden');
+            window.scrollTo(0, 0);
+        }
+
+        // 返回編輯畫面
+        function backToSetup() {
+            document.getElementById('preview-view').classList.add('hidden');
+            document.getElementById('setup-view').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
