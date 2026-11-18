@@ -94,7 +94,14 @@
                 <p class="text-sm text-gray-500 mb-3">請貼上至少 20 個<strong class="text-blue-600">正確的字</strong>。系統會透過 AI 自動為您寫出通順的文章，並替換常見的同音/形似錯字。</p>
                 <textarea id="vocab-input" class="w-full h-64 border border-gray-300 rounded p-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-kai" spellcheck="false"></textarea>
                 
-                <button onclick="generateDrafts()" class="w-full mt-6 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded shadow transition flex justify-center items-center">
+                <!-- 新增：電腦獨立執行專用金鑰欄位 -->
+                <div class="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                    <label class="block text-sm font-bold text-yellow-900 mb-1">🔑 設定 API 金鑰 (通行證)</label>
+                    <p class="text-xs text-yellow-700 mb-2">第一次使用請貼上金鑰。系統會自動記憶，之後不用再填。<a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-600 underline font-bold hover:text-blue-800">點此免費取得</a></p>
+                    <input type="password" id="api-key-input" placeholder="請貼上 AIza 開頭的金鑰..." class="w-full border border-yellow-300 rounded p-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500 font-mono">
+                </div>
+                
+                <button onclick="generateDrafts()" class="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded shadow transition flex justify-center items-center">
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
                     呼叫 AI 生成通順文章與錯字
                 </button>
@@ -155,6 +162,12 @@
         // 初始化
         window.onload = () => {
             document.getElementById('vocab-input').value = defaultVocab;
+            
+            // 讀取之前存過的金鑰
+            const savedKey = localStorage.getItem('gemini_api_key');
+            if (savedKey) {
+                document.getElementById('api-key-input').value = savedKey;
+            }
         };
 
         // 自訂提示框
@@ -208,7 +221,16 @@
         // 透過 AI 生成草稿 (直接連結回主系統的思維)
         async function generateDrafts() {
             const text = document.getElementById('vocab-input').value;
-            const apiKey = ""; // 系統自動帶入，不需要再請老師手動填寫
+            const apiKeyInput = document.getElementById('api-key-input').value.trim();
+            
+            if (!apiKeyInput) {
+                showAlert("⛔ 請先在左下方填寫您的 API 金鑰（通行證），才能呼叫 AI 幫忙寫文章喔！\n\n如果您還沒有金鑰，請點擊欄位上方的「點此免費取得」連結。");
+                return;
+            }
+            
+            // 儲存金鑰，下次打開網頁不用再填
+            localStorage.setItem('gemini_api_key', apiKeyInput);
+            const apiKey = apiKeyInput;
 
             // 過濾掉非中文字元並去重
             const chars = [...new Set(text.replace(/[^\u4E00-\u9FA5]/g, '').split(''))];
@@ -255,6 +277,10 @@
                 
                 const result = await response.json();
                 
+                if (result.error) {
+                    throw new Error(`伺服器拒絕連線：${result.error.message || 'API 金鑰無效'}`);
+                }
+                
                 if (result.candidates && result.candidates.length > 0) {
                     let jsonStr = result.candidates[0].content.parts[0].text;
                     
@@ -271,7 +297,7 @@
                 }
             } catch (error) {
                 console.error("生成錯誤:", error);
-                showAlert(`⚠️ 系統連線異常：\n\n生成文章時發生錯誤，可能是網路繁忙或格式解析失敗。\n請再次點擊按鈕重新生成！`);
+                showAlert(`⚠️ 系統連線異常：\n\n${error.message}\n\n請檢查您的 API 金鑰是否正確，或稍後再試！`);
             } finally {
                 hideLoading();
             }
