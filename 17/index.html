@@ -94,7 +94,7 @@
                 <p class="text-sm text-gray-500 mb-3">請貼上至少 20 個<strong class="text-blue-600">正確的字</strong>。系統會透過 AI 自動為您寫出通順的文章，並替換常見的同音/形似錯字。</p>
                 <textarea id="vocab-input" class="w-full h-64 border border-gray-300 rounded p-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-kai" spellcheck="false"></textarea>
                 
-                <!-- 新增：電腦獨立執行專用金鑰欄位 -->
+                <!-- API 金鑰欄位 (加入自動記憶) -->
                 <div class="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
                     <label class="block text-sm font-bold text-yellow-900 mb-1">🔑 設定 API 金鑰 (通行證)</label>
                     <p class="text-xs text-yellow-700 mb-2">第一次使用請貼上金鑰。系統會自動記憶，之後不用再填。<a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-600 underline font-bold hover:text-blue-800">點此免費取得</a></p>
@@ -154,6 +154,7 @@
             <!-- JS 將在這裡生成 Page 1 (題目版) 和 Page 2 (解答版) -->
         </div>
     </div>
+
 <!-- 專屬版權宣告頁尾 (乾淨、單行設計) -->
     <div class="text-center text-gray-400 text-sm mt-8 mb-4 tracking-wider">
         &copy; 谷宗芸老師設計 / AI 輔助生成
@@ -371,10 +372,10 @@
                 <div class="flex justify-between items-end mb-2">
                     <h1 class="text-2xl font-bold tracking-widest font-kai">標題:改錯字練習</h1>
                     <div class="text-lg font-bold tracking-widest flex items-center font-kai">
-                        <span class="w-8 border-b border-black inline-block mx-1"></span>年
-                        <span class="w-8 border-b border-black inline-block mx-1"></span>班
-                        <span class="w-8 border-b border-black inline-block mx-1"></span>號
-                        <span class="ml-2">姓名:</span><span class="w-24 border-b border-black inline-block"></span>
+                        <span class="w-12 border-b border-black inline-block mx-1"></span>年
+                        <span class="w-12 border-b border-black inline-block mx-1"></span>班
+                        <span class="w-12 border-b border-black inline-block mx-1"></span>號
+                        <span class="ml-2">姓名：</span><span class="w-32 border-b border-black inline-block"></span>
                     </div>
                 </div>
                 <div class="mb-4 text-base font-bold leading-relaxed font-kai">
@@ -401,10 +402,10 @@
                 <div class="flex justify-between items-end mb-2">
                     <h1 class="text-2xl font-bold tracking-widest font-kai">改錯字練習(解答版)</h1>
                     <div class="text-lg font-bold tracking-widest flex items-center font-kai">
-                        <span class="w-8 border-b border-black inline-block mx-1"></span>年
-                        <span class="w-8 border-b border-black inline-block mx-1"></span>班
-                        <span class="w-8 border-b border-black inline-block mx-1"></span>號
-                        <span class="ml-2">姓名:</span><span class="w-24 border-b border-black inline-block"></span>
+                        <span class="w-12 border-b border-black inline-block mx-1"></span>年
+                        <span class="w-12 border-b border-black inline-block mx-1"></span>班
+                        <span class="w-12 border-b border-black inline-block mx-1"></span>號
+                        <span class="ml-2">姓名：</span><span class="w-32 border-b border-black inline-block"></span>
                     </div>
                 </div>
                 <div class="mb-4 text-base font-bold leading-relaxed font-kai">
@@ -440,6 +441,5 @@
             document.getElementById('setup-view').classList.remove('hidden');
         }
     </script>
-
 </body>
 </html>
