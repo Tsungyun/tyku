@@ -94,22 +94,12 @@
                 <p class="text-sm text-gray-500 mb-3">請貼上至少 20 個<strong class="text-blue-600">正確的字</strong>。系統會透過 AI 自動為您寫出通順的文章，並替換常見的同音/形似錯字。</p>
                 <textarea id="vocab-input" class="w-full h-64 border border-gray-300 rounded p-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-kai" spellcheck="false"></textarea>
                 
-                <!-- 新增：API 金鑰欄位與說明 -->
-                <div class="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg text-sm">
-                    <label class="block text-gray-700 font-bold mb-1 flex items-center">
-                        <svg class="w-4 h-4 mr-1 text-yellow-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
-                        電腦獨立執行專用 (選填)
-                    </label>
-                    <p class="text-gray-500 mb-2">若您是<strong class="text-red-500">下載到自己電腦上</strong>打開，Google 會阻擋未授權連線，請在此填入 Gemini API 金鑰。<br>*(若在原網頁的右側預覽畫面中操作，請保持空白)*</p>
-                    <input type="password" id="api-key-input" class="w-full border border-gray-300 rounded p-2 focus:ring-blue-500" placeholder="在此貼上 API Key (AIzaSy...)">
-                </div>
-
-                <button onclick="generateDrafts()" class="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded shadow transition flex justify-center items-center">
+                <button onclick="generateDrafts()" class="w-full mt-6 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded shadow transition flex justify-center items-center">
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
                     呼叫 AI 生成通順文章與錯字
                 </button>
                 
-                <!-- 新增：保底測試按鈕 -->
+                <!-- 保底測試按鈕 -->
                 <button onclick="loadMockData()" class="w-full mt-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded shadow transition text-sm flex justify-center items-center">
                     測試排版功能 (載入範例文章)
                 </button>
@@ -201,12 +191,24 @@
             return array;
         }
 
-        // 透過 AI 生成草稿 (全面強化版)
+        // 具有重試機制的 fetch，避免 AI 伺服器繁忙
+        async function fetchWithRetry(url, options, retries = 3, delay = 2000) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const res = await fetch(url, options);
+                    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                    return res;
+                } catch (e) {
+                    if (i === retries - 1) throw e;
+                    await new Promise(res => setTimeout(res, delay));
+                }
+            }
+        }
+
+        // 透過 AI 生成草稿 (直接連結回主系統的思維)
         async function generateDrafts() {
             const text = document.getElementById('vocab-input').value;
-            // 抓取 API 金鑰
-            const apiKeyInput = document.getElementById('api-key-input').value.trim();
-            const apiKey = apiKeyInput || "";
+            const apiKey = ""; // 系統自動帶入，不需要再請老師手動填寫
 
             // 過濾掉非中文字元並去重
             const chars = [...new Set(text.replace(/[^\u4E00-\u9FA5]/g, '').split(''))];
@@ -222,17 +224,18 @@
 
             showLoading();
 
-            const prompt = `你是一個專業的國小國語老師，擅長編寫「改錯字練習」的文章。
-我將給你兩組生字，請你分別為這兩組生字撰寫兩篇語意通順、自然、符合國小學生生活或遊記情境的短文。
+            const prompt = `你是一位專業的台灣國小國語老師。
+請分別使用以下兩組生字，寫兩篇完全不同的通順短文（每篇約150-200字，適合國小學生閱讀的記敘文、日記或遊記）。
 
-群組一的生字：${group1.join(', ')}
-群組二的生字：${group2.join(', ')}
+第一組生字：${group1.join(', ')}
+第二組生字：${group2.join(', ')}
 
-【任務要求】：
-1. 第一篇文章必須完美融入群組一的10個字；第二篇文章必須完美融入群組二的10個字。文章必須通順。
-2. 對於指定的生字，請把它們替換為小學生常見的「同音錯字」或「形似錯字」。錯字必須是常用字。
-3. 格式：在文章中，請直接用 \`{錯字|正確字}\` 的格式來呈現這些被替換的字，絕對不要加引號。
-4. 回傳要求：請回傳嚴格的 JSON 格式，必須包含 draft1 和 draft2 兩個欄位。`;
+【重要規則】：
+1. 第一篇必須包含第一組的10個字；第二篇必須包含第二組的10個字。
+2. 將這些生字替換成「國小常見的同音錯字或形似錯字」。錯字必須是常用字。
+3. 在文章中，請直接以 \`{錯字|正確字}\` 的格式標示，不要加任何引號或多餘符號。
+4. 兩篇文章必須語意通順、自然、邏輯合理，絕對不可以硬湊。
+5. 請務必回傳嚴格的 JSON 格式，必須包含 draft1 和 draft2 兩個欄位。`;
 
             const payload = {
                 contents: [{ parts: [{ text: prompt }] }],
@@ -250,47 +253,25 @@
                     body: JSON.stringify(payload)
                 });
                 
-                if (!response.ok) {
-                    const errText = await response.text();
-                    throw new Error(`HTTP ${response.status}: ${errText}`);
-                }
-
                 const result = await response.json();
                 
-                if (!result.candidates || result.candidates.length === 0) {
-                    throw new Error("AI 未回傳任何內容。");
-                }
-
-                const candidate = result.candidates[0];
-                if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
-                    let jsonStr = candidate.content.parts[0].text;
-                    const match = jsonStr.match(/\{[\s\S]*\}/);
-                    if (match) {
-                        jsonStr = match[0];
-                    }
+                if (result.candidates && result.candidates.length > 0) {
+                    let jsonStr = result.candidates[0].content.parts[0].text;
                     
-                    const data = JSON.parse(jsonStr.trim());
+                    // 強制清理可能出現的 markdown 標記 (防呆機制)
+                    jsonStr = jsonStr.replace(/```json/g, '').replace(/```/g, '').trim();
                     
-                    if (!data.draft1 || !data.draft2) {
-                        throw new Error("JSON 格式缺少 draft1 或 draft2。");
-                    }
-
+                    const data = JSON.parse(jsonStr);
+                    
                     document.getElementById('draft-1').value = data.draft1;
                     document.getElementById('draft-2').value = data.draft2;
-                    showAlert("🎉 AI 已成功為您撰寫完成！\n這是一篇專門為您提供的通順短文。\n您可以直接預覽考卷，或在這邊做最後微調。");
+                    showAlert("🎉 AI 老師已成功為您撰寫完成！\n這兩篇文章是即時為您生成的通順短文。\n您可以直接預覽考卷，或在這邊做最後微調。");
                 } else {
-                    throw new Error("找不到文字內容。");
+                    throw new Error("API 沒有回傳預期的內容。");
                 }
             } catch (error) {
-                console.error("生成錯誤細節:", error);
-                
-                let errorMsg = error.message;
-                // 針對沒有權限 (通常發生在下載到桌面，且未填 API Key 時) 的超清晰提示
-                if (errorMsg.includes('PERMISSION_DENIED') || errorMsg.includes('API_KEY_INVALID') || errorMsg.includes('403') || errorMsg.includes('400')) {
-                    showAlert(`⚠️ AI 授權失敗 (權限遭拒絕)！\n\n系統偵測到您將網頁「下載到了自己的電腦上」。脫離了目前的 AI 平台，Google 會阻擋未具名的連線。\n\n【解決方案】：\n1. 請在左側輸入您的 Gemini API 金鑰。\n2. 若您沒有金鑰，請「不要下載檔案」，直接在網頁右側的預覽畫面中使用。\n3. 若只想確認排版功能，可直接點擊『測試排版功能』按鈕。`);
-                } else {
-                    showAlert(`⚠️ 發生未知連線異常：\n\n${errorMsg}\n\n建議重整網頁稍後再試，或先點擊『測試排版功能』體驗列印效果。`);
-                }
+                console.error("生成錯誤:", error);
+                showAlert(`⚠️ 系統連線異常：\n\n生成文章時發生錯誤，可能是網路繁忙或格式解析失敗。\n請再次點擊按鈕重新生成！`);
             } finally {
                 hideLoading();
             }
