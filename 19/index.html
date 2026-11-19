@@ -667,6 +667,9 @@
     const originalPreviewImg = document.getElementById('originalPreviewImg');
     const originalSummaryText = document.getElementById('originalSummaryText');
     const imageMetaText = document.getElementById('imageMetaText');
+    const conceptTitle = document.getElementById('conceptTitle');
+    const questionCountBadge = document.getElementById('questionCountBadge');
+    const countReasonText = document.getElementById('countReasonText');
     const questionsContainer = document.getElementById('questionsContainer');
     const answeredCountText = document.getElementById('answeredCountText');
     const totalQuestionsText = document.getElementById('totalQuestionsText');
@@ -997,6 +1000,15 @@
 8. ${countInstruction}`;
 
       const userPrompt = `請仔細閱讀這張數學題目截圖（圖檔資訊：${width}×${height} 像素，大小約 ${sizeKB} KB），先辨識其核心數學概念與是否包含圖形，再生成 4 到 8 題相同概念但不同數字的類似練習題；若原題有圖，請務必為每一題都繪製對應新數字的 SVG 數學圖形。`;
+
+      const payload = {
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: userPrompt },
+              {
+                inlineData: {
                   mimeType: state.imageMimeType,
                   data: state.imageBase64,
                 },
