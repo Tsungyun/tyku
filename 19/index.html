@@ -306,6 +306,16 @@
           <p id="loadingStatusText" class="text-sm text-slate-500 animate-pulse-soft">
             正在辨識題目概念、評估字數與設計不同數字的練習題
           </p>
+          <p id="loadingTimerText" class="text-xs text-slate-400 mt-2 font-mono">已等待 0 秒</p>
+          <div class="mt-5">
+            <button
+              id="cancelGenerateBtn"
+              type="button"
+              class="px-4 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold transition-colors"
+            >
+              取消返回
+            </button>
+          </div>
         </div>
       </div>
     </section>
@@ -631,13 +641,15 @@
     const state = {
       imageDataUrl: null,
       imageBase64: null,
-      imageMimeType: 'image/png',
+      imageMimeType: 'image/jpeg',
       imageMeta: { width: 0, height: 0, sizeKB: 0 },
       practiceData: null,
       activeQuestionIndex: 0,
       keypadMinimized: false,
       keypadSymMode: false,
       isGenerating: false,
+      abortController: null,
+      loadingTimerId: null,
       customApiKey: (() => {
         try { return localStorage.getItem('math_gen_custom_api_key') || ''; } catch (_) { return ''; }
       })(),
@@ -656,6 +668,8 @@
     const practiceSection = document.getElementById('practiceSection');
     const loadingPreviewImg = document.getElementById('loadingPreviewImg');
     const loadingStatusText = document.getElementById('loadingStatusText');
+    const loadingTimerText = document.getElementById('loadingTimerText');
+    const cancelGenerateBtn = document.getElementById('cancelGenerateBtn');
     const errorBanner = document.getElementById('errorBanner');
     const errorBannerDetail = document.getElementById('errorBannerDetail');
     const errorBannerHint = document.getElementById('errorBannerHint');
@@ -833,6 +847,11 @@
           let targetW = img.naturalWidth;
           let targetH = img.naturalHeight;
           if (targetW > MAX_DIM || targetH > MAX_DIM) {
+          // Keep resolution crisp yet lightweight (max 1024px) for fast AI vision processing
+          const MAX_DIM = 1024;
+          let targetW = img.naturalWidth;
+          let targetH = img.naturalHeight;
+          if (targetW > MAX_DIM || targetH > MAX_DIM) {
             const ratio = Math.min(MAX_DIM / targetW, MAX_DIM / targetH);
             targetW = Math.round(targetW * ratio);
             targetH = Math.round(targetH * ratio);
@@ -846,14 +865,9 @@
           ctx.fillRect(0, 0, targetW, targetH);
           ctx.drawImage(img, 0, 0, targetW, targetH);
 
-          // Use lossless PNG for crisp screenshots; fallback to high-quality JPEG if too large
-          let processedDataUrl = canvas.toDataURL('image/png');
-          let mimeType = 'image/png';
-          if (processedDataUrl.length > 2.2 * 1024 * 1024) {
-            processedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
-            mimeType = 'image/jpeg';
-          }
-          state.imageMimeType = mimeType;
+          // High-clarity JPEG (~80-180KB) uploads and processes much faster than multi-MB PNG
+          const processedDataUrl = canvas.toDataURL('image/jpeg', 0.86);
+          state.imageMimeType = 'image/jpeg';
           state.imageBase64 = processedDataUrl.split(',')[1];
 
           generateSimilarQuestions();
@@ -872,13 +886,29 @@
     // ==================== Gemini API Calls ====================
 
     /**
-     * Fetch with exponential backoff for transient errors (429 / 5xx / network)
+     * Fetch with per-attempt timeout (45s), user cancellation, and exponential backoff
      */
-    async function fetchWithRetry(url, options, maxRetries = 3) {
+    async function fetchWithRetry(url, options, maxRetries = 2, timeoutMs = 45000) {
       let delay = 1000;
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        const timeoutCtrl = new AbortController();
+        const userSignal = state.abortController?.signal;
+        const onUserAbort = () => timeoutCtrl.abort('user-cancel');
+
+        if (userSignal?.aborted) {
+          const cancelErr = new Error('已取消解析');
+          cancelErr.isUserCancel = true;
+          throw cancelErr;
+        }
+        userSignal?.addEventListener('abort', onUserAbort, { once: true });
+
+        const timer = setTimeout(() => timeoutCtrl.abort('timeout'), timeoutMs);
+
         try {
-          const response = await fetch(url, options);
+          const response = await fetch(url, { ...options, signal: timeoutCtrl.signal });
+          clearTimeout(timer);
+          userSignal?.removeEventListener('abort', onUserAbort);
+
           if (response.ok) {
             return await response.json();
           }
@@ -901,6 +931,21 @@
           fatalErr.noRetry = true;
           throw fatalErr;
         } catch (err) {
+          clearTimeout(timer);
+          userSignal?.removeEventListener('abort', onUserAbort);
+
+          if (userSignal?.aborted || err.isUserCancel || timeoutCtrl.signal.reason === 'user-cancel') {
+            const cancelErr = new Error('已取消解析');
+            cancelErr.isUserCancel = true;
+            throw cancelErr;
+          }
+
+          if (timeoutCtrl.signal.reason === 'timeout') {
+            const timeoutErr = new Error('連線逾時（超過 45 秒未收到回應）。建議將出題數量改為「固定 4 題」或重新試一次。');
+            timeoutErr.noRetry = true;
+            throw timeoutErr;
+          }
+
           if (err.noRetry || attempt >= maxRetries) {
             throw err;
           }
@@ -958,6 +1003,7 @@
     async function generateSimilarQuestions() {
       if (!state.imageBase64 || state.isGenerating) return;
       state.isGenerating = true;
+      state.abortController = new AbortController();
 
       errorBanner.classList.add('hidden');
       uploadSection.classList.add('hidden');
@@ -966,40 +1012,47 @@
       minimizedKeypadPill.classList.add('hidden');
       loadingSection.classList.remove('hidden');
       loadingPreviewImg.src = state.imageDataUrl;
-      loadingStatusText.textContent = '正在辨識截圖中的數學題目與核心觀念...';
+      loadingStatusText.textContent = '正在上傳截圖並呼叫 Gemini 解析數學題...';
+
+      let elapsedSec = 0;
+      loadingTimerText.textContent = '已等待 0 秒';
+      if (state.loadingTimerId) clearInterval(state.loadingTimerId);
+      state.loadingTimerId = setInterval(() => {
+        elapsedSec++;
+        loadingTimerText.textContent = `已等待 ${elapsedSec} 秒`;
+        if (elapsedSec === 4) {
+          loadingStatusText.textContent = 'Gemini 正在設計同概念題目與對應圖形，請稍候...';
+        } else if (elapsedSec === 15) {
+          loadingStatusText.textContent = '題目較複雜或含圖形繪製，正在整理格式中...';
+        }
+      }, 1000);
 
       const selectedMode = countModeSelect.value;
       const { width, height, sizeKB } = state.imageMeta;
 
       const countInstruction =
         selectedMode === 'auto'
-          ? `請依據圖片中題目的「字數長短、解題步驟複雜度、以及圖檔尺寸（${width}×${height} px, ${sizeKB} KB）」智慧決定要生成 4 到 8 題之間的數量：
-             - 若原題字數少、偏向單步驟或基礎計算題，請出 7 到 8 題讓學生充分熟練。
-             - 若原題為中等長度的計算或簡短應用題，請出 5 到 6 題。
-             - 若原題字數多、多步驟複合應用題或複雜幾何推理，請出 4 到 5 題。`
+          ? `請依據圖片中題目的字數、複雜度與是否含圖智慧決定出題數量（4 到 8 題）：
+             - 若原題【包含圖形】，請精選 4 題（確保圖文清晰且生成快速）。
+             - 若原題為純文字且字數少、基礎計算題，請出 6 到 8 題。
+             - 若原題為純文字且字數多的應用題，請出 4 到 5 題。`
           : `請固定生成恰好 ${selectedMode} 題類似題（recommendedCount 請填 ${selectedMode}）。`;
 
-      const systemPrompt = `你是一位經驗豐富的台灣中小學與高中數學老師，擅長將學生上傳的數學題目截圖，拆解出核心數學概念，並設計出「概念完全相同、但數字與情境皆不同」的高品質類似練習題。
+      const systemPrompt = `你是一位經驗豐富的台灣中小學與高中數學老師，能將數學題截圖拆解出核心概念，並快速設計出「概念相同、數字與情境不同」的類似練習題。
 
-請嚴格遵守以下規則：
-1. 使用繁體中文（台灣數學教學用語，例如：因數、倍數、分數、一元一次方程式、畢氏定理、公分、平方公分等）。
-2. 所有生成的題目必須與原題運用相同的核心數學概念，且每一題的數字、數值或生活情境都要彼此不同，避免重複。
-3. 確保每一題的數學計算完全正確、有明確唯一的標準答案（避免無解或語意模糊）。
-4. 題目敘述與詳解中的數學算式、分數、根號、次方，請使用標準 LaTeX 語法並以單個錢字號 $...$ 包覆（例如 $\\frac{3}{4}$、$x^2 + 3x - 4 = 0$、$\\sqrt{5}$）。
-5. answer 欄位請提供「最簡純文字答案」（不要加 $ 符號，也不要加單位，單位請另外放在 unit 欄位），方便學生用小鍵盤輸入與自動批改，例如：12、-5、3/4、2.5、x=4。
-6. acceptableAnswers 陣列請列出其他等價可接受的寫法（例如若答案是 3/4，可放入 ["3/4", "0.75"]；若答案是 12，可放入 ["12"]）。
-7. 【圖形偵測與繪製（極重要）】：
-   - 請先判斷原題截圖是否包含任何數學圖形（例如：幾何形狀、三角形、四邊形、圓形、複合面積、陰影區域、角度圖、數線、座標平面、長條圖／折線圖／圓餅圖、立體圖形展開圖、時鐘、天平、分數圖示或題目示意圖）。
-   - 若原題有圖，請將 hasDiagram 設為 true，並且【每一題】的 svgDiagram 欄位都必須繪製一張結構相同、但數字／頂點標註完全對應新題目的乾淨向量圖（<svg viewBox="0 0 320 220" xmlns="http://www.w3.org/2000/svg">...</svg>）。
-   - SVG 繪圖規範：
-     * 必須設定適當的 viewBox（建議 "0 0 320 220" 或 "0 0 340 200"），所有圖形與文字都必須保留至少 20px 邊距，絕對不可超出畫面或互相重疊。
-     * 線條請使用深色清晰筆畫（stroke="#1e293b" stroke-width="2"），輔助線／高請用虛線（stroke-dasharray="5,4"），陰影區域請用柔和填色（例如 fill="#c7d2fe" fill-opacity="0.7"），直角請加上直角記號小正方形。
-     * 文字標註（邊長、角度、頂點字母、未知數 ? 或 x）請使用 font-family="sans-serif" font-size="14" font-weight="600" fill="#0f172a"，並精準擺放在邊線外側或空白處。
-     * 禁止在 SVG 內使用外部圖片連結或 <script>。
-   - 若原題純為文字或算式、完全沒有圖形，請將 hasDiagram 設為 false，且每題的 svgDiagram 填寫空字串 ""。
-8. ${countInstruction}`;
+規則：
+1. 使用繁體中文（台灣數學用語）。
+2. 每題數字與情境都不同、計算精確無誤且有唯一標準答案。
+3. 數學式請用 LaTeX 單錢字號 $...$（例如 $\\frac{3}{4}$、$\\sqrt{5}$）。
+4. answer 填最簡純文字（不含單位與 $），單位放 unit，等價答案放 acceptableAnswers。
+5. hint 限 1 句話；explanation 簡潔扼要（2～3 行列式即可），避免冗長。
+6. 【圖形偵測與精簡 SVG】：
+   - 若原題有幾何圖、陰影面積、角度、數線、座標或圖表，設 hasDiagram=true，並為每題繪製結構相同但標註新數字的精簡 SVG（<svg viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg">...</svg>）。
+   - SVG 務必精簡（控制在 12 個以內的基本元素如 polygon/rect/circle/line/path/text，不留多餘空白與註解），線條 stroke="#1e293b" stroke-width="2"，陰影 fill="#c7d2fe" fill-opacity="0.7"，文字 font-size="14" font-weight="600" fill="#0f172a"，保留邊距不重疊。
+   - 若原題無圖，hasDiagram=false 且 svgDiagram=""。
+7. ${countInstruction}`;
 
-      const userPrompt = `請仔細閱讀這張數學題目截圖（圖檔資訊：${width}×${height} 像素，大小約 ${sizeKB} KB），先辨識其核心數學概念與是否包含圖形，再生成 4 到 8 題相同概念但不同數字的類似練習題；若原題有圖，請務必為每一題都繪製對應新數字的 SVG 數學圖形。`;
+      const userPrompt = `請解析這張數學題截圖（${width}×${height} px, ${sizeKB} KB），依規則生成 4～8 題同概念不同數字的類似題；若原題有圖，每題附上精簡 SVG 對應圖形。`;
 
       const payload = {
         contents: [
@@ -1020,6 +1073,7 @@
           parts: [{ text: systemPrompt }],
         },
         generationConfig: {
+          maxOutputTokens: 8192,
           responseMimeType: 'application/json',
           responseSchema: {
             type: 'OBJECT',
@@ -1125,6 +1179,12 @@
         renderPracticeWorkspace(parsed);
         showToast(`已成功生成 ${parsed.questions.length} 題同概念練習題！`, 'success');
       } catch (error) {
+        if (error?.isUserCancel) {
+          loadingSection.classList.add('hidden');
+          uploadSection.classList.remove('hidden');
+          showToast('已取消解析', 'info');
+          return;
+        }
         console.error('Generation error:', error);
         loadingSection.classList.add('hidden');
         uploadSection.classList.remove('hidden');
@@ -1146,6 +1206,11 @@
         }
         showToast('解析發生錯誤，已顯示詳細原因', 'error');
       } finally {
+        if (state.loadingTimerId) {
+          clearInterval(state.loadingTimerId);
+          state.loadingTimerId = null;
+        }
+        state.abortController = null;
         state.isGenerating = false;
       }
     }
@@ -1766,6 +1831,12 @@
 
     retryLastBtn.addEventListener('click', () => {
       generateSimilarQuestions();
+    });
+
+    cancelGenerateBtn.addEventListener('click', () => {
+      if (state.abortController) {
+        state.abortController.abort('user-cancel');
+      }
     });
 
     // ==================== Optional API Key Settings Modal Events ====================
