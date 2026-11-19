@@ -183,6 +183,25 @@
             💡 計算題通常出 6～8 題；複雜應用題則精選 4～5 題
           </p>
         </div>
+
+        <!-- Real Error Diagnostic Banner (Hidden by default) -->
+        <div id="errorBanner" class="hidden mt-4 rounded-xl bg-rose-50 border border-rose-200 p-3.5 text-left">
+          <div class="flex items-start justify-between gap-3">
+            <div class="space-y-1 text-xs sm:text-sm text-rose-800">
+              <div class="font-bold flex items-center gap-1.5">
+                <span>⚠️ 解析未完成</span>
+              </div>
+              <p id="errorBannerDetail" class="text-rose-700 break-all"></p>
+            </div>
+            <button
+              id="retryLastBtn"
+              type="button"
+              class="hidden shrink-0 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold transition-colors"
+            >
+              重新解析
+            </button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -443,107 +462,12 @@
     const practiceSection = document.getElementById('practiceSection');
     const loadingPreviewImg = document.getElementById('loadingPreviewImg');
     const loadingStatusText = document.getElementById('loadingStatusText');
+    const errorBanner = document.getElementById('errorBanner');
+    const errorBannerDetail = document.getElementById('errorBannerDetail');
+    const retryLastBtn = document.getElementById('retryLastBtn');
 
     const conceptTitle = document.getElementById('conceptTitle');
-    const questionCountBadge = document.getElementById('questionCountBadge');
-    const countReasonText = document.getElementById('countReasonText');
-    const originalImagePanel = document.getElementById('originalImagePanel');
-    const originalPreviewImg = document.getElementById('originalPreviewImg');
-    const originalSummaryText = document.getElementById('originalSummaryText');
-    const imageMetaText = document.getElementById('imageMetaText');
-    const questionsContainer = document.getElementById('questionsContainer');
-
-    const answeredCountText = document.getElementById('answeredCountText');
-    const totalQuestionsText = document.getElementById('totalQuestionsText');
-    const scoreBadge = document.getElementById('scoreBadge');
-
-    const floatingKeypad = document.getElementById('floatingKeypad');
-    const minimizedKeypadPill = document.getElementById('minimizedKeypadPill');
-    const headerKeypadToggle = document.getElementById('headerKeypadToggle');
-    const resetAllBtn = document.getElementById('resetAllBtn');
-    const activeInputIndicator = document.getElementById('activeInputIndicator');
-    const keypadPageNum = document.getElementById('keypadPageNum');
-    const keypadPageSym = document.getElementById('keypadPageSym');
-    const keypadModeBtn = document.getElementById('keypadModeBtn');
-    const suppressOsKeyboard = document.getElementById('suppressOsKeyboard');
-
-    /**
-     * Show non-blocking toast notification (replaces alert)
-     */
-    function showToast(message, type = 'info') {
-      const container = document.getElementById('toastContainer');
-      const toast = document.createElement('div');
-      const colorMap = {
-        info: 'bg-slate-800 text-white',
-        success: 'bg-emerald-600 text-white',
-        error: 'bg-rose-600 text-white',
-        warning: 'bg-amber-600 text-white',
-      };
-      toast.className = `pointer-events-auto px-4 py-2.5 rounded-xl shadow-lg text-xs sm:text-sm font-medium transition-all duration-300 transform translate-y-0 opacity-100 ${colorMap[type] || colorMap.info}`;
-      toast.textContent = message;
-      container.appendChild(toast);
-
-      setTimeout(() => {
-        toast.classList.add('opacity-0', '-translate-y-2');
-        setTimeout(() => toast.remove(), 300);
-      }, 3200);
-    }
-
-    /**
-     * Safely render KaTeX inside a given DOM element
-     */
-    function renderMathSafely(element) {
-      try {
-        if (typeof renderMathInElement === 'function' && element) {
-          renderMathInElement(element, {
-            delimiters: [
-              { left: '$$', right: '$$', display: true },
-              { left: '$', right: '$', display: false },
-              { left: '\\(', right: '\\)', display: false },
-              { left: '\\[', right: '\\]', display: true },
-            ],
-            throwOnError: false,
-          });
-        }
-      } catch (err) {
-        console.warn('KaTeX render fallback:', err);
-      }
-    }
-
-    /**
-     * Process an uploaded/pasted image File:
-     * Reads original dimensions & file size, optionally downscales huge screenshots for fast API upload.
-     */
-    function handleImageFile(file) {
-      if (!file || !file.type.startsWith('image/')) {
-        showToast('請上傳或貼上有效的圖片檔案（PNG / JPG / WebP）', 'warning');
-        return;
-      }
-
-      const sizeKB = Math.max(1, Math.round(file.size / 1024));
-      const reader = new FileReader();
-
-      reader.onload = (e) => {
-        const dataUrl = e.target.result;
-        const img = new Image();
-        img.onload = () => {
-          state.imageMeta = {
-            width: img.naturalWidth,
-            height: img.naturalHeight,
-            sizeKB,
-          };
-          state.imageDataUrl = dataUrl;
-
-          // Resize if image is very large (> 1600px on longest side) to keep payload fast
-          const MAX_DIM = 1600;
-          let targetW = img.naturalWidth;
-          let targetH = img.naturalHeight;
-          if (targetW > MAX_DIM || targetH > MAX_DIM) {
-            const ratio = Math.min(MAX_DIM / targetW, MAX_DIM / targetH);
-            targetW = Math.round(targetW * ratio);
-            targetH = Math.round(targetH * ratio);
-          }
-
+// ... existing code ... -->
           const canvas = document.createElement('canvas');
           canvas.width = targetW;
           canvas.height = targetH;
@@ -552,9 +476,15 @@
           ctx.fillRect(0, 0, targetW, targetH);
           ctx.drawImage(img, 0, 0, targetW, targetH);
 
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
-          state.imageMimeType = 'image/jpeg';
-          state.imageBase64 = compressedDataUrl.split(',')[1];
+          // Preserve crisp PNG for screenshots when payload is reasonable, fallback to high-quality JPEG
+          let processedDataUrl = canvas.toDataURL('image/png');
+          let mimeType = 'image/png';
+          if (processedDataUrl.length > 1.8 * 1024 * 1024) {
+            processedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+            mimeType = 'image/jpeg';
+          }
+          state.imageMimeType = mimeType;
+          state.imageBase64 = processedDataUrl.split(',')[1];
 
           generateSimilarQuestions();
         };
@@ -568,8 +498,9 @@
 
     /**
      * Fetch with exponential backoff for Gemini API calls
+     * Fails fast on non-retryable 4xx errors instead of waiting through all retries.
      */
-    async function fetchWithRetry(url, options, maxRetries = 4) {
+    async function fetchWithRetry(url, options, maxRetries = 3) {
       let delay = 1000;
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
@@ -577,21 +508,78 @@
           if (response.ok) {
             return await response.json();
           }
+
+          const errBody = await response.text();
+          // Only retry on rate-limit (429) or transient server errors (5xx)
           if ((response.status === 429 || response.status >= 500) && attempt < maxRetries) {
+            loadingStatusText.textContent = `伺服器忙碌中，正在進行第 ${attempt + 1} 次重試...`;
             await new Promise((res) => setTimeout(res, delay));
             delay *= 2;
             continue;
           }
-          const errBody = await response.text();
-          throw new Error(`API 回應錯誤 (${response.status}): ${errBody}`);
+
+          let shortMsg = errBody;
+          try {
+            const errJson = JSON.parse(errBody);
+            shortMsg = errJson?.error?.message || errBody;
+          } catch (_) {
+            // Keep raw error body
+          }
+          const fatalErr = new Error(`API 錯誤 (${response.status})：${shortMsg}`);
+          fatalErr.noRetry = true;
+          throw fatalErr;
         } catch (err) {
-          if (attempt < maxRetries) {
-            await new Promise((res) => setTimeout(res, delay));
-            delay *= 2;
-          } else {
+          if (err.noRetry || attempt >= maxRetries) {
             throw err;
           }
+          loadingStatusText.textContent = `連線不穩定，正在進行第 ${attempt + 1} 次重試...`;
+          await new Promise((res) => setTimeout(res, delay));
+          delay *= 2;
         }
+      }
+    }
+
+    /**
+     * Extract non-thought text from Gemini response and safely parse JSON
+     */
+    function extractAndParseGeminiJson(result) {
+      const candidate = result?.candidates?.[0];
+      if (!candidate) {
+        const blockReason = result?.promptFeedback?.blockReason;
+        throw new Error(blockReason ? `請求被安全機制擋下 (${blockReason})` : '模型沒有回傳任何候選結果');
+      }
+
+      const parts = candidate.content?.parts || [];
+      // Filter out model thought parts so we only read the actual JSON answer
+      const answerText = parts
+        .filter((p) => typeof p.text === 'string' && !p.thought)
+        .map((p) => p.text)
+        .join('')
+        .trim();
+
+      const fallbackText = parts.map((p) => p.text || '').join('').trim();
+      const rawText = answerText || fallbackText;
+
+      if (!rawText) {
+        throw new Error(`模型未回傳文字內容（結束原因：${candidate.finishReason || '未知'}）`);
+      }
+
+      // Strip accidental markdown code fences if present
+      let cleaned = rawText
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/\s*```$/i, '')
+        .trim();
+
+      try {
+        return JSON.parse(cleaned);
+      } catch (firstErr) {
+        // Fallback: try slicing outermost JSON object
+        const firstBrace = cleaned.indexOf('{');
+        const lastBrace = cleaned.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace > firstBrace) {
+          return JSON.parse(cleaned.slice(firstBrace, lastBrace + 1));
+        }
+        throw new Error(`回傳格式無法解析為 JSON：${firstErr.message}`);
       }
     }
 
@@ -602,7 +590,8 @@
       if (!state.imageBase64 || state.isGenerating) return;
       state.isGenerating = true;
 
-      // Update UI to loading state
+      // Hide any previous error banner and switch to loading state
+      errorBanner.classList.add('hidden');
       uploadSection.classList.add('hidden');
       practiceSection.classList.add('hidden');
       floatingKeypad.classList.add('hidden');
@@ -737,14 +726,9 @@
           body: JSON.stringify(payload),
         });
 
-        const rawText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!rawText) {
-          throw new Error('模型未回傳有效內容');
-        }
-
-        const parsed = JSON.parse(rawText);
+        const parsed = extractAndParseGeminiJson(result);
         if (!parsed.questions || !Array.isArray(parsed.questions) || parsed.questions.length === 0) {
-          throw new Error('未成功生成題目列表');
+          throw new Error('模型未回傳有效題目列表');
         }
 
         state.practiceData = parsed;
@@ -754,7 +738,12 @@
         console.error('Generation error:', error);
         loadingSection.classList.add('hidden');
         uploadSection.classList.remove('hidden');
-        showToast('解析題目時發生錯誤，請確認截圖清晰後再試一次', 'error');
+        errorBannerDetail.textContent = error?.message || '發生未知錯誤，請稍後再試。';
+        errorBanner.classList.remove('hidden');
+        if (state.imageBase64) {
+          retryLastBtn.classList.remove('hidden');
+        }
+        showToast('解析發生錯誤，已顯示詳細原因', 'error');
       } finally {
         state.isGenerating = false;
       }
@@ -1348,6 +1337,10 @@
     });
 
     document.getElementById('regenerateBtn').addEventListener('click', () => {
+      generateSimilarQuestions();
+    });
+
+    retryLastBtn.addEventListener('click', () => {
       generateSimilarQuestions();
     });
 
