@@ -1,0 +1,1380 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>數學截圖類似題練習器</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts: Inter & Noto Sans TC -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- KaTeX for Crisp Mathematical Formula Rendering -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', '"Noto Sans TC"', 'system-ui', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    /* Custom scrollbar & subtle animations */
+    body {
+      font-family: 'Inter', 'Noto Sans TC', system-ui, -apple-system, sans-serif;
+    }
+
+    .dropzone-active {
+      border-color: #4f46e5 !important;
+      background-color: #eef2ff !important;
+      transform: scale(1.01);
+    }
+
+    .katex {
+      font-size: 1.08em;
+    }
+
+    /* Prevent accidental text selection while tapping keypad buttons */
+    .keypad-btn {
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+
+    .keypad-btn:active {
+      transform: scale(0.94);
+    }
+
+    /* Floating keypad drag cursor */
+    .drag-handle {
+      cursor: grab;
+      touch-action: none;
+    }
+    .drag-handle:active {
+      cursor: grabbing;
+    }
+
+    @keyframes pulse-soft {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.55; }
+    }
+    .animate-pulse-soft {
+      animation: pulse-soft 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+  </style>
+</head>
+
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col antialiased selection:bg-indigo-100 selection:text-indigo-800">
+
+  <!-- ==================== Top Navigation Header ==================== -->
+  <header class="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200/80 shadow-sm">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-sm font-bold text-lg">
+          ∑
+        </div>
+        <div>
+          <h1 class="text-base sm:text-lg font-bold text-slate-900 leading-tight">數學截圖類似題練習器</h1>
+          <p class="text-xs text-slate-500 hidden sm:block">貼上或拖移題目截圖，自動生成 4～8 題同概念練習</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <!-- Quick toggle for Mini Keypad -->
+        <button
+          id="headerKeypadToggle"
+          type="button"
+          class="hidden items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-medium bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors border border-indigo-200/60"
+          title="開啟或隱藏螢幕小鍵盤"
+        >
+          <span>⌨️</span>
+          <span class="hidden sm:inline">小鍵盤</span>
+        </button>
+
+        <!-- New Question Button -->
+        <button
+          id="resetAllBtn"
+          type="button"
+          class="hidden items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-medium bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
+        >
+          <span>＋</span>
+          <span>換新題目</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== Toast Notification Container ==================== -->
+  <div id="toastContainer" class="fixed top-20 right-4 z-50 flex flex-col gap-2 pointer-events-none max-w-xs w-full"></div>
+
+  <!-- ==================== Main Workspace ==================== -->
+  <main class="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 pb-36">
+
+    <!-- ===== Section 1: Upload / Drop / Paste Area ===== -->
+    <section id="uploadSection" class="transition-all duration-300">
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5 sm:p-8">
+        <div class="text-center max-w-xl mx-auto mb-6">
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold mb-3">
+            <span>✨</span> AI 智慧辨識核心數學概念
+          </span>
+          <h2 class="text-xl sm:text-2xl font-bold text-slate-900 mb-2">把數學題目截圖放進來</h2>
+          <p class="text-sm text-slate-500">
+            支援直接 <kbd class="px-1.5 py-0.5 bg-slate-100 border border-slate-300 rounded text-xs font-mono text-slate-700">Ctrl+V</kbd> / <kbd class="px-1.5 py-0.5 bg-slate-100 border border-slate-300 rounded text-xs font-mono text-slate-700">⌘V</kbd> 貼上、拖移圖片到此處，或點擊選取圖片
+          </p>
+        </div>
+
+        <!-- Interactive Dropzone -->
+        <div
+          id="dropZone"
+          tabindex="0"
+          role="button"
+          aria-label="拖移或點擊上傳數學題目截圖"
+          class="relative border-2 border-dashed border-slate-300 hover:border-indigo-400 hover:bg-slate-50/80 rounded-2xl p-8 sm:p-12 text-center cursor-pointer transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+        >
+          <input id="fileInput" type="file" accept="image/*" class="hidden" />
+
+          <div class="flex flex-col items-center justify-center gap-3 pointer-events-none">
+            <div class="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-inner">
+              <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+              </svg>
+            </div>
+            <div>
+              <p class="text-base font-semibold text-slate-700">拖移數學題截圖到這裡，或點擊選擇檔案</p>
+              <p class="text-xs text-slate-400 mt-1">也可以在網頁任何地方直接按貼上（支援 PNG、JPG、WebP）</p>
+            </div>
+            <div class="mt-2 flex flex-wrap items-center justify-center gap-2">
+              <span class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-xs font-medium">📋 剪貼簿貼上</span>
+              <span class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-xs font-medium">🖱️ 拖移放開</span>
+              <span class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-xs font-medium">📁 選取檔案</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Question Count Option Bar -->
+        <div class="mt-5 flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-100">
+          <div class="flex items-center gap-2 text-xs sm:text-sm text-slate-600">
+            <span class="font-medium text-slate-700">出題數量模式：</span>
+            <select
+              id="countModeSelect"
+              class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs sm:text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="auto" selected>智慧決定（依題目字數與圖檔大小出 4～8 題）</option>
+              <option value="4">固定 4 題</option>
+              <option value="5">固定 5 題</option>
+              <option value="6">固定 6 題</option>
+              <option value="7">固定 7 題</option>
+              <option value="8">固定 8 題</option>
+            </select>
+          </div>
+          <p class="text-xs text-slate-400">
+            💡 計算題通常出 6～8 題；複雜應用題則精選 4～5 題
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Section 2: Loading / Analyzing State ===== -->
+    <section id="loadingSection" class="hidden">
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6 sm:p-10 text-center">
+        <div class="max-w-md mx-auto">
+          <div class="mb-5 flex justify-center">
+            <img
+              id="loadingPreviewImg"
+              src=""
+              alt="上傳的題目預覽"
+              class="max-h-40 rounded-xl border border-slate-200 shadow-sm object-contain bg-slate-50 p-1"
+            />
+          </div>
+          <div class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 mb-3">
+            <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+          </div>
+          <h3 class="text-lg font-bold text-slate-900 mb-1">正在解析數學題目並生成類似題...</h3>
+          <p id="loadingStatusText" class="text-sm text-slate-500 animate-pulse-soft">
+            正在辨識題目概念、評估複雜度與設計不同數字的練習題
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Section 3: Practice Workspace ===== -->
+    <section id="practiceSection" class="hidden space-y-5">
+
+      <!-- Concept & Original Image Summary Card -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 sm:p-5">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div class="space-y-1.5">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="px-2.5 py-1 rounded-lg bg-indigo-600 text-white text-xs font-semibold tracking-wide">
+                核心概念
+              </span>
+              <h2 id="conceptTitle" class="text-lg sm:text-xl font-bold text-slate-900"></h2>
+              <span id="questionCountBadge" class="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold"></span>
+            </div>
+            <p id="countReasonText" class="text-xs sm:text-sm text-slate-500"></p>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              id="toggleOriginalBtn"
+              type="button"
+              class="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs sm:text-sm font-medium text-slate-700 transition-colors"
+            >
+              🖼️ 查看原題截圖
+            </button>
+            <button
+              id="regenerateBtn"
+              type="button"
+              class="px-3 py-1.5 rounded-xl border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-xs sm:text-sm font-medium text-indigo-700 transition-colors"
+            >
+              🔄 再出一組新數字
+            </button>
+          </div>
+        </div>
+
+        <!-- Collapsible Original Screenshot Panel -->
+        <div id="originalImagePanel" class="hidden mt-4 pt-4 border-t border-slate-100">
+          <div class="flex flex-col sm:flex-row gap-4 items-start">
+            <img
+              id="originalPreviewImg"
+              src=""
+              alt="原題截圖"
+              class="max-h-52 rounded-xl border border-slate-200 bg-slate-50 p-1 object-contain"
+            />
+            <div class="flex-1 text-sm text-slate-600 space-y-1.5">
+              <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">辨識出的原題摘要</div>
+              <div id="originalSummaryText" class="leading-relaxed bg-slate-50 rounded-xl p-3 border border-slate-100"></div>
+              <div id="imageMetaText" class="text-xs text-slate-400"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Progress & Score Summary Bar -->
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <span class="text-xs sm:text-sm font-medium text-slate-600">
+            作答進度：<strong id="answeredCountText" class="text-indigo-600">0</strong> / <span id="totalQuestionsText">0</span> 題
+          </span>
+          <span id="scoreBadge" class="hidden px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200"></span>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button
+            id="checkAllBtn"
+            type="button"
+            class="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-semibold shadow-sm transition-colors"
+          >
+            ✓ 全部對答案
+          </button>
+          <button
+            id="clearAllAnswersBtn"
+            type="button"
+            class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs sm:text-sm font-medium transition-colors"
+          >
+            清空作答
+          </button>
+        </div>
+      </div>
+
+      <!-- Questions List Container -->
+      <div id="questionsContainer" class="grid grid-cols-1 gap-4"></div>
+
+      <!-- Bottom Action Footer -->
+      <div class="flex justify-center pt-2">
+        <button
+          id="bottomCheckAllBtn"
+          type="button"
+          class="w-full sm:w-auto px-8 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-md hover:shadow-lg transition-all text-sm sm:text-base"
+        >
+          ✓ 批改全部題目並查看詳解
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <!-- ==================== Compact Floating On-Screen Math Keypad ==================== -->
+  <!-- Designed to be tiny, draggable, collapsible, and never block the math questions -->
+  <div
+    id="floatingKeypad"
+    class="hidden fixed bottom-4 right-4 z-40 w-[238px] bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden transition-shadow"
+  >
+    <!-- Draggable Compact Header -->
+    <div
+      id="keypadDragHandle"
+      class="drag-handle bg-slate-900 text-white px-3 py-2 flex items-center justify-between select-none"
+    >
+      <div class="flex items-center gap-1.5">
+        <span class="text-xs opacity-70">⠿</span>
+        <span class="text-xs font-semibold tracking-wide">數學小鍵盤</span>
+        <span id="activeInputIndicator" class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/80 text-white font-medium">
+          第 1 題
+        </span>
+      </div>
+      <div class="flex items-center gap-1">
+        <button
+          id="keypadModeBtn"
+          type="button"
+          class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-700 hover:bg-slate-600 text-slate-200 transition-colors"
+          title="切換符號頁"
+        >
+          符號
+        </button>
+        <button
+          id="minimizeKeypadBtn"
+          type="button"
+          class="w-6 h-6 rounded-lg hover:bg-slate-700 flex items-center justify-center text-xs text-slate-300 transition-colors"
+          title="縮小成按鈕"
+        >
+          —
+        </button>
+      </div>
+    </div>
+
+    <!-- Compact Keypad Body: Page 1 (Numbers & Basic Math) -->
+    <div id="keypadPageNum" class="p-2 grid grid-cols-4 gap-1.5">
+      <button type="button" data-key="7" class="keypad-btn h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-sm">7</button>
+      <button type="button" data-key="8" class="keypad-btn h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-sm">8</button>
+      <button type="button" data-key="9" class="keypad-btn h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-sm">9</button>
+      <button type="button" data-action="backspace" class="keypad-btn h-9 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-sm" title="倒退刪除">⌫</button>
+
+      <button type="button" data-key="4" class="keypad-btn h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-sm">4</button>
+      <button type="button" data-key="5" class="keypad-btn h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-sm">5</button>
+      <button type="button" data-key="6" class="keypad-btn h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-sm">6</button>
+      <button type="button" data-key="/" class="keypad-btn h-9 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-sm" title="分數線 / 除號">/</button>
+
+      <button type="button" data-key="1" class="keypad-btn h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-sm">1</button>
+      <button type="button" data-key="2" class="keypad-btn h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-sm">2</button>
+      <button type="button" data-key="3" class="keypad-btn h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-sm">3</button>
+      <button type="button" data-key="-" class="keypad-btn h-9 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-base" title="負號或減號">−</button>
+
+      <button type="button" data-key="0" class="keypad-btn h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-sm">0</button>
+      <button type="button" data-key="." class="keypad-btn h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-base">.</button>
+      <button type="button" data-action="clear" class="keypad-btn h-9 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold text-xs" title="清除本題">C</button>
+      <button type="button" data-action="next" class="keypad-btn h-9 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm" title="跳到下一題">下題↵</button>
+    </div>
+
+    <!-- Compact Keypad Body: Page 2 (Algebra & Extended Symbols) -->
+    <div id="keypadPageSym" class="hidden p-2 grid grid-cols-4 gap-1.5">
+      <button type="button" data-key="x" class="keypad-btn h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-serif italic font-semibold text-sm">x</button>
+      <button type="button" data-key="y" class="keypad-btn h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-serif italic font-semibold text-sm">y</button>
+      <button type="button" data-key="=" class="keypad-btn h-9 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-sm">=</button>
+      <button type="button" data-action="backspace" class="keypad-btn h-9 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-sm">⌫</button>
+
+      <button type="button" data-key="+" class="keypad-btn h-9 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-sm">+</button>
+      <button type="button" data-key="×" class="keypad-btn h-9 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-sm">×</button>
+      <button type="button" data-key="(" class="keypad-btn h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-sm">(</button>
+      <button type="button" data-key=")" class="keypad-btn h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-sm">)</button>
+
+      <button type="button" data-key="^" class="keypad-btn h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-sm" title="次方">^</button>
+      <button type="button" data-key="√" class="keypad-btn h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-sm" title="根號">√</button>
+      <button type="button" data-key="π" class="keypad-btn h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-sm">π</button>
+      <button type="button" data-key="%" class="keypad-btn h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-sm">%</button>
+
+      <button type="button" data-key="," class="keypad-btn h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-sm">,</button>
+      <button type="button" data-key=":" class="keypad-btn h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-sm" title="比例符號">:</button>
+      <button type="button" data-key="±" class="keypad-btn h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-sm">±</button>
+      <button type="button" data-action="next" class="keypad-btn h-9 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm">下題↵</button>
+    </div>
+
+    <!-- Subtle footer tip for touch users -->
+    <div class="px-2.5 py-1.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
+      <span>可拖曳上方黑條移動</span>
+      <label class="inline-flex items-center gap-1 cursor-pointer select-none">
+        <input id="suppressOsKeyboard" type="checkbox" class="rounded border-slate-300 text-indigo-600 w-3 h-3" />
+        <span>隱藏手機鍵盤</span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Minimized Floating Pill Button -->
+  <button
+    id="minimizedKeypadPill"
+    type="button"
+    class="hidden fixed bottom-4 right-4 z-40 items-center gap-1.5 px-3.5 py-2.5 rounded-full bg-slate-900 hover:bg-indigo-600 text-white text-xs font-semibold shadow-xl transition-all"
+    title="展開數學小鍵盤"
+  >
+    <span>⌨️</span>
+    <span>小鍵盤</span>
+  </button>
+
+  <!-- ==================== Application Logic ==================== -->
+  <script>
+    /**
+     * Global Application State
+     */
+    const state = {
+      imageDataUrl: null,        // Original preview Data URL
+      imageBase64: null,         // Processed base64 payload (without prefix)
+      imageMimeType: 'image/jpeg',
+      imageMeta: { width: 0, height: 0, sizeKB: 0 },
+      practiceData: null,        // Structured JSON response from Gemini
+      activeQuestionIndex: 0,    // Index of currently focused answer input
+      keypadMinimized: false,
+      keypadSymMode: false,
+      isGenerating: false,
+    };
+
+    // Gemini API configuration (API key is injected automatically at runtime)
+    const apiKey = "";
+    const GEMINI_MODEL = "gemini-3-flash-preview";
+
+    // DOM Elements
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const countModeSelect = document.getElementById('countModeSelect');
+    const uploadSection = document.getElementById('uploadSection');
+    const loadingSection = document.getElementById('loadingSection');
+    const practiceSection = document.getElementById('practiceSection');
+    const loadingPreviewImg = document.getElementById('loadingPreviewImg');
+    const loadingStatusText = document.getElementById('loadingStatusText');
+
+    const conceptTitle = document.getElementById('conceptTitle');
+    const questionCountBadge = document.getElementById('questionCountBadge');
+    const countReasonText = document.getElementById('countReasonText');
+    const originalImagePanel = document.getElementById('originalImagePanel');
+    const originalPreviewImg = document.getElementById('originalPreviewImg');
+    const originalSummaryText = document.getElementById('originalSummaryText');
+    const imageMetaText = document.getElementById('imageMetaText');
+    const questionsContainer = document.getElementById('questionsContainer');
+
+    const answeredCountText = document.getElementById('answeredCountText');
+    const totalQuestionsText = document.getElementById('totalQuestionsText');
+    const scoreBadge = document.getElementById('scoreBadge');
+
+    const floatingKeypad = document.getElementById('floatingKeypad');
+    const minimizedKeypadPill = document.getElementById('minimizedKeypadPill');
+    const headerKeypadToggle = document.getElementById('headerKeypadToggle');
+    const resetAllBtn = document.getElementById('resetAllBtn');
+    const activeInputIndicator = document.getElementById('activeInputIndicator');
+    const keypadPageNum = document.getElementById('keypadPageNum');
+    const keypadPageSym = document.getElementById('keypadPageSym');
+    const keypadModeBtn = document.getElementById('keypadModeBtn');
+    const suppressOsKeyboard = document.getElementById('suppressOsKeyboard');
+
+    /**
+     * Show non-blocking toast notification (replaces alert)
+     */
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      const colorMap = {
+        info: 'bg-slate-800 text-white',
+        success: 'bg-emerald-600 text-white',
+        error: 'bg-rose-600 text-white',
+        warning: 'bg-amber-600 text-white',
+      };
+      toast.className = `pointer-events-auto px-4 py-2.5 rounded-xl shadow-lg text-xs sm:text-sm font-medium transition-all duration-300 transform translate-y-0 opacity-100 ${colorMap[type] || colorMap.info}`;
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', '-translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 3200);
+    }
+
+    /**
+     * Safely render KaTeX inside a given DOM element
+     */
+    function renderMathSafely(element) {
+      try {
+        if (typeof renderMathInElement === 'function' && element) {
+          renderMathInElement(element, {
+            delimiters: [
+              { left: '$$', right: '$$', display: true },
+              { left: '$', right: '$', display: false },
+              { left: '\\(', right: '\\)', display: false },
+              { left: '\\[', right: '\\]', display: true },
+            ],
+            throwOnError: false,
+          });
+        }
+      } catch (err) {
+        console.warn('KaTeX render fallback:', err);
+      }
+    }
+
+    /**
+     * Process an uploaded/pasted image File:
+     * Reads original dimensions & file size, optionally downscales huge screenshots for fast API upload.
+     */
+    function handleImageFile(file) {
+      if (!file || !file.type.startsWith('image/')) {
+        showToast('請上傳或貼上有效的圖片檔案（PNG / JPG / WebP）', 'warning');
+        return;
+      }
+
+      const sizeKB = Math.max(1, Math.round(file.size / 1024));
+      const reader = new FileReader();
+
+      reader.onload = (e) => {
+        const dataUrl = e.target.result;
+        const img = new Image();
+        img.onload = () => {
+          state.imageMeta = {
+            width: img.naturalWidth,
+            height: img.naturalHeight,
+            sizeKB,
+          };
+          state.imageDataUrl = dataUrl;
+
+          // Resize if image is very large (> 1600px on longest side) to keep payload fast
+          const MAX_DIM = 1600;
+          let targetW = img.naturalWidth;
+          let targetH = img.naturalHeight;
+          if (targetW > MAX_DIM || targetH > MAX_DIM) {
+            const ratio = Math.min(MAX_DIM / targetW, MAX_DIM / targetH);
+            targetW = Math.round(targetW * ratio);
+            targetH = Math.round(targetH * ratio);
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = targetW;
+          canvas.height = targetH;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, targetW, targetH);
+          ctx.drawImage(img, 0, 0, targetW, targetH);
+
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
+          state.imageMimeType = 'image/jpeg';
+          state.imageBase64 = compressedDataUrl.split(',')[1];
+
+          generateSimilarQuestions();
+        };
+        img.onerror = () => {
+          showToast('無法讀取這張圖片，請重新截圖後再試一次', 'error');
+        };
+        img.src = dataUrl;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    /**
+     * Fetch with exponential backoff for Gemini API calls
+     */
+    async function fetchWithRetry(url, options, maxRetries = 4) {
+      let delay = 1000;
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          const response = await fetch(url, options);
+          if (response.ok) {
+            return await response.json();
+          }
+          if ((response.status === 429 || response.status >= 500) && attempt < maxRetries) {
+            await new Promise((res) => setTimeout(res, delay));
+            delay *= 2;
+            continue;
+          }
+          const errBody = await response.text();
+          throw new Error(`API 回應錯誤 (${response.status}): ${errBody}`);
+        } catch (err) {
+          if (attempt < maxRetries) {
+            await new Promise((res) => setTimeout(res, delay));
+            delay *= 2;
+          } else {
+            throw err;
+          }
+        }
+      }
+    }
+
+    /**
+     * Call Gemini API to analyze the math screenshot and generate 4-8 similar concept problems
+     */
+    async function generateSimilarQuestions() {
+      if (!state.imageBase64 || state.isGenerating) return;
+      state.isGenerating = true;
+
+      // Update UI to loading state
+      uploadSection.classList.add('hidden');
+      practiceSection.classList.add('hidden');
+      floatingKeypad.classList.add('hidden');
+      minimizedKeypadPill.classList.add('hidden');
+      loadingSection.classList.remove('hidden');
+      loadingPreviewImg.src = state.imageDataUrl;
+      loadingStatusText.textContent = '正在辨識截圖中的數學題目與核心觀念...';
+
+      const selectedMode = countModeSelect.value;
+      const { width, height, sizeKB } = state.imageMeta;
+
+      const countInstruction =
+        selectedMode === 'auto'
+          ? `請依據圖片中題目的「字數長短、解題步驟複雜度、以及圖檔尺寸（${width}×${height} px, ${sizeKB} KB）」智慧決定要生成 4 到 8 題之間的數量：
+             - 若原題字數少、偏向單步驟或基礎計算題，請出 7 到 8 題讓學生充分熟練。
+             - 若原題為中等長度的計算或簡短應用題，請出 5 到 6 題。
+             - 若原題字數多、多步驟複合應用題或複雜幾何推理，請出 4 到 5 題以免學生負擔過重。`
+          : `請固定生成恰好 ${selectedMode} 題類似題（recommendedCount 請填 ${selectedMode}）。`;
+
+      const systemPrompt = `你是一位經驗豐富的台灣中小學與高中數學老師，擅長將學生上傳的數學題目截圖，拆解出核心數學概念，並設計出「概念完全相同、但數字與情境皆不同」的高品質類似練習題。
+
+請嚴格遵守以下規則：
+1. 使用繁體中文（台灣數學教學用語，例如：因數、倍數、分數、一元一次方程式、畢氏定理、公分、平方公分等）。
+2. 所有生成的題目必須與原題運用相同的核心數學概念，且每一題的數字、數值或生活情境都要彼此不同，避免重複。
+3. 確保每一題的數學計算完全正確、有明確唯一的標準答案（避免無解、過度醜陋的小數或語意模糊）。
+4. 題目敘述與詳解中的數學算式、分數、根號、次方，請使用標準 LaTeX 語法並以單個錢字號 $...$ 包覆（例如 $\\frac{3}{4}$、$x^2 + 3x - 4 = 0$、$\\sqrt{5}$）。
+5. answer 欄位請提供「最簡純文字答案」（不要加 $ 符號，也不要加單位，單位請另外放在 unit 欄位），方便學生用小鍵盤輸入與自動批改，例如：12、-5、3/4、2.5、x=4。
+6. acceptableAnswers 陣列請列出其他等價可接受的寫法（例如若答案是 3/4，可放入 ["3/4", "0.75"]；若答案是 12，可放入 ["12"]）。
+7. ${countInstruction}`;
+
+      const userPrompt = `請仔細閱讀這張數學題目截圖（圖檔資訊：${width}×${height} 像素，大小約 ${sizeKB} KB），先辨識其核心數學概念，再生成 4 到 8 題相同概念但不同數字的類似練習題供學生作答。`;
+
+      const payload = {
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: userPrompt },
+              {
+                inlineData: {
+                  mimeType: state.imageMimeType,
+                  data: state.imageBase64,
+                },
+              },
+            ],
+          },
+        ],
+        systemInstruction: {
+          parts: [{ text: systemPrompt }],
+        },
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: 'OBJECT',
+            properties: {
+              conceptName: {
+                type: 'STRING',
+                description: '這題的核心數學概念名稱',
+              },
+              originalSummary: {
+                type: 'STRING',
+                description: '原題目的文字轉錄或簡要說明（可用 $...$ 表示數學式）',
+              },
+              recommendedCount: {
+                type: 'INTEGER',
+                description: '實際生成的題數（4 到 8 之間）',
+              },
+              countReason: {
+                type: 'STRING',
+                description: '簡短說明為何生成這個題數',
+              },
+              questions: {
+                type: 'ARRAY',
+                items: {
+                  type: 'OBJECT',
+                  properties: {
+                    id: { type: 'INTEGER' },
+                    questionText: {
+                      type: 'STRING',
+                      description: '類似題目敘述，數學式請用 $...$ 包覆',
+                    },
+                    hint: {
+                      type: 'STRING',
+                      description: '給學生的簡短解題提示',
+                    },
+                    answer: {
+                      type: 'STRING',
+                      description: '最簡純文字標準答案（不含單位、不含 $）',
+                    },
+                    acceptableAnswers: {
+                      type: 'ARRAY',
+                      items: { type: 'STRING' },
+                      description: '等價可接受答案陣列',
+                    },
+                    unit: {
+                      type: 'STRING',
+                      description: '答案單位（若無則為空字串）',
+                    },
+                    explanation: {
+                      type: 'STRING',
+                      description: '清楚的逐步解題詳解（數學式用 $...$）',
+                    },
+                  },
+                  required: [
+                    'id',
+                    'questionText',
+                    'hint',
+                    'answer',
+                    'acceptableAnswers',
+                    'unit',
+                    'explanation',
+                  ],
+                },
+              },
+            },
+            required: [
+              'conceptName',
+              'originalSummary',
+              'recommendedCount',
+              'countReason',
+              'questions',
+            ],
+          },
+        },
+      };
+
+      try {
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+        const result = await fetchWithRetry(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        const rawText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!rawText) {
+          throw new Error('模型未回傳有效內容');
+        }
+
+        const parsed = JSON.parse(rawText);
+        if (!parsed.questions || !Array.isArray(parsed.questions) || parsed.questions.length === 0) {
+          throw new Error('未成功生成題目列表');
+        }
+
+        state.practiceData = parsed;
+        renderPracticeWorkspace(parsed);
+        showToast(`已成功生成 ${parsed.questions.length} 題同概念練習題！`, 'success');
+      } catch (error) {
+        console.error('Generation error:', error);
+        loadingSection.classList.add('hidden');
+        uploadSection.classList.remove('hidden');
+        showToast('解析題目時發生錯誤，請確認截圖清晰後再試一次', 'error');
+      } finally {
+        state.isGenerating = false;
+      }
+    }
+
+    /**
+     * Render the generated questions and practice UI
+     */
+    function renderPracticeWorkspace(data) {
+      loadingSection.classList.add('hidden');
+      practiceSection.classList.remove('hidden');
+      headerKeypadToggle.classList.remove('hidden');
+      headerKeypadToggle.classList.add('inline-flex');
+      resetAllBtn.classList.remove('hidden');
+      resetAllBtn.classList.add('inline-flex');
+
+      // Show floating mini keypad (compact)
+      state.keypadMinimized = false;
+      floatingKeypad.classList.remove('hidden');
+      minimizedKeypadPill.classList.add('hidden');
+
+      // Fill concept & metadata
+      conceptTitle.textContent = data.conceptName || '數學概念練習';
+      questionCountBadge.textContent = `共 ${data.questions.length} 題`;
+      countReasonText.textContent = data.countReason || '依據原題核心概念生成不同數值之練習題';
+
+      originalPreviewImg.src = state.imageDataUrl;
+      originalSummaryText.textContent = data.originalSummary || '';
+      renderMathSafely(originalSummaryText);
+      imageMetaText.textContent = `原圖尺寸：${state.imageMeta.width} × ${state.imageMeta.height} px｜檔案大小：約 ${state.imageMeta.sizeKB} KB`;
+
+      totalQuestionsText.textContent = data.questions.length;
+      answeredCountText.textContent = '0';
+      scoreBadge.classList.add('hidden');
+
+      // Build question cards
+      questionsContainer.innerHTML = '';
+      data.questions.forEach((q, idx) => {
+        const card = document.createElement('div');
+        card.id = `question-card-${idx}`;
+        card.className = 'bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 sm:p-5 transition-all duration-200';
+
+        const unitHtml = q.unit
+          ? `<span class="text-sm font-medium text-slate-500 shrink-0">${escapeHtml(q.unit)}</span>`
+          : '';
+
+        card.innerHTML = `
+          <div class="flex items-start gap-3">
+            <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-indigo-50 text-indigo-700 font-bold text-sm flex items-center justify-center shrink-0 mt-0.5">
+              ${idx + 1}
+            </div>
+            <div class="flex-1 min-w-0 space-y-3">
+              <!-- Question Text -->
+              <div class="question-math-text text-slate-800 text-sm sm:text-base leading-relaxed font-medium break-words">
+                ${escapeHtml(q.questionText)}
+              </div>
+
+              <!-- Answer Input Row -->
+              <div class="flex flex-wrap items-center gap-2 pt-1">
+                <label for="ans-input-${idx}" class="text-xs font-semibold text-slate-500">答：</label>
+                <div class="relative flex items-center gap-2 flex-1 min-w-[160px] max-w-xs">
+                  <input
+                    id="ans-input-${idx}"
+                    data-q-index="${idx}"
+                    type="text"
+                    autocomplete="off"
+                    placeholder="點擊輸入答案..."
+                    class="answer-input w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-slate-50/70 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 text-sm sm:text-base font-semibold text-slate-900 outline-none transition-all"
+                  />
+                  ${unitHtml}
+                </div>
+
+                <!-- Action Buttons per Question -->
+                <div class="flex items-center gap-1.5 ml-auto">
+                  <button
+                    type="button"
+                    data-hint-idx="${idx}"
+                    class="hint-btn px-2.5 py-1.5 rounded-xl text-xs font-medium bg-amber-50 hover:bg-amber-100 text-amber-700 transition-colors"
+                  >
+                    💡 提示
+                  </button>
+                  <button
+                    type="button"
+                    data-check-idx="${idx}"
+                    class="check-single-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-indigo-600 hover:text-white text-slate-700 transition-colors"
+                  >
+                    對答案
+                  </button>
+                </div>
+              </div>
+
+              <!-- Hint Box (Hidden by default) -->
+              <div id="hint-box-${idx}" class="hidden rounded-xl bg-amber-50/80 border border-amber-200/70 px-3.5 py-2.5 text-xs sm:text-sm text-amber-900">
+                <span class="font-bold">💡 解題提示：</span>
+                <span class="hint-math-text">${escapeHtml(q.hint)}</span>
+              </div>
+
+              <!-- Feedback & Explanation Box (Hidden by default) -->
+              <div id="feedback-box-${idx}" class="hidden rounded-xl px-3.5 py-3 text-xs sm:text-sm space-y-1.5"></div>
+            </div>
+          </div>
+        `;
+
+        questionsContainer.appendChild(card);
+        renderMathSafely(card);
+      });
+
+      // Attach listeners to newly created inputs & buttons
+      bindQuestionEvents();
+
+      // Automatically link keypad to the first question
+      setActiveQuestion(0, false);
+    }
+
+    /**
+     * Bind focus, input, hint, and single-check events on question cards
+     */
+    function bindQuestionEvents() {
+      const inputs = document.querySelectorAll('.answer-input');
+      inputs.forEach((input) => {
+        if (suppressOsKeyboard.checked) {
+          input.setAttribute('inputmode', 'none');
+        }
+
+        input.addEventListener('focus', () => {
+          const idx = Number(input.dataset.qIndex);
+          setActiveQuestion(idx, false);
+        });
+
+        input.addEventListener('input', () => {
+          updateAnsweredCount();
+        });
+
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            const idx = Number(input.dataset.qIndex);
+            checkSingleQuestion(idx);
+            if (idx + 1 < state.practiceData.questions.length) {
+              setActiveQuestion(idx + 1, true);
+            }
+          }
+        });
+      });
+
+      document.querySelectorAll('.hint-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const idx = Number(btn.dataset.hintIdx);
+          const hintBox = document.getElementById(`hint-box-${idx}`);
+          hintBox.classList.toggle('hidden');
+          renderMathSafely(hintBox);
+        });
+      });
+
+      document.querySelectorAll('.check-single-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const idx = Number(btn.dataset.checkIdx);
+          checkSingleQuestion(idx);
+        });
+      });
+    }
+
+    /**
+     * Highlight and track which question input the floating keypad targets
+     */
+    function setActiveQuestion(idx, shouldFocus = true) {
+      if (!state.practiceData || idx < 0 || idx >= state.practiceData.questions.length) return;
+      state.activeQuestionIndex = idx;
+      activeInputIndicator.textContent = `第 ${idx + 1} 題`;
+
+      // Highlight active card border subtly
+      document.querySelectorAll('[id^="question-card-"]').forEach((card, i) => {
+        if (i === idx) {
+          card.classList.add('ring-2', 'ring-indigo-400/70', 'border-indigo-300');
+        } else {
+          card.classList.remove('ring-2', 'ring-indigo-400/70', 'border-indigo-300');
+        }
+      });
+
+      const targetInput = document.getElementById(`ans-input-${idx}`);
+      if (shouldFocus && targetInput) {
+        targetInput.focus();
+      }
+    }
+
+    /**
+     * Normalize math answer strings for fair comparison
+     * Converts full-width characters to half-width, strips spaces, normalizes minus/multiply symbols.
+     */
+    function normalizeAnswer(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .trim()
+        // Convert full-width ASCII variants to half-width
+        .replace(/[\uFF01-\uFF5E]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
+        .replace(/　/g, '')
+        .replace(/\s+/g, '')
+        .replace(/[−–—]/g, '-')
+        .replace(/[×✕＊]/g, '*')
+        .replace(/[÷／]/g, '/')
+        .replace(/，/g, ',')
+        .replace(/：/g, ':')
+        .toLowerCase();
+    }
+
+    /**
+     * Evaluate whether a user's answer matches the standard answer or acceptable answers
+     * Also checks numeric equality (e.g., "3/4" vs "0.75" or "2.50" vs "2.5")
+     */
+    function isAnswerCorrect(userInput, question) {
+      const normUser = normalizeAnswer(userInput);
+      if (!normUser) return false;
+
+      const candidates = [question.answer, ...(question.acceptableAnswers || [])]
+        .filter(Boolean)
+        .map(normalizeAnswer);
+
+      if (candidates.includes(normUser)) return true;
+
+      // Try safe numeric/fraction comparison if both sides are simple numbers or fractions
+      const parseSimpleNumber = (expr) => {
+        if (/^-?\d+(\.\d+)?$/.test(expr)) return parseFloat(expr);
+        const frac = expr.match(/^(-?\d+)\/(-?\d+)$/);
+        if (frac && Number(frac[2]) !== 0) {
+          return Number(frac[1]) / Number(frac[2]);
+        }
+        return null;
+      };
+
+      const userVal = parseSimpleNumber(normUser);
+      if (userVal !== null) {
+        for (const cand of candidates) {
+          const candVal = parseSimpleNumber(cand);
+          if (candVal !== null && Math.abs(userVal - candVal) < 1e-6) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    /**
+     * Check a single question and render immediate feedback + explanation
+     */
+    function checkSingleQuestion(idx) {
+      const q = state.practiceData?.questions?.[idx];
+      if (!q) return false;
+
+      const input = document.getElementById(`ans-input-${idx}`);
+      const feedbackBox = document.getElementById(`feedback-box-${idx}`);
+      const userVal = input.value.trim();
+
+      const correct = isAnswerCorrect(userVal, q);
+      feedbackBox.classList.remove('hidden', 'bg-emerald-50', 'border-emerald-200', 'text-emerald-900', 'bg-rose-50', 'border-rose-200', 'text-rose-900');
+
+      const unitStr = q.unit ? ` ${escapeHtml(q.unit)}` : '';
+
+      if (correct) {
+        feedbackBox.classList.add('bg-emerald-50', 'border', 'border-emerald-200', 'text-emerald-900');
+        input.classList.remove('border-rose-400', 'bg-rose-50/40');
+        input.classList.add('border-emerald-500', 'bg-emerald-50/40');
+        feedbackBox.innerHTML = `
+          <div class="font-bold flex items-center gap-1.5 text-emerald-700">
+            <span>✅ 答對了！</span>
+            <span class="font-normal text-emerald-600">標準答案：${escapeHtml(q.answer)}${unitStr}</span>
+          </div>
+          <div class="text-slate-700 leading-relaxed pt-1 border-t border-emerald-200/60">
+            <span class="font-semibold text-emerald-800">詳解：</span>${escapeHtml(q.explanation)}
+          </div>
+        `;
+      } else {
+        feedbackBox.classList.add('bg-rose-50', 'border', 'border-rose-200', 'text-rose-900');
+        input.classList.remove('border-emerald-500', 'bg-emerald-50/40');
+        input.classList.add('border-rose-400', 'bg-rose-50/40');
+        const statusMsg = userVal ? '❌ 再想一下喔！' : '📝 尚未填寫答案';
+        feedbackBox.innerHTML = `
+          <div class="font-bold flex flex-wrap items-center gap-2 text-rose-700">
+            <span>${statusMsg}</span>
+            <span class="px-2 py-0.5 rounded-md bg-white/80 border border-rose-200 text-rose-800 text-xs">
+              標準答案：${escapeHtml(q.answer)}${unitStr}
+            </span>
+          </div>
+          <div class="text-slate-700 leading-relaxed pt-1 border-t border-rose-200/60">
+            <span class="font-semibold text-rose-800">詳解：</span>${escapeHtml(q.explanation)}
+          </div>
+        `;
+      }
+
+      renderMathSafely(feedbackBox);
+      return correct;
+    }
+
+    /**
+     * Check all questions and show overall score
+     */
+    function checkAllQuestions() {
+      if (!state.practiceData) return;
+      let correctCount = 0;
+      const total = state.practiceData.questions.length;
+
+      for (let i = 0; i < total; i++) {
+        if (checkSingleQuestion(i)) {
+          correctCount++;
+        }
+      }
+
+      scoreBadge.textContent = `得分：${correctCount} / ${total} 題 (${Math.round((correctCount / total) * 100)}%)`;
+      scoreBadge.classList.remove('hidden');
+
+      if (correctCount === total) {
+        showToast(`太棒了！全部 ${total} 題都答對，概念完全掌握！`, 'success');
+      } else {
+        showToast(`批改完成：答對 ${correctCount} / ${total} 題，可以查看每題詳解喔！`, 'info');
+      }
+    }
+
+    /**
+     * Update live answered count indicator
+     */
+    function updateAnsweredCount() {
+      const inputs = document.querySelectorAll('.answer-input');
+      let count = 0;
+      inputs.forEach((inp) => {
+        if (inp.value.trim() !== '') count++;
+      });
+      answeredCountText.textContent = count;
+    }
+
+    /**
+     * HTML escaping helper to prevent XSS while preserving LaTeX text
+     */
+    function escapeHtml(text) {
+      if (!text) return '';
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    // ==================== Floating Mini Keypad Logic ====================
+
+    /**
+     * Insert text into the active answer input at cursor position without losing focus
+     */
+    function handleKeypadPress(key, action) {
+      const input = document.getElementById(`ans-input-${state.activeQuestionIndex}`);
+      if (!input) return;
+
+      const start = input.selectionStart ?? input.value.length;
+      const end = input.selectionEnd ?? input.value.length;
+
+      if (action === 'backspace') {
+        if (start !== end) {
+          input.value = input.value.slice(0, start) + input.value.slice(end);
+          input.setSelectionRange(start, start);
+        } else if (start > 0) {
+          input.value = input.value.slice(0, start - 1) + input.value.slice(start);
+          input.setSelectionRange(start - 1, start - 1);
+        }
+      } else if (action === 'clear') {
+        input.value = '';
+      } else if (action === 'next') {
+        const total = state.practiceData?.questions?.length || 0;
+        if (total > 0) {
+          const nextIdx = (state.activeQuestionIndex + 1) % total;
+          setActiveQuestion(nextIdx, true);
+          const nextCard = document.getElementById(`question-card-${nextIdx}`);
+          nextCard?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        return;
+      } else if (key !== undefined) {
+        input.value = input.value.slice(0, start) + key + input.value.slice(end);
+        const newPos = start + key.length;
+        input.setSelectionRange(newPos, newPos);
+      }
+
+      input.focus();
+      updateAnsweredCount();
+    }
+
+    // Prevent keypad button clicks from stealing focus from the input box
+    floatingKeypad.addEventListener('mousedown', (e) => {
+      if (e.target.closest('.keypad-btn')) {
+        e.preventDefault();
+      }
+    });
+
+    floatingKeypad.addEventListener('click', (e) => {
+      const btn = e.target.closest('.keypad-btn');
+      if (!btn) return;
+      handleKeypadPress(btn.dataset.key, btn.dataset.action);
+    });
+
+    // Switch between Numeric and Symbol keypad pages
+    keypadModeBtn.addEventListener('click', () => {
+      state.keypadSymMode = !state.keypadSymMode;
+      if (state.keypadSymMode) {
+        keypadPageNum.classList.add('hidden');
+        keypadPageSym.classList.remove('hidden');
+        keypadModeBtn.textContent = '123';
+      } else {
+        keypadPageSym.classList.add('hidden');
+        keypadPageNum.classList.remove('hidden');
+        keypadModeBtn.textContent = '符號';
+      }
+    });
+
+    // Minimize / Expand floating keypad
+    function setKeypadMinimized(minimized) {
+      state.keypadMinimized = minimized;
+      if (minimized) {
+        floatingKeypad.classList.add('hidden');
+        minimizedKeypadPill.classList.remove('hidden');
+        minimizedKeypadPill.classList.add('inline-flex');
+      } else {
+        floatingKeypad.classList.remove('hidden');
+        minimizedKeypadPill.classList.add('hidden');
+        minimizedKeypadPill.classList.remove('inline-flex');
+      }
+    }
+
+    document.getElementById('minimizeKeypadBtn').addEventListener('click', () => setKeypadMinimized(true));
+    minimizedKeypadPill.addEventListener('click', () => setKeypadMinimized(false));
+    headerKeypadToggle.addEventListener('click', () => setKeypadMinimized(!state.keypadMinimized));
+
+    // Toggle native mobile keyboard suppression
+    suppressOsKeyboard.addEventListener('change', () => {
+      const inputs = document.querySelectorAll('.answer-input');
+      inputs.forEach((inp) => {
+        if (suppressOsKeyboard.checked) {
+          inp.setAttribute('inputmode', 'none');
+        } else {
+          inp.removeAttribute('inputmode');
+        }
+      });
+    });
+
+    // ==================== Draggable Keypad Implementation (Mouse & Touch) ====================
+    (function initDraggableKeypad() {
+      const handle = document.getElementById('keypadDragHandle');
+      let isDragging = false;
+      let startX = 0;
+      let startY = 0;
+      let initialLeft = 0;
+      let initialTop = 0;
+
+      const onStart = (clientX, clientY) => {
+        const rect = floatingKeypad.getBoundingClientRect();
+        isDragging = true;
+        startX = clientX;
+        startY = clientY;
+        initialLeft = rect.left;
+        initialTop = rect.top;
+
+        // Convert bottom/right positioning to explicit left/top once dragged
+        floatingKeypad.style.right = 'auto';
+        floatingKeypad.style.bottom = 'auto';
+        floatingKeypad.style.left = `${initialLeft}px`;
+        floatingKeypad.style.top = `${initialTop}px`;
+      };
+
+      const onMove = (clientX, clientY) => {
+        if (!isDragging) return;
+        const dx = clientX - startX;
+        const dy = clientY - startY;
+        const maxLeft = window.innerWidth - floatingKeypad.offsetWidth - 8;
+        const maxTop = window.innerHeight - floatingKeypad.offsetHeight - 8;
+
+        const nextLeft = Math.min(Math.max(8, initialLeft + dx), Math.max(8, maxLeft));
+        const nextTop = Math.min(Math.max(8, initialTop + dy), Math.max(8, maxTop));
+
+        floatingKeypad.style.left = `${nextLeft}px`;
+        floatingKeypad.style.top = `${nextTop}px`;
+      };
+
+      const onEnd = () => {
+        isDragging = false;
+      };
+
+      // Mouse events
+      handle.addEventListener('mousedown', (e) => {
+        if (e.target.closest('button')) return;
+        onStart(e.clientX, e.clientY);
+      });
+      window.addEventListener('mousemove', (e) => onMove(e.clientX, e.clientY));
+      window.addEventListener('mouseup', onEnd);
+
+      // Touch events
+      handle.addEventListener('touchstart', (e) => {
+        if (e.target.closest('button')) return;
+        const touch = e.touches[0];
+        onStart(touch.clientX, touch.clientY);
+      }, { passive: true });
+
+      window.addEventListener('touchmove', (e) => {
+        if (!isDragging) return;
+        const touch = e.touches[0];
+        onMove(touch.clientX, touch.clientY);
+      }, { passive: true });
+
+      window.addEventListener('touchend', onEnd);
+
+      // Keep keypad inside viewport on window resize
+      window.addEventListener('resize', () => {
+        if (floatingKeypad.style.left) {
+          const rect = floatingKeypad.getBoundingClientRect();
+          const maxLeft = Math.max(8, window.innerWidth - rect.width - 8);
+          const maxTop = Math.max(8, window.innerHeight - rect.height - 8);
+          floatingKeypad.style.left = `${Math.min(rect.left, maxLeft)}px`;
+          floatingKeypad.style.top = `${Math.min(rect.top, maxTop)}px`;
+        }
+      });
+    })();
+
+    // ==================== Drag, Drop, File Select & Global Paste Events ====================
+
+    // Click dropzone to pick file
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        fileInput.click();
+      }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        handleImageFile(e.target.files[0]);
+        fileInput.value = '';
+      }
+    });
+
+    // Drag & Drop handlers on both dropZone and window
+    ['dragenter', 'dragover'].forEach((evtName) => {
+      dropZone.addEventListener(evtName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.add('dropzone-active');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach((evtName) => {
+      dropZone.addEventListener(evtName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.remove('dropzone-active');
+      });
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      const files = e.dataTransfer?.files;
+      if (files && files.length > 0) {
+        handleImageFile(files[0]);
+      }
+    });
+
+    // Also allow dropping anywhere on the page even while viewing previous questions
+    window.addEventListener('dragover', (e) => e.preventDefault());
+    window.addEventListener('drop', (e) => {
+      e.preventDefault();
+      if (e.target.closest('#dropZone')) return;
+      const files = e.dataTransfer?.files;
+      if (files && files.length > 0 && files[0].type.startsWith('image/')) {
+        handleImageFile(files[0]);
+      }
+    });
+
+    // Global Clipboard Paste (Ctrl+V / Cmd+V)
+    window.addEventListener('paste', (e) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          if (file) {
+            showToast('已偵測到剪貼簿截圖，開始解析題目！', 'info');
+            handleImageFile(file);
+          }
+          return;
+        }
+      }
+    });
+
+    // ==================== Practice Control Buttons ====================
+
+    document.getElementById('toggleOriginalBtn').addEventListener('click', () => {
+      originalImagePanel.classList.toggle('hidden');
+    });
+
+    document.getElementById('regenerateBtn').addEventListener('click', () => {
+      generateSimilarQuestions();
+    });
+
+    document.getElementById('checkAllBtn').addEventListener('click', checkAllQuestions);
+    document.getElementById('bottomCheckAllBtn').addEventListener('click', checkAllQuestions);
+
+    document.getElementById('clearAllAnswersBtn').addEventListener('click', () => {
+      document.querySelectorAll('.answer-input').forEach((inp) => {
+        inp.value = '';
+        inp.classList.remove('border-emerald-500', 'bg-emerald-50/40', 'border-rose-400', 'bg-rose-50/40');
+      });
+      document.querySelectorAll('[id^="feedback-box-"]').forEach((box) => box.classList.add('hidden'));
+      scoreBadge.classList.add('hidden');
+      updateAnsweredCount();
+      setActiveQuestion(0, true);
+    });
+
+    resetAllBtn.addEventListener('click', () => {
+      practiceSection.classList.add('hidden');
+      loadingSection.classList.add('hidden');
+      floatingKeypad.classList.add('hidden');
+      minimizedKeypadPill.classList.add('hidden');
+      headerKeypadToggle.classList.add('hidden');
+      resetAllBtn.classList.add('hidden');
+      uploadSection.classList.remove('hidden');
+      originalImagePanel.classList.add('hidden');
+    });
+  </script>
+</body>
+</html>
