@@ -31,7 +31,6 @@
   </script>
 
   <style>
-    /* Custom scrollbar & subtle animations */
     body {
       font-family: 'Inter', 'Noto Sans TC', system-ui, -apple-system, sans-serif;
     }
@@ -73,13 +72,47 @@
     .animate-pulse-soft {
       animation: pulse-soft 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
     }
+
+    /* ==================== Print / Export PDF Styles ==================== */
+    @media print {
+      @page {
+        size: A4 portrait;
+        margin: 14mm 14mm 16mm 14mm;
+      }
+
+      body {
+        background: #ffffff !important;
+        color: #111827 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      .no-print {
+        display: none !important;
+      }
+
+      #printWorksheetView {
+        display: block !important;
+        position: static !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+        border: none !important;
+        max-width: 100% !important;
+      }
+
+      .print-question-item {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+    }
   </style>
 </head>
 
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col antialiased selection:bg-indigo-100 selection:text-indigo-800">
 
   <!-- ==================== Top Navigation Header ==================== -->
-  <header class="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200/80 shadow-sm">
+  <header class="no-print sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200/80 shadow-sm">
     <div class="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
       <div class="flex items-center gap-2.5">
         <div class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-sm font-bold text-lg">
@@ -87,7 +120,7 @@
         </div>
         <div>
           <h1 class="text-base sm:text-lg font-bold text-slate-900 leading-tight">數學截圖類似題練習器</h1>
-          <p class="text-xs text-slate-500 hidden sm:block">貼上或拖移題目截圖，自動生成 4～8 題同概念練習</p>
+          <p class="text-xs text-slate-500 hidden sm:block">拖移或貼上數學題截圖 → 生成 4～8 題類似題 → 上臺作答或匯出 PDF</p>
         </div>
       </div>
 
@@ -117,17 +150,17 @@
   </header>
 
   <!-- ==================== Toast Notification Container ==================== -->
-  <div id="toastContainer" class="fixed top-20 right-4 z-50 flex flex-col gap-2 pointer-events-none max-w-xs w-full"></div>
+  <div id="toastContainer" class="no-print fixed top-20 right-4 z-50 flex flex-col gap-2 pointer-events-none max-w-xs w-full"></div>
 
   <!-- ==================== Main Workspace ==================== -->
-  <main class="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 pb-36">
+  <main class="no-print flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 pb-36">
 
     <!-- ===== Section 1: Upload / Drop / Paste Area ===== -->
     <section id="uploadSection" class="transition-all duration-300">
       <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5 sm:p-8">
         <div class="text-center max-w-xl mx-auto mb-6">
           <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold mb-3">
-            <span>✨</span> AI 智慧辨識核心數學概念
+            <span>✨</span> Gemini AI 圖片辨識 × 同概念自動出題
           </span>
           <h2 class="text-xl sm:text-2xl font-bold text-slate-900 mb-2">把數學題目截圖放進來</h2>
           <p class="text-sm text-slate-500">
@@ -180,7 +213,7 @@
             </select>
           </div>
           <p class="text-xs text-slate-400">
-            💡 計算題通常出 6～8 題；複雜應用題則精選 4～5 題
+            💡 計算題通常出 6～8 題；字數較多的應用題則精選 4～5 題
           </p>
         </div>
 
@@ -214,7 +247,7 @@
               id="loadingPreviewImg"
               src=""
               alt="上傳的題目預覽"
-              class="max-h-40 rounded-xl border border-slate-200 shadow-sm object-contain bg-slate-50 p-1"
+              class="max-h-44 rounded-xl border border-slate-200 shadow-sm object-contain bg-slate-50 p-1"
             />
           </div>
           <div class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 mb-3">
@@ -223,9 +256,9 @@
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
             </svg>
           </div>
-          <h3 class="text-lg font-bold text-slate-900 mb-1">正在解析數學題目並生成類似題...</h3>
+          <h3 class="text-lg font-bold text-slate-900 mb-1">Gemini 正在解析數學題並生成類似題...</h3>
           <p id="loadingStatusText" class="text-sm text-slate-500 animate-pulse-soft">
-            正在辨識題目概念、評估複雜度與設計不同數字的練習題
+            正在辨識題目概念、評估字數與設計不同數字的練習題
           </p>
         </div>
       </div>
@@ -234,9 +267,9 @@
     <!-- ===== Section 3: Practice Workspace ===== -->
     <section id="practiceSection" class="hidden space-y-5">
 
-      <!-- Concept & Original Image Summary Card -->
+      <!-- Concept & Action Summary Card -->
       <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 sm:p-5">
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div class="space-y-1.5">
             <div class="flex flex-wrap items-center gap-2">
               <span class="px-2.5 py-1 rounded-lg bg-indigo-600 text-white text-xs font-semibold tracking-wide">
@@ -254,7 +287,15 @@
               type="button"
               class="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs sm:text-sm font-medium text-slate-700 transition-colors"
             >
-              🖼️ 查看原題截圖
+              🖼️ 原題截圖
+            </button>
+            <button
+              id="openWorksheetBtn"
+              type="button"
+              class="px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-xs sm:text-sm font-semibold text-emerald-700 transition-colors"
+              title="開啟乾淨考卷畫面，支援匯出 PDF 列印或直接截圖"
+            >
+              📄 考卷 PDF / 截圖模式
             </button>
             <button
               id="regenerateBtn"
@@ -315,23 +356,86 @@
       <div id="questionsContainer" class="grid grid-cols-1 gap-4"></div>
 
       <!-- Bottom Action Footer -->
-      <div class="flex justify-center pt-2">
+      <div class="flex flex-wrap justify-center gap-3 pt-2">
         <button
           id="bottomCheckAllBtn"
           type="button"
-          class="w-full sm:w-auto px-8 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-md hover:shadow-lg transition-all text-sm sm:text-base"
+          class="w-full sm:w-auto px-7 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-md hover:shadow-lg transition-all text-sm sm:text-base"
         >
           ✓ 批改全部題目並查看詳解
+        </button>
+        <button
+          id="bottomWorksheetBtn"
+          type="button"
+          class="w-full sm:w-auto px-6 py-3 rounded-2xl bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold shadow-sm transition-all text-sm sm:text-base"
+        >
+          📄 匯出考卷 PDF / 截圖檢視
         </button>
       </div>
     </section>
   </main>
 
+  <!-- ==================== Clean Worksheet / PDF Export & Screenshot Modal ==================== -->
+  <div id="worksheetModal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm overflow-y-auto p-3 sm:p-6">
+    <div class="max-w-3xl mx-auto space-y-3">
+      <!-- Top Control Bar (hidden when printing) -->
+      <div class="no-print sticky top-2 z-10 bg-slate-900/95 text-white rounded-2xl px-4 py-3 shadow-xl flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2 text-xs sm:text-sm font-semibold">
+          <span>📄 考卷預覽（可直接列印存 PDF 或截圖）</span>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <label class="inline-flex items-center gap-1.5 text-xs bg-slate-800 px-2.5 py-1.5 rounded-xl cursor-pointer select-none">
+            <input id="toggleWorksheetAnswers" type="checkbox" class="rounded border-slate-500 text-emerald-500" />
+            <span>顯示解答與詳解（教師卷）</span>
+          </label>
+          <button
+            id="triggerPrintPdfBtn"
+            type="button"
+            class="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold shadow-sm transition-colors"
+          >
+            🖨️ 列印 / 另存 PDF
+          </button>
+          <button
+            id="closeWorksheetModalBtn"
+            type="button"
+            class="px-3 py-1.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-100 text-xs font-medium transition-colors"
+          >
+            關閉返回
+          </button>
+        </div>
+      </div>
+
+      <!-- Printable / Screenshot-Friendly White Paper Sheet -->
+      <div id="printWorksheetView" class="bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 sm:p-10 text-slate-900">
+        <!-- Worksheet Header -->
+        <div class="border-b-2 border-slate-800 pb-4 mb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+          <div>
+            <div class="text-xs font-semibold text-slate-500 tracking-wider uppercase">數學概念類似題練習卷</div>
+            <h2 id="wsConceptTitle" class="text-xl sm:text-2xl font-bold text-slate-900 mt-1"></h2>
+          </div>
+          <div class="text-xs sm:text-sm text-slate-600 flex flex-wrap gap-4">
+            <span>班級：__________</span>
+            <span>姓名：__________</span>
+            <span>得分：______</span>
+          </div>
+        </div>
+
+        <!-- Worksheet Questions Container -->
+        <div id="wsQuestionsList" class="space-y-6"></div>
+
+        <!-- Optional Answer Key Section (Shown when Teacher Mode is checked) -->
+        <div id="wsAnswerKeySection" class="hidden mt-8 pt-6 border-t-2 border-dashed border-slate-300">
+          <h3 class="text-base font-bold text-slate-900 mb-3">【參考答案與詳解】</h3>
+          <div id="wsAnswerKeyList" class="space-y-3 text-sm text-slate-700"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ==================== Compact Floating On-Screen Math Keypad ==================== -->
-  <!-- Designed to be tiny, draggable, collapsible, and never block the math questions -->
   <div
     id="floatingKeypad"
-    class="hidden fixed bottom-4 right-4 z-40 w-[238px] bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden transition-shadow"
+    class="no-print hidden fixed bottom-4 right-4 z-40 w-[238px] bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200/90 overflow-hidden transition-shadow"
   >
     <!-- Draggable Compact Header -->
     <div
@@ -411,7 +515,7 @@
       <button type="button" data-action="next" class="keypad-btn h-9 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm">下題↵</button>
     </div>
 
-    <!-- Subtle footer tip for touch users -->
+    <!-- Subtle footer tip for touch / whiteboard users -->
     <div class="px-2.5 py-1.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
       <span>可拖曳上方黑條移動</span>
       <label class="inline-flex items-center gap-1 cursor-pointer select-none">
@@ -425,7 +529,7 @@
   <button
     id="minimizedKeypadPill"
     type="button"
-    class="hidden fixed bottom-4 right-4 z-40 items-center gap-1.5 px-3.5 py-2.5 rounded-full bg-slate-900 hover:bg-indigo-600 text-white text-xs font-semibold shadow-xl transition-all"
+    class="no-print hidden fixed bottom-4 right-4 z-40 items-center gap-1.5 px-3.5 py-2.5 rounded-full bg-slate-900 hover:bg-indigo-600 text-white text-xs font-semibold shadow-xl transition-all"
     title="展開數學小鍵盤"
   >
     <span>⌨️</span>
@@ -438,22 +542,22 @@
      * Global Application State
      */
     const state = {
-      imageDataUrl: null,        // Original preview Data URL
-      imageBase64: null,         // Processed base64 payload (without prefix)
-      imageMimeType: 'image/jpeg',
+      imageDataUrl: null,
+      imageBase64: null,
+      imageMimeType: 'image/png',
       imageMeta: { width: 0, height: 0, sizeKB: 0 },
-      practiceData: null,        // Structured JSON response from Gemini
-      activeQuestionIndex: 0,    // Index of currently focused answer input
+      practiceData: null,
+      activeQuestionIndex: 0,
       keypadMinimized: false,
       keypadSymMode: false,
       isGenerating: false,
     };
 
-    // Gemini API configuration (API key is injected automatically at runtime)
+    // Gemini API configuration (Canvas runtime injects the API key automatically when empty)
     const apiKey = "";
     const GEMINI_MODEL = "gemini-3-flash-preview";
 
-    // DOM Elements
+    // ==================== DOM References ====================
     const dropZone = document.getElementById('dropZone');
     const fileInput = document.getElementById('fileInput');
     const countModeSelect = document.getElementById('countModeSelect');
@@ -467,7 +571,134 @@
     const retryLastBtn = document.getElementById('retryLastBtn');
 
     const conceptTitle = document.getElementById('conceptTitle');
-// ... existing code ... -->
+    const questionCountBadge = document.getElementById('questionCountBadge');
+    const countReasonText = document.getElementById('countReasonText');
+    const originalImagePanel = document.getElementById('originalImagePanel');
+    const originalPreviewImg = document.getElementById('originalPreviewImg');
+    const originalSummaryText = document.getElementById('originalSummaryText');
+    const imageMetaText = document.getElementById('imageMetaText');
+    const questionsContainer = document.getElementById('questionsContainer');
+    const answeredCountText = document.getElementById('answeredCountText');
+    const totalQuestionsText = document.getElementById('totalQuestionsText');
+    const scoreBadge = document.getElementById('scoreBadge');
+
+    const floatingKeypad = document.getElementById('floatingKeypad');
+    const minimizedKeypadPill = document.getElementById('minimizedKeypadPill');
+    const headerKeypadToggle = document.getElementById('headerKeypadToggle');
+    const resetAllBtn = document.getElementById('resetAllBtn');
+    const activeInputIndicator = document.getElementById('activeInputIndicator');
+    const keypadModeBtn = document.getElementById('keypadModeBtn');
+    const keypadPageNum = document.getElementById('keypadPageNum');
+    const keypadPageSym = document.getElementById('keypadPageSym');
+    const suppressOsKeyboard = document.getElementById('suppressOsKeyboard');
+
+    // Worksheet / PDF Modal Elements
+    const worksheetModal = document.getElementById('worksheetModal');
+    const wsConceptTitle = document.getElementById('wsConceptTitle');
+    const wsQuestionsList = document.getElementById('wsQuestionsList');
+    const wsAnswerKeySection = document.getElementById('wsAnswerKeySection');
+    const wsAnswerKeyList = document.getElementById('wsAnswerKeyList');
+    const toggleWorksheetAnswers = document.getElementById('toggleWorksheetAnswers');
+
+    // ==================== Utility Functions ====================
+
+    /**
+     * Non-blocking toast notification (replaces alert)
+     */
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const colors = {
+        info: 'bg-slate-900 text-white',
+        success: 'bg-emerald-600 text-white',
+        error: 'bg-rose-600 text-white',
+        warning: 'bg-amber-500 text-white',
+      };
+      const toast = document.createElement('div');
+      toast.className = `${colors[type] || colors.info} px-4 py-2.5 rounded-xl shadow-lg text-xs sm:text-sm font-medium pointer-events-auto transition-all duration-300 opacity-0 translate-y-2`;
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      requestAnimationFrame(() => {
+        toast.classList.remove('opacity-0', 'translate-y-2');
+      });
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 3600);
+    }
+
+    /**
+     * Safely render KaTeX formulas inside an HTML element
+     */
+    function renderMathSafely(element, attempt = 0) {
+      if (!element) return;
+      if (typeof renderMathInElement === 'function') {
+        try {
+          renderMathInElement(element, {
+            delimiters: [
+              { left: '$$', right: '$$', display: true },
+              { left: '$', right: '$', display: false },
+              { left: '\\(', right: '\\)', display: false },
+              { left: '\\[', right: '\\]', display: true },
+            ],
+            throwOnError: false,
+          });
+        } catch (err) {
+          console.warn('KaTeX render warning:', err);
+        }
+      } else if (attempt < 5) {
+        setTimeout(() => renderMathSafely(element, attempt + 1), 300);
+      }
+    }
+
+    /**
+     * HTML escaping helper to prevent XSS while preserving LaTeX text
+     */
+    function escapeHtml(text) {
+      if (!text) return '';
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    // ==================== Image Processing ====================
+
+    /**
+     * Read image file, normalize resolution while keeping crisp text clarity, and trigger Gemini
+     */
+    function handleImageFile(file) {
+      if (!file || !file.type.startsWith('image/')) {
+        showToast('請上傳或貼上圖片檔案（PNG、JPG、WebP）', 'warning');
+        return;
+      }
+
+      const sizeKB = Math.max(1, Math.round(file.size / 1024));
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target.result;
+        const img = new Image();
+        img.onload = () => {
+          state.imageDataUrl = dataUrl;
+          state.imageMeta = {
+            width: img.naturalWidth,
+            height: img.naturalHeight,
+            sizeKB,
+          };
+
+          // Keep resolution crisp (up to 1600px on longest side) so small math symbols stay clear
+          const MAX_DIM = 1600;
+          let targetW = img.naturalWidth;
+          let targetH = img.naturalHeight;
+          if (targetW > MAX_DIM || targetH > MAX_DIM) {
+            const ratio = Math.min(MAX_DIM / targetW, MAX_DIM / targetH);
+            targetW = Math.round(targetW * ratio);
+            targetH = Math.round(targetH * ratio);
+          }
+
           const canvas = document.createElement('canvas');
           canvas.width = targetW;
           canvas.height = targetH;
@@ -476,10 +707,10 @@
           ctx.fillRect(0, 0, targetW, targetH);
           ctx.drawImage(img, 0, 0, targetW, targetH);
 
-          // Preserve crisp PNG for screenshots when payload is reasonable, fallback to high-quality JPEG
+          // Use lossless PNG for crisp screenshots; fallback to high-quality JPEG if too large
           let processedDataUrl = canvas.toDataURL('image/png');
           let mimeType = 'image/png';
-          if (processedDataUrl.length > 1.8 * 1024 * 1024) {
+          if (processedDataUrl.length > 2.2 * 1024 * 1024) {
             processedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
             mimeType = 'image/jpeg';
           }
@@ -493,12 +724,16 @@
         };
         img.src = dataUrl;
       };
+      reader.onerror = () => {
+        showToast('讀取檔案失敗，請再試一次', 'error');
+      };
       reader.readAsDataURL(file);
     }
 
+    // ==================== Gemini API Calls ====================
+
     /**
-     * Fetch with exponential backoff for Gemini API calls
-     * Fails fast on non-retryable 4xx errors instead of waiting through all retries.
+     * Fetch with exponential backoff for transient errors (429 / 5xx / network)
      */
     async function fetchWithRetry(url, options, maxRetries = 3) {
       let delay = 1000;
@@ -510,7 +745,6 @@
           }
 
           const errBody = await response.text();
-          // Only retry on rate-limit (429) or transient server errors (5xx)
           if ((response.status === 429 || response.status >= 500) && attempt < maxRetries) {
             loadingStatusText.textContent = `伺服器忙碌中，正在進行第 ${attempt + 1} 次重試...`;
             await new Promise((res) => setTimeout(res, delay));
@@ -522,9 +756,8 @@
           try {
             const errJson = JSON.parse(errBody);
             shortMsg = errJson?.error?.message || errBody;
-          } catch (_) {
-            // Keep raw error body
-          }
+          } catch (_) {}
+
           const fatalErr = new Error(`API 錯誤 (${response.status})：${shortMsg}`);
           fatalErr.noRetry = true;
           throw fatalErr;
@@ -540,17 +773,16 @@
     }
 
     /**
-     * Extract non-thought text from Gemini response and safely parse JSON
+     * Safely extract and parse JSON from Gemini response (filters out thought parts)
      */
     function extractAndParseGeminiJson(result) {
       const candidate = result?.candidates?.[0];
       if (!candidate) {
         const blockReason = result?.promptFeedback?.blockReason;
-        throw new Error(blockReason ? `請求被安全機制擋下 (${blockReason})` : '模型沒有回傳任何候選結果');
+        throw new Error(blockReason ? `請求被安全機制擋下 (${blockReason})` : '模型沒有回傳任何結果');
       }
 
       const parts = candidate.content?.parts || [];
-      // Filter out model thought parts so we only read the actual JSON answer
       const answerText = parts
         .filter((p) => typeof p.text === 'string' && !p.thought)
         .map((p) => p.text)
@@ -564,8 +796,7 @@
         throw new Error(`模型未回傳文字內容（結束原因：${candidate.finishReason || '未知'}）`);
       }
 
-      // Strip accidental markdown code fences if present
-      let cleaned = rawText
+      const cleaned = rawText
         .replace(/^```(?:json)?\s*/i, '')
         .replace(/\s*```$/i, '')
         .trim();
@@ -573,7 +804,6 @@
       try {
         return JSON.parse(cleaned);
       } catch (firstErr) {
-        // Fallback: try slicing outermost JSON object
         const firstBrace = cleaned.indexOf('{');
         const lastBrace = cleaned.lastIndexOf('}');
         if (firstBrace !== -1 && lastBrace > firstBrace) {
@@ -590,7 +820,6 @@
       if (!state.imageBase64 || state.isGenerating) return;
       state.isGenerating = true;
 
-      // Hide any previous error banner and switch to loading state
       errorBanner.classList.add('hidden');
       uploadSection.classList.add('hidden');
       practiceSection.classList.add('hidden');
@@ -608,7 +837,7 @@
           ? `請依據圖片中題目的「字數長短、解題步驟複雜度、以及圖檔尺寸（${width}×${height} px, ${sizeKB} KB）」智慧決定要生成 4 到 8 題之間的數量：
              - 若原題字數少、偏向單步驟或基礎計算題，請出 7 到 8 題讓學生充分熟練。
              - 若原題為中等長度的計算或簡短應用題，請出 5 到 6 題。
-             - 若原題字數多、多步驟複合應用題或複雜幾何推理，請出 4 到 5 題以免學生負擔過重。`
+             - 若原題字數多、多步驟複合應用題或複雜幾何推理，請出 4 到 5 題。`
           : `請固定生成恰好 ${selectedMode} 題類似題（recommendedCount 請填 ${selectedMode}）。`;
 
       const systemPrompt = `你是一位經驗豐富的台灣中小學與高中數學老師，擅長將學生上傳的數學題目截圖，拆解出核心數學概念，並設計出「概念完全相同、但數字與情境皆不同」的高品質類似練習題。
@@ -616,7 +845,7 @@
 請嚴格遵守以下規則：
 1. 使用繁體中文（台灣數學教學用語，例如：因數、倍數、分數、一元一次方程式、畢氏定理、公分、平方公分等）。
 2. 所有生成的題目必須與原題運用相同的核心數學概念，且每一題的數字、數值或生活情境都要彼此不同，避免重複。
-3. 確保每一題的數學計算完全正確、有明確唯一的標準答案（避免無解、過度醜陋的小數或語意模糊）。
+3. 確保每一題的數學計算完全正確、有明確唯一的標準答案（避免無解或語意模糊）。
 4. 題目敘述與詳解中的數學算式、分數、根號、次方，請使用標準 LaTeX 語法並以單個錢字號 $...$ 包覆（例如 $\\frac{3}{4}$、$x^2 + 3x - 4 = 0$、$\\sqrt{5}$）。
 5. answer 欄位請提供「最簡純文字答案」（不要加 $ 符號，也不要加單位，單位請另外放在 unit 欄位），方便學生用小鍵盤輸入與自動批改，例如：12、-5、3/4、2.5、x=4。
 6. acceptableAnswers 陣列請列出其他等價可接受的寫法（例如若答案是 3/4，可放入 ["3/4", "0.75"]；若答案是 12，可放入 ["12"]）。
@@ -749,9 +978,8 @@
       }
     }
 
-    /**
-     * Render the generated questions and practice UI
-     */
+    // ==================== Practice UI Rendering ====================
+
     function renderPracticeWorkspace(data) {
       loadingSection.classList.add('hidden');
       practiceSection.classList.remove('hidden');
@@ -765,7 +993,6 @@
       floatingKeypad.classList.remove('hidden');
       minimizedKeypadPill.classList.add('hidden');
 
-      // Fill concept & metadata
       conceptTitle.textContent = data.conceptName || '數學概念練習';
       questionCountBadge.textContent = `共 ${data.questions.length} 題`;
       countReasonText.textContent = data.countReason || '依據原題核心概念生成不同數值之練習題';
@@ -779,7 +1006,6 @@
       answeredCountText.textContent = '0';
       scoreBadge.classList.add('hidden');
 
-      // Build question cards
       questionsContainer.innerHTML = '';
       data.questions.forEach((q, idx) => {
         const card = document.createElement('div');
@@ -796,12 +1022,10 @@
               ${idx + 1}
             </div>
             <div class="flex-1 min-w-0 space-y-3">
-              <!-- Question Text -->
               <div class="question-math-text text-slate-800 text-sm sm:text-base leading-relaxed font-medium break-words">
                 ${escapeHtml(q.questionText)}
               </div>
 
-              <!-- Answer Input Row -->
               <div class="flex flex-wrap items-center gap-2 pt-1">
                 <label for="ans-input-${idx}" class="text-xs font-semibold text-slate-500">答：</label>
                 <div class="relative flex items-center gap-2 flex-1 min-w-[160px] max-w-xs">
@@ -816,7 +1040,6 @@
                   ${unitHtml}
                 </div>
 
-                <!-- Action Buttons per Question -->
                 <div class="flex items-center gap-1.5 ml-auto">
                   <button
                     type="button"
@@ -835,13 +1058,11 @@
                 </div>
               </div>
 
-              <!-- Hint Box (Hidden by default) -->
               <div id="hint-box-${idx}" class="hidden rounded-xl bg-amber-50/80 border border-amber-200/70 px-3.5 py-2.5 text-xs sm:text-sm text-amber-900">
                 <span class="font-bold">💡 解題提示：</span>
                 <span class="hint-math-text">${escapeHtml(q.hint)}</span>
               </div>
 
-              <!-- Feedback & Explanation Box (Hidden by default) -->
               <div id="feedback-box-${idx}" class="hidden rounded-xl px-3.5 py-3 text-xs sm:text-sm space-y-1.5"></div>
             </div>
           </div>
@@ -851,16 +1072,86 @@
         renderMathSafely(card);
       });
 
-      // Attach listeners to newly created inputs & buttons
       bindQuestionEvents();
-
-      // Automatically link keypad to the first question
       setActiveQuestion(0, false);
     }
 
-    /**
-     * Bind focus, input, hint, and single-check events on question cards
-     */
+    // ==================== Worksheet / PDF Export & Screenshot View ====================
+
+    function openWorksheetModal() {
+      const data = state.practiceData;
+      if (!data || !data.questions) return;
+
+      wsConceptTitle.textContent = `${data.conceptName || '數學練習'}（共 ${data.questions.length} 題）`;
+      wsQuestionsList.innerHTML = '';
+      wsAnswerKeyList.innerHTML = '';
+
+      data.questions.forEach((q, idx) => {
+        const unitText = q.unit ? ` ${escapeHtml(q.unit)}` : '';
+
+        // Question item with spacious answer line for printed PDF / screenshot
+        const qItem = document.createElement('div');
+        qItem.className = 'print-question-item pb-4 border-b border-slate-100 last:border-b-0';
+        qItem.innerHTML = `
+          <div class="flex items-start gap-3">
+            <span class="font-bold text-slate-900 text-base shrink-0">${idx + 1}.</span>
+            <div class="flex-1 space-y-4">
+              <div class="text-slate-900 text-base leading-relaxed">${escapeHtml(q.questionText)}</div>
+              <div class="pt-4 flex items-center justify-end text-sm text-slate-600">
+                <span>答：______________________${unitText}</span>
+              </div>
+            </div>
+          </div>
+        `;
+        wsQuestionsList.appendChild(qItem);
+
+        // Answer key item
+        const aItem = document.createElement('div');
+        aItem.className = 'print-question-item rounded-xl bg-slate-50 border border-slate-200/70 p-3';
+        aItem.innerHTML = `
+          <div class="font-bold text-slate-900 mb-1">第 ${idx + 1} 題答案：${escapeHtml(q.answer)}${unitText}</div>
+          <div class="text-slate-700 leading-relaxed">詳解：${escapeHtml(q.explanation)}</div>
+        `;
+        wsAnswerKeyList.appendChild(aItem);
+      });
+
+      renderMathSafely(wsQuestionsList);
+      renderMathSafely(wsAnswerKeyList);
+
+      // Sync teacher answer key visibility
+      if (toggleWorksheetAnswers.checked) {
+        wsAnswerKeySection.classList.remove('hidden');
+      } else {
+        wsAnswerKeySection.classList.add('hidden');
+      }
+
+      worksheetModal.classList.remove('hidden');
+    }
+
+    document.getElementById('openWorksheetBtn').addEventListener('click', openWorksheetModal);
+    document.getElementById('bottomWorksheetBtn').addEventListener('click', openWorksheetModal);
+    document.getElementById('closeWorksheetModalBtn').addEventListener('click', () => {
+      worksheetModal.classList.add('hidden');
+    });
+
+    toggleWorksheetAnswers.addEventListener('change', () => {
+      if (toggleWorksheetAnswers.checked) {
+        wsAnswerKeySection.classList.remove('hidden');
+      } else {
+        wsAnswerKeySection.classList.add('hidden');
+      }
+    });
+
+    document.getElementById('triggerPrintPdfBtn').addEventListener('click', () => {
+      try {
+        window.print();
+      } catch (err) {
+        showToast('瀏覽器限制列印，您可以直接截圖下方白色考卷區域喔！', 'warning');
+      }
+    });
+
+    // ==================== Question Interaction & Grading ====================
+
     function bindQuestionEvents() {
       const inputs = document.querySelectorAll('.answer-input');
       inputs.forEach((input) => {
@@ -906,15 +1197,11 @@
       });
     }
 
-    /**
-     * Highlight and track which question input the floating keypad targets
-     */
     function setActiveQuestion(idx, shouldFocus = true) {
       if (!state.practiceData || idx < 0 || idx >= state.practiceData.questions.length) return;
       state.activeQuestionIndex = idx;
       activeInputIndicator.textContent = `第 ${idx + 1} 題`;
 
-      // Highlight active card border subtly
       document.querySelectorAll('[id^="question-card-"]').forEach((card, i) => {
         if (i === idx) {
           card.classList.add('ring-2', 'ring-indigo-400/70', 'border-indigo-300');
@@ -929,15 +1216,10 @@
       }
     }
 
-    /**
-     * Normalize math answer strings for fair comparison
-     * Converts full-width characters to half-width, strips spaces, normalizes minus/multiply symbols.
-     */
     function normalizeAnswer(str) {
       if (str === null || str === undefined) return '';
       return String(str)
         .trim()
-        // Convert full-width ASCII variants to half-width
         .replace(/[\uFF01-\uFF5E]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
         .replace(/　/g, '')
         .replace(/\s+/g, '')
@@ -949,10 +1231,6 @@
         .toLowerCase();
     }
 
-    /**
-     * Evaluate whether a user's answer matches the standard answer or acceptable answers
-     * Also checks numeric equality (e.g., "3/4" vs "0.75" or "2.50" vs "2.5")
-     */
     function isAnswerCorrect(userInput, question) {
       const normUser = normalizeAnswer(userInput);
       if (!normUser) return false;
@@ -963,7 +1241,6 @@
 
       if (candidates.includes(normUser)) return true;
 
-      // Try safe numeric/fraction comparison if both sides are simple numbers or fractions
       const parseSimpleNumber = (expr) => {
         if (/^-?\d+(\.\d+)?$/.test(expr)) return parseFloat(expr);
         const frac = expr.match(/^(-?\d+)\/(-?\d+)$/);
@@ -985,9 +1262,6 @@
       return false;
     }
 
-    /**
-     * Check a single question and render immediate feedback + explanation
-     */
     function checkSingleQuestion(idx) {
       const q = state.practiceData?.questions?.[idx];
       if (!q) return false;
@@ -1036,9 +1310,6 @@
       return correct;
     }
 
-    /**
-     * Check all questions and show overall score
-     */
     function checkAllQuestions() {
       if (!state.practiceData) return;
       let correctCount = 0;
@@ -1060,9 +1331,6 @@
       }
     }
 
-    /**
-     * Update live answered count indicator
-     */
     function updateAnsweredCount() {
       const inputs = document.querySelectorAll('.answer-input');
       let count = 0;
@@ -1072,24 +1340,8 @@
       answeredCountText.textContent = count;
     }
 
-    /**
-     * HTML escaping helper to prevent XSS while preserving LaTeX text
-     */
-    function escapeHtml(text) {
-      if (!text) return '';
-      return String(text)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-    }
-
     // ==================== Floating Mini Keypad Logic ====================
 
-    /**
-     * Insert text into the active answer input at cursor position without losing focus
-     */
     function handleKeypadPress(key, action) {
       const input = document.getElementById(`ans-input-${state.activeQuestionIndex}`);
       if (!input) return;
@@ -1126,7 +1378,6 @@
       updateAnsweredCount();
     }
 
-    // Prevent keypad button clicks from stealing focus from the input box
     floatingKeypad.addEventListener('mousedown', (e) => {
       if (e.target.closest('.keypad-btn')) {
         e.preventDefault();
@@ -1139,7 +1390,6 @@
       handleKeypadPress(btn.dataset.key, btn.dataset.action);
     });
 
-    // Switch between Numeric and Symbol keypad pages
     keypadModeBtn.addEventListener('click', () => {
       state.keypadSymMode = !state.keypadSymMode;
       if (state.keypadSymMode) {
@@ -1153,7 +1403,6 @@
       }
     });
 
-    // Minimize / Expand floating keypad
     function setKeypadMinimized(minimized) {
       state.keypadMinimized = minimized;
       if (minimized) {
@@ -1171,7 +1420,6 @@
     minimizedKeypadPill.addEventListener('click', () => setKeypadMinimized(false));
     headerKeypadToggle.addEventListener('click', () => setKeypadMinimized(!state.keypadMinimized));
 
-    // Toggle native mobile keyboard suppression
     suppressOsKeyboard.addEventListener('change', () => {
       const inputs = document.querySelectorAll('.answer-input');
       inputs.forEach((inp) => {
@@ -1183,7 +1431,7 @@
       });
     });
 
-    // ==================== Draggable Keypad Implementation (Mouse & Touch) ====================
+    // ==================== Draggable Keypad (Mouse & Touch) ====================
     (function initDraggableKeypad() {
       const handle = document.getElementById('keypadDragHandle');
       let isDragging = false;
@@ -1200,7 +1448,6 @@
         initialLeft = rect.left;
         initialTop = rect.top;
 
-        // Convert bottom/right positioning to explicit left/top once dragged
         floatingKeypad.style.right = 'auto';
         floatingKeypad.style.bottom = 'auto';
         floatingKeypad.style.left = `${initialLeft}px`;
@@ -1225,7 +1472,6 @@
         isDragging = false;
       };
 
-      // Mouse events
       handle.addEventListener('mousedown', (e) => {
         if (e.target.closest('button')) return;
         onStart(e.clientX, e.clientY);
@@ -1233,7 +1479,6 @@
       window.addEventListener('mousemove', (e) => onMove(e.clientX, e.clientY));
       window.addEventListener('mouseup', onEnd);
 
-      // Touch events
       handle.addEventListener('touchstart', (e) => {
         if (e.target.closest('button')) return;
         const touch = e.touches[0];
@@ -1248,7 +1493,6 @@
 
       window.addEventListener('touchend', onEnd);
 
-      // Keep keypad inside viewport on window resize
       window.addEventListener('resize', () => {
         if (floatingKeypad.style.left) {
           const rect = floatingKeypad.getBoundingClientRect();
@@ -1262,7 +1506,6 @@
 
     // ==================== Drag, Drop, File Select & Global Paste Events ====================
 
-    // Click dropzone to pick file
     dropZone.addEventListener('click', () => fileInput.click());
     dropZone.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
@@ -1278,7 +1521,6 @@
       }
     });
 
-    // Drag & Drop handlers on both dropZone and window
     ['dragenter', 'dragover'].forEach((evtName) => {
       dropZone.addEventListener(evtName, (e) => {
         e.preventDefault();
@@ -1302,7 +1544,6 @@
       }
     });
 
-    // Also allow dropping anywhere on the page even while viewing previous questions
     window.addEventListener('dragover', (e) => e.preventDefault());
     window.addEventListener('drop', (e) => {
       e.preventDefault();
@@ -1313,7 +1554,6 @@
       }
     });
 
-    // Global Clipboard Paste (Ctrl+V / Cmd+V)
     window.addEventListener('paste', (e) => {
       const items = e.clipboardData?.items;
       if (!items) return;
@@ -1365,6 +1605,7 @@
       minimizedKeypadPill.classList.add('hidden');
       headerKeypadToggle.classList.add('hidden');
       resetAllBtn.classList.add('hidden');
+      worksheetModal.classList.add('hidden');
       uploadSection.classList.remove('hidden');
       originalImagePanel.classList.add('hidden');
     });
