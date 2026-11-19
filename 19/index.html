@@ -125,6 +125,17 @@
       </div>
 
       <div class="flex items-center gap-2">
+        <!-- Optional API Key Settings Button -->
+        <button
+          id="openApiSettingsBtn"
+          type="button"
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-medium bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
+          title="若遇 403 權限錯誤，可在此填入個人 Gemini API Key"
+        >
+          <span>⚙️</span>
+          <span class="hidden sm:inline">API 設定</span>
+        </button>
+
         <!-- Quick toggle for Mini Keypad -->
         <button
           id="headerKeypadToggle"
@@ -225,14 +236,24 @@
                 <span>⚠️ 解析未完成</span>
               </div>
               <p id="errorBannerDetail" class="text-rose-700 break-all"></p>
+              <p id="errorBannerHint" class="hidden text-xs text-rose-600 pt-1"></p>
             </div>
-            <button
-              id="retryLastBtn"
-              type="button"
-              class="hidden shrink-0 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold transition-colors"
-            >
-              重新解析
-            </button>
+            <div class="flex flex-col sm:flex-row gap-1.5 shrink-0">
+              <button
+                id="errorOpenApiBtn"
+                type="button"
+                class="hidden px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold transition-colors"
+              >
+                填入 API Key
+              </button>
+              <button
+                id="retryLastBtn"
+                type="button"
+                class="hidden px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold transition-colors"
+              >
+                重新解析
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -536,6 +557,47 @@
     <span>小鍵盤</span>
   </button>
 
+  <!-- ==================== Optional API Key Settings Modal ==================== -->
+  <div id="apiSettingsModal" class="no-print hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full p-5 sm:p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-bold text-slate-900">⚙️ Gemini API 金鑰設定（選填）</h3>
+        <button id="closeApiModalBtn" type="button" class="text-slate-400 hover:text-slate-600 text-lg leading-none px-1">✕</button>
+      </div>
+      <p class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+        預設會自動使用預覽環境內建連線。若您的環境出現 <strong>403 Permission denied</strong>，可到
+        <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" class="text-indigo-600 underline font-medium">Google AI Studio</a>
+        免費取得 API Key 並貼在下方（僅儲存在您的瀏覽器本機，不會上傳）。
+      </p>
+      <div class="space-y-1.5">
+        <label for="customApiKeyInput" class="block text-xs font-semibold text-slate-700">個人 Gemini API Key</label>
+        <input
+          id="customApiKeyInput"
+          type="password"
+          autocomplete="off"
+          placeholder="AIzaSy..."
+          class="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-slate-50 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 text-sm outline-none"
+        />
+      </div>
+      <div class="flex items-center justify-end gap-2 pt-1">
+        <button
+          id="clearApiKeyBtn"
+          type="button"
+          class="px-3 py-1.5 rounded-xl text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+        >
+          清除並用預設
+        </button>
+        <button
+          id="saveApiKeyBtn"
+          type="button"
+          class="px-4 py-1.5 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
+        >
+          儲存金鑰
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- ==================== Application Logic ==================== -->
   <script>
     /**
@@ -551,9 +613,12 @@
       keypadMinimized: false,
       keypadSymMode: false,
       isGenerating: false,
+      customApiKey: (() => {
+        try { return localStorage.getItem('math_gen_custom_api_key') || ''; } catch (_) { return ''; }
+      })(),
     };
 
-    // Gemini API configuration (Canvas runtime injects the API key automatically when empty)
+    // Gemini API configuration (Leave empty so Canvas runtime injects the key automatically)
     const apiKey = "";
     const GEMINI_MODEL = "gemini-3-flash-preview";
 
@@ -568,11 +633,11 @@
     const loadingStatusText = document.getElementById('loadingStatusText');
     const errorBanner = document.getElementById('errorBanner');
     const errorBannerDetail = document.getElementById('errorBannerDetail');
+    const errorBannerHint = document.getElementById('errorBannerHint');
+    const errorOpenApiBtn = document.getElementById('errorOpenApiBtn');
     const retryLastBtn = document.getElementById('retryLastBtn');
-
-    const conceptTitle = document.getElementById('conceptTitle');
-    const questionCountBadge = document.getElementById('questionCountBadge');
-    const countReasonText = document.getElementById('countReasonText');
+    const apiSettingsModal = document.getElementById('apiSettingsModal');
+    const customApiKeyInput = document.getElementById('customApiKeyInput');
     const originalImagePanel = document.getElementById('originalImagePanel');
     const originalPreviewImg = document.getElementById('originalPreviewImg');
     const originalSummaryText = document.getElementById('originalSummaryText');
@@ -948,7 +1013,10 @@
       };
 
       try {
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+        // Keep exact literal URL pattern when using default empty apiKey for Canvas runtime injection
+        const apiUrl = state.customApiKey
+          ? `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${encodeURIComponent(state.customApiKey)}`
+          : `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
         const result = await fetchWithRetry(apiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -967,7 +1035,18 @@
         console.error('Generation error:', error);
         loadingSection.classList.add('hidden');
         uploadSection.classList.remove('hidden');
-        errorBannerDetail.textContent = error?.message || '發生未知錯誤，請稍後再試。';
+        const msg = error?.message || '發生未知錯誤，請稍後再試。';
+        errorBannerDetail.textContent = msg;
+
+        if (msg.includes('403') || msg.includes('401') || msg.toLowerCase().includes('permission')) {
+          errorBannerHint.textContent = '💡 提示：目前預覽環境的預設 API 權限被拒，請點右側「填入 API Key」輸入您的免費 Google AI Studio 金鑰後即可正常使用。';
+          errorBannerHint.classList.remove('hidden');
+          errorOpenApiBtn.classList.remove('hidden');
+        } else {
+          errorBannerHint.classList.add('hidden');
+          errorOpenApiBtn.classList.add('hidden');
+        }
+
         errorBanner.classList.remove('hidden');
         if (state.imageBase64) {
           retryLastBtn.classList.remove('hidden');
@@ -1582,6 +1661,43 @@
 
     retryLastBtn.addEventListener('click', () => {
       generateSimilarQuestions();
+    });
+
+    // ==================== Optional API Key Settings Modal Events ====================
+    function openApiSettingsModal() {
+      customApiKeyInput.value = state.customApiKey || '';
+      apiSettingsModal.classList.remove('hidden');
+    }
+
+    document.getElementById('openApiSettingsBtn').addEventListener('click', openApiSettingsModal);
+    errorOpenApiBtn.addEventListener('click', openApiSettingsModal);
+    document.getElementById('closeApiModalBtn').addEventListener('click', () => {
+      apiSettingsModal.classList.add('hidden');
+    });
+
+    document.getElementById('saveApiKeyBtn').addEventListener('click', () => {
+      const val = customApiKeyInput.value.trim();
+      state.customApiKey = val;
+      try {
+        if (val) {
+          localStorage.setItem('math_gen_custom_api_key', val);
+        } else {
+          localStorage.removeItem('math_gen_custom_api_key');
+        }
+      } catch (_) {}
+      apiSettingsModal.classList.add('hidden');
+      showToast(val ? '已儲存個人 API Key！' : '已恢復使用預設連線', 'success');
+      if (val && state.imageBase64) {
+        generateSimilarQuestions();
+      }
+    });
+
+    document.getElementById('clearApiKeyBtn').addEventListener('click', () => {
+      state.customApiKey = '';
+      customApiKeyInput.value = '';
+      try { localStorage.removeItem('math_gen_custom_api_key'); } catch (_) {}
+      apiSettingsModal.classList.add('hidden');
+      showToast('已清除金鑰並恢復預設連線', 'info');
     });
 
     document.getElementById('checkAllBtn').addEventListener('click', checkAllQuestions);
