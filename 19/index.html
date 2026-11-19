@@ -644,6 +644,7 @@
       imageMimeType: 'image/jpeg',
       imageMeta: { width: 0, height: 0, sizeKB: 0 },
       practiceData: null,
+      diagramTransforms: [],
       activeQuestionIndex: 0,
       keypadMinimized: false,
       keypadSymMode: false,
@@ -815,6 +816,124 @@
       } catch (err) {
         console.warn('SVG sanitize warning:', err);
         return '';
+      }
+    }
+
+    /**
+     * Build a shuffled pool of genuinely diverse 360° rotations, 90°/270° orientation swaps, and mirror flips
+     */
+    function buildDiverseTransformPool(count) {
+      const presets = [
+        { angle: 90, flipX: 1, flipY: 1 },    // 橫變直 / 直變橫 (90°)
+        { angle: 45, flipX: 1, flipY: 1 },    // 斜置 45°
+        { angle: 180, flipX: 1, flipY: 1 },   // 上下顛倒 180°
+        { angle: -35, flipX: -1, flipY: 1 },  // 鏡像 + 斜轉 -35°
+        { angle: 270, flipX: 1, flipY: 1 },   // 橫變直 / 直變橫 (270°)
+        { angle: 135, flipX: 1, flipY: 1 },   // 斜置 135°
+        { angle: 0, flipX: -1, flipY: 1 },    // 左右鏡像
+        { angle: -60, flipX: 1, flipY: -1 },  // 上下翻轉 + 斜置 -60°
+      ];
+      // Fisher-Yates shuffle so every generation produces fresh orientations
+      for (let i = presets.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [presets[i], presets[j]] = [presets[j], presets[i]];
+      }
+      const result = [];
+      for (let i = 0; i < count; i++) {
+        result.push({ ...presets[i % presets.length] });
+      }
+      return result;
+    }
+
+    /**
+     * Format a human-readable orientation badge for a transform state
+     */
+    function formatTransformLabel(t) {
+      if (!t) return '原方向';
+      const normAngle = ((t.angle % 360) + 360) % 360;
+      const parts = [];
+      if (t.flipX === -1) parts.push('左右鏡像');
+      if (t.flipY === -1) parts.push('上下翻轉');
+      if (normAngle === 90 || normAngle === 270) {
+        parts.push(`橫直轉換 ${normAngle}°`);
+      } else if (normAngle === 180) {
+        parts.push('旋轉 180°');
+      } else if (normAngle !== 0) {
+        parts.push(`斜轉 ${normAngle}°`);
+      }
+      return parts.length > 0 ? parts.join('＋') : '原方向';
+    }
+
+    /**
+     * Apply deterministic 360° rotation & mirror transform to an SVG while keeping all <text> labels upright
+     */
+    function applySvgTransform(cleanSvgStr, transform) {
+      if (!cleanSvgStr) return '';
+      if (!transform || (transform.angle % 360 === 0 && transform.flipX === 1 && transform.flipY === 1)) {
+        return cleanSvgStr;
+      }
+
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(cleanSvgStr, 'image/svg+xml');
+        const svgEl = doc.querySelector('svg');
+        if (!svgEl || doc.querySelector('parsererror')) return cleanSvgStr;
+
+        const vbParts = (svgEl.getAttribute('viewBox') || '0 0 300 200').trim().split(/[\s,]+/).map(Number);
+        const vx = Number.isFinite(vbParts[0]) ? vbParts[0] : 0;
+        const vy = Number.isFinite(vbParts[1]) ? vbParts[1] : 0;
+        const vw = Number.isFinite(vbParts[2]) && vbParts[2] > 0 ? vbParts[2] : 300;
+        const vh = Number.isFinite(vbParts[3]) && vbParts[3] > 0 ? vbParts[3] : 200;
+
+        const cx = vx + vw / 2;
+        const cy = vy + vh / 2;
+        const angle = transform.angle || 0;
+        const fx = transform.flipX === -1 ? -1 : 1;
+        const fy = transform.flipY === -1 ? -1 : 1;
+
+        const svgNS = 'http://www.w3.org/2000/svg';
+        const wrapperG = doc.createElementNS(svgNS, 'g');
+        wrapperG.setAttribute(
+          'transform',
+          `translate(${cx} ${cy}) rotate(${angle}) scale(${fx} ${fy}) translate(${-cx} ${-cy})`
+        );
+
+        // Move all visual children (except <defs>) into the transformed group
+        const children = Array.from(svgEl.childNodes);
+        children.forEach((node) => {
+          if (node.nodeType === 1 && node.tagName.toLowerCase() === 'defs') return;
+          wrapperG.appendChild(node);
+        });
+        svgEl.appendChild(wrapperG);
+
+        // Counter-transform every <text> element around its anchor point so numbers/letters stay upright
+        wrapperG.querySelectorAll('text').forEach((textEl) => {
+          const tx = parseFloat(textEl.getAttribute('x')) || 0;
+          const ty = parseFloat(textEl.getAttribute('y')) || 0;
+          const invTransform = `translate(${tx} ${ty}) scale(${fx} ${fy}) rotate(${-angle}) translate(${-tx} ${-ty})`;
+          const existing = textEl.getAttribute('transform');
+          textEl.setAttribute('transform', existing ? `${invTransform} ${existing}` : invTransform);
+          if (!textEl.getAttribute('text-anchor')) {
+            textEl.setAttribute('text-anchor', 'middle');
+          }
+          if (!textEl.getAttribute('dominant-baseline')) {
+            textEl.setAttribute('dominant-baseline', 'central');
+          }
+        });
+
+        // Expand viewBox to prevent clipping when rotated 45°, 90°, 135°, 270°, etc.
+        const normAngle = ((angle % 360) + 360) % 360;
+        if (normAngle !== 0 && normAngle !== 180) {
+          const diag = Math.ceil(Math.hypot(vw, vh)) + 24;
+          const newVx = Math.round(cx - diag / 2);
+          const newVy = Math.round(cy - diag / 2);
+          svgEl.setAttribute('viewBox', `${newVx} ${newVy} ${diag} ${diag}`);
+        }
+
+        return new XMLSerializer().serializeToString(svgEl);
+      } catch (err) {
+        console.warn('SVG transform warning:', err);
+        return cleanSvgStr;
       }
     }
 
@@ -1039,11 +1158,11 @@
 1. 使用繁體中文，每題數字不同、答案精確唯一，數學式用 $...$。
 2. answer 填最簡純文字（不含單位與 $），單位放 unit，等價答案放 acceptableAnswers。
 3. hint 限 1 句；explanation 簡潔 2～3 行。
-4. 若原題有幾何圖、陰影、角度、數線或圖表，設 hasDiagram=true，每題給精簡 SVG（<svg viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg">...</svg>，12 個元素內，stroke="#1e293b" stroke-width="2"，陰影 fill="#c7d2fe" fill-opacity="0.7"，文字 font-size="14" font-weight="600" fill="#0f172a"）。
-5. 含圖題每題必須變換方向（輪流套用：斜線改反方向、左右/上下翻轉、旋轉朝向或改比例），不可只改數字；直接用新座標畫圖，勿鏡像旋轉 <text> 以免反字。若無圖則 hasDiagram=false、svgDiagram=""。
+4. 若原題有幾何圖、陰影、角度、數線或圖表，設 hasDiagram=true；若圖形屬於幾何形狀／面積／角度／多邊形／圓形（旋轉翻轉後仍完全合理），設 allowFreeRotation=true；若為座標平面、數線、長條圖或折線圖，設 allowFreeRotation=false。
+5. 含圖題每題給精簡 SVG（<svg viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg">...</svg>，12 個元素內，stroke="#1e293b" stroke-width="2"，陰影 fill="#c7d2fe" fill-opacity="0.7"，所有 <text> 標註請加上 text-anchor="middle" font-size="14" font-weight="600" fill="#0f172a"）。每題圖形的長寬比例、切割位置或形狀細節要盡量變化；且題目文字請用「如圖所示」或頂點代號（如 A、B、C、D），避免寫死「左上方／最底下」，因為系統會自動對圖形進行 360° 旋轉、橫直轉換與鏡像翻轉。若無圖則 hasDiagram=false、allowFreeRotation=false、svgDiagram=""。
 6. ${countInstruction}`;
 
-      const userPrompt = `解析此數學題截圖（${width}×${height} px, ${sizeKB} KB），生成同概念類似題；若原題有圖，每題附不同方向變化的精簡 SVG。`;
+      const userPrompt = `解析此數學題截圖（${width}×${height} px, ${sizeKB} KB），生成同概念類似題；若原題有圖，每題附不同比例與結構變化的精簡 SVG。`;
 
       const payload = {
         contents: [
@@ -1080,6 +1199,10 @@
                 type: 'BOOLEAN',
                 description: '原題截圖是否包含數學圖形、幾何圖、數線、圖表或示意圖',
               },
+              allowFreeRotation: {
+                type: 'BOOLEAN',
+                description: '圖形是否適合 360° 旋轉、橫直轉換與鏡像翻轉（幾何圖形、面積、角度為 true；座標圖、數線、統計圖為 false）',
+              },
               originalSummary: {
                 type: 'STRING',
                 description: '原題目的文字轉錄或簡要說明（可用 $...$ 表示數學式）',
@@ -1104,7 +1227,7 @@
                     },
                     svgDiagram: {
                       type: 'STRING',
-                      description: '若 hasDiagram 為 true，為此題繪製的完整 <svg viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg">...</svg> 向量圖；每題必須改變方向（如斜線反向、左右/上下翻轉、旋轉朝向或調整比例）並重新計算座標使文字正向；若無圖則為空字串',
+                      description: '若 hasDiagram 為 true，為此題繪製的完整 <svg viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg">...</svg> 向量圖（每題變化長寬比例與結構細節，<text> 加 text-anchor="middle"）；若無圖則為空字串',
                     },
                     hint: {
                       type: 'STRING',
@@ -1144,6 +1267,7 @@
             required: [
               'conceptName',
               'hasDiagram',
+              'allowFreeRotation',
               'originalSummary',
               'recommendedCount',
               'countReason',
@@ -1238,6 +1362,12 @@
       answeredCountText.textContent = '0';
       scoreBadge.classList.add('hidden');
 
+      // Initialize diverse 360°/90°/45°/mirror transforms for geometric diagrams
+      const canRotate = Boolean(data.hasDiagram && data.allowFreeRotation !== false);
+      state.diagramTransforms = canRotate
+        ? buildDiverseTransformPool(data.questions.length)
+        : data.questions.map(() => ({ angle: 0, flipX: 1, flipY: 1 }));
+
       questionsContainer.innerHTML = '';
       data.questions.forEach((q, idx) => {
         const card = document.createElement('div');
@@ -1249,8 +1379,26 @@
           : '';
 
         const cleanSvg = sanitizeSvg(q.svgDiagram);
-        const diagramHtml = cleanSvg
-          ? `<div class="math-diagram-box my-2 max-w-md">${cleanSvg}</div>`
+        const transformedSvg = cleanSvg ? applySvgTransform(cleanSvg, state.diagramTransforms[idx]) : '';
+        const transformControlsHtml = cleanSvg && canRotate
+          ? `<div class="flex flex-wrap items-center justify-between gap-2 mt-1.5 max-w-md text-[11px] text-slate-500">
+               <span id="diagram-badge-${idx}" class="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-medium">
+                 📐 ${formatTransformLabel(state.diagramTransforms[idx])}
+               </span>
+               <div class="flex items-center gap-1">
+                 <button type="button" data-rot-idx="${idx}" data-rot-step="45" class="diagram-ctrl-btn px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium transition-colors" title="順時針旋轉 45°">↻ +45°</button>
+                 <button type="button" data-rot-idx="${idx}" data-rot-step="90" class="diagram-ctrl-btn px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium transition-colors" title="橫直切換 90°">↻ +90°</button>
+                 <button type="button" data-flip-idx="${idx}" class="diagram-ctrl-btn px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium transition-colors" title="左右鏡像翻轉">⇄ 鏡像</button>
+                 <button type="button" data-reset-idx="${idx}" class="diagram-ctrl-btn px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-500 font-medium transition-colors" title="還原方向">↺</button>
+               </div>
+             </div>`
+          : '';
+
+        const diagramHtml = transformedSvg
+          ? `<div class="my-2">
+               <div id="diagram-box-${idx}" class="math-diagram-box max-w-md">${transformedSvg}</div>
+               ${transformControlsHtml}
+             </div>`
           : '';
 
         card.innerHTML = `
@@ -1327,8 +1475,9 @@
       data.questions.forEach((q, idx) => {
         const unitText = q.unit ? ` ${escapeHtml(q.unit)}` : '';
         const cleanSvg = sanitizeSvg(q.svgDiagram);
-        const wsDiagramHtml = cleanSvg
-          ? `<div class="math-diagram-box my-3 max-w-sm">${cleanSvg}</div>`
+        const transformedSvg = cleanSvg ? applySvgTransform(cleanSvg, state.diagramTransforms[idx]) : '';
+        const wsDiagramHtml = transformedSvg
+          ? `<div class="math-diagram-box my-3 max-w-sm">${transformedSvg}</div>`
           : '';
 
         // Question item with spacious answer line for printed PDF / screenshot
@@ -1436,6 +1585,36 @@
         btn.addEventListener('click', () => {
           const idx = Number(btn.dataset.checkIdx);
           checkSingleQuestion(idx);
+        });
+      });
+
+      // Interactive per-question diagram rotation & mirror controls
+      document.querySelectorAll('.diagram-ctrl-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const idx = Number(btn.dataset.rotIdx ?? btn.dataset.flipIdx ?? btn.dataset.resetIdx);
+          const q = state.practiceData?.questions?.[idx];
+          const t = state.diagramTransforms[idx];
+          if (!q || !t) return;
+
+          if (btn.dataset.rotStep) {
+            t.angle = (t.angle + Number(btn.dataset.rotStep)) % 360;
+          } else if (btn.dataset.flipIdx !== undefined) {
+            t.flipX = t.flipX === -1 ? 1 : -1;
+          } else if (btn.dataset.resetIdx !== undefined) {
+            t.angle = 0;
+            t.flipX = 1;
+            t.flipY = 1;
+          }
+
+          const box = document.getElementById(`diagram-box-${idx}`);
+          const badge = document.getElementById(`diagram-badge-${idx}`);
+          const cleanSvg = sanitizeSvg(q.svgDiagram);
+          if (box && cleanSvg) {
+            box.innerHTML = applySvgTransform(cleanSvg, t);
+          }
+          if (badge) {
+            badge.textContent = `📐 ${formatTransformLabel(t)}`;
+          }
         });
       });
     }
