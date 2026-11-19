@@ -73,6 +73,26 @@
       animation: pulse-soft 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
     }
 
+    /* Crisp Responsive Math Diagram Box */
+    .math-diagram-box {
+      background-color: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 0.75rem;
+      padding: 0.75rem;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+
+    .math-diagram-box svg {
+      max-width: 100%;
+      width: auto;
+      max-height: 220px;
+      height: auto;
+      display: block;
+    }
+
     /* ==================== Print / Export PDF Styles ==================== */
     @media print {
       @page {
@@ -104,6 +124,11 @@
       .print-question-item {
         break-inside: avoid;
         page-break-inside: avoid;
+      }
+
+      .math-diagram-box {
+        border: 1px solid #cbd5e1 !important;
+        padding: 0.5rem !important;
       }
     }
   </style>
@@ -730,6 +755,52 @@
         .replace(/'/g, '&#39;');
     }
 
+    /**
+     * Safely sanitize inline SVG returned by Gemini so diagrams render crisply without unsafe tags
+     */
+    function sanitizeSvg(svgRaw) {
+      if (!svgRaw || typeof svgRaw !== 'string') return '';
+      const trimmed = svgRaw.trim();
+      const match = trimmed.match(/<svg[\s\S]*<\/svg>/i);
+      if (!match) return '';
+
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(match[0], 'image/svg+xml');
+        const svgEl = doc.querySelector('svg');
+        if (!svgEl || doc.querySelector('parsererror')) return '';
+
+        // Strip any potentially unsafe elements
+        svgEl.querySelectorAll('script, foreignObject, iframe, object, embed').forEach((el) => el.remove());
+
+        // Strip inline event handlers and javascript: URLs
+        const allNodes = [svgEl, ...svgEl.querySelectorAll('*')];
+        allNodes.forEach((node) => {
+          Array.from(node.attributes).forEach((attr) => {
+            const name = attr.name.toLowerCase();
+            const val = attr.value.trim().toLowerCase();
+            if (name.startsWith('on') || val.startsWith('javascript:')) {
+              node.removeAttribute(attr.name);
+            }
+          });
+        });
+
+        // Ensure responsive viewBox exists
+        if (!svgEl.getAttribute('viewBox')) {
+          const w = parseFloat(svgEl.getAttribute('width')) || 320;
+          const h = parseFloat(svgEl.getAttribute('height')) || 220;
+          svgEl.setAttribute('viewBox', `0 0 ${w} ${h}`);
+        }
+        svgEl.removeAttribute('width');
+        svgEl.removeAttribute('height');
+
+        return new XMLSerializer().serializeToString(svgEl);
+      } catch (err) {
+        console.warn('SVG sanitize warning:', err);
+        return '';
+      }
+    }
+
     // ==================== Image Processing ====================
 
     /**
@@ -914,18 +985,18 @@
 4. 題目敘述與詳解中的數學算式、分數、根號、次方，請使用標準 LaTeX 語法並以單個錢字號 $...$ 包覆（例如 $\\frac{3}{4}$、$x^2 + 3x - 4 = 0$、$\\sqrt{5}$）。
 5. answer 欄位請提供「最簡純文字答案」（不要加 $ 符號，也不要加單位，單位請另外放在 unit 欄位），方便學生用小鍵盤輸入與自動批改，例如：12、-5、3/4、2.5、x=4。
 6. acceptableAnswers 陣列請列出其他等價可接受的寫法（例如若答案是 3/4，可放入 ["3/4", "0.75"]；若答案是 12，可放入 ["12"]）。
-7. ${countInstruction}`;
+7. 【圖形偵測與繪製（極重要）】：
+   - 請先判斷原題截圖是否包含任何數學圖形（例如：幾何形狀、三角形、四邊形、圓形、複合面積、陰影區域、角度圖、數線、座標平面、長條圖／折線圖／圓餅圖、立體圖形展開圖、時鐘、天平、分數圖示或題目示意圖）。
+   - 若原題有圖，請將 hasDiagram 設為 true，並且【每一題】的 svgDiagram 欄位都必須繪製一張結構相同、但數字／頂點標註完全對應新題目的乾淨向量圖（<svg viewBox="0 0 320 220" xmlns="http://www.w3.org/2000/svg">...</svg>）。
+   - SVG 繪圖規範：
+     * 必須設定適當的 viewBox（建議 "0 0 320 220" 或 "0 0 340 200"），所有圖形與文字都必須保留至少 20px 邊距，絕對不可超出畫面或互相重疊。
+     * 線條請使用深色清晰筆畫（stroke="#1e293b" stroke-width="2"），輔助線／高請用虛線（stroke-dasharray="5,4"），陰影區域請用柔和填色（例如 fill="#c7d2fe" fill-opacity="0.7"），直角請加上直角記號小正方形。
+     * 文字標註（邊長、角度、頂點字母、未知數 ? 或 x）請使用 font-family="sans-serif" font-size="14" font-weight="600" fill="#0f172a"，並精準擺放在邊線外側或空白處。
+     * 禁止在 SVG 內使用外部圖片連結或 <script>。
+   - 若原題純為文字或算式、完全沒有圖形，請將 hasDiagram 設為 false，且每題的 svgDiagram 填寫空字串 ""。
+8. ${countInstruction}`;
 
-      const userPrompt = `請仔細閱讀這張數學題目截圖（圖檔資訊：${width}×${height} 像素，大小約 ${sizeKB} KB），先辨識其核心數學概念，再生成 4 到 8 題相同概念但不同數字的類似練習題供學生作答。`;
-
-      const payload = {
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              { text: userPrompt },
-              {
-                inlineData: {
+      const userPrompt = `請仔細閱讀這張數學題目截圖（圖檔資訊：${width}×${height} 像素，大小約 ${sizeKB} KB），先辨識其核心數學概念與是否包含圖形，再生成 4 到 8 題相同概念但不同數字的類似練習題；若原題有圖，請務必為每一題都繪製對應新數字的 SVG 數學圖形。`;
                   mimeType: state.imageMimeType,
                   data: state.imageBase64,
                 },
@@ -944,6 +1015,10 @@
               conceptName: {
                 type: 'STRING',
                 description: '這題的核心數學概念名稱',
+              },
+              hasDiagram: {
+                type: 'BOOLEAN',
+                description: '原題截圖是否包含數學圖形、幾何圖、數線、圖表或示意圖',
               },
               originalSummary: {
                 type: 'STRING',
@@ -966,6 +1041,10 @@
                     questionText: {
                       type: 'STRING',
                       description: '類似題目敘述，數學式請用 $...$ 包覆',
+                    },
+                    svgDiagram: {
+                      type: 'STRING',
+                      description: '若 hasDiagram 為 true，為此題繪製的完整 <svg viewBox="0 0 320 220" xmlns="http://www.w3.org/2000/svg">...</svg> 向量圖（含對應新數字標註）；若無圖則為空字串',
                     },
                     hint: {
                       type: 'STRING',
@@ -992,6 +1071,7 @@
                   required: [
                     'id',
                     'questionText',
+                    'svgDiagram',
                     'hint',
                     'answer',
                     'acceptableAnswers',
@@ -1003,6 +1083,7 @@
             },
             required: [
               'conceptName',
+              'hasDiagram',
               'originalSummary',
               'recommendedCount',
               'countReason',
@@ -1073,7 +1154,8 @@
       minimizedKeypadPill.classList.add('hidden');
 
       conceptTitle.textContent = data.conceptName || '數學概念練習';
-      questionCountBadge.textContent = `共 ${data.questions.length} 題`;
+      const diagramTag = data.hasDiagram ? '・📐 含對應圖形' : '';
+      questionCountBadge.textContent = `共 ${data.questions.length} 題${diagramTag}`;
       countReasonText.textContent = data.countReason || '依據原題核心概念生成不同數值之練習題';
 
       originalPreviewImg.src = state.imageDataUrl;
@@ -1095,6 +1177,11 @@
           ? `<span class="text-sm font-medium text-slate-500 shrink-0">${escapeHtml(q.unit)}</span>`
           : '';
 
+        const cleanSvg = sanitizeSvg(q.svgDiagram);
+        const diagramHtml = cleanSvg
+          ? `<div class="math-diagram-box my-2 max-w-md">${cleanSvg}</div>`
+          : '';
+
         card.innerHTML = `
           <div class="flex items-start gap-3">
             <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-indigo-50 text-indigo-700 font-bold text-sm flex items-center justify-center shrink-0 mt-0.5">
@@ -1104,6 +1191,7 @@
               <div class="question-math-text text-slate-800 text-sm sm:text-base leading-relaxed font-medium break-words">
                 ${escapeHtml(q.questionText)}
               </div>
+              ${diagramHtml}
 
               <div class="flex flex-wrap items-center gap-2 pt-1">
                 <label for="ans-input-${idx}" class="text-xs font-semibold text-slate-500">答：</label>
@@ -1167,6 +1255,10 @@
 
       data.questions.forEach((q, idx) => {
         const unitText = q.unit ? ` ${escapeHtml(q.unit)}` : '';
+        const cleanSvg = sanitizeSvg(q.svgDiagram);
+        const wsDiagramHtml = cleanSvg
+          ? `<div class="math-diagram-box my-3 max-w-sm">${cleanSvg}</div>`
+          : '';
 
         // Question item with spacious answer line for printed PDF / screenshot
         const qItem = document.createElement('div');
@@ -1174,9 +1266,10 @@
         qItem.innerHTML = `
           <div class="flex items-start gap-3">
             <span class="font-bold text-slate-900 text-base shrink-0">${idx + 1}.</span>
-            <div class="flex-1 space-y-4">
+            <div class="flex-1 space-y-3">
               <div class="text-slate-900 text-base leading-relaxed">${escapeHtml(q.questionText)}</div>
-              <div class="pt-4 flex items-center justify-end text-sm text-slate-600">
+              ${wsDiagramHtml}
+              <div class="pt-3 flex items-center justify-end text-sm text-slate-600">
                 <span>答：______________________${unitText}</span>
               </div>
             </div>
