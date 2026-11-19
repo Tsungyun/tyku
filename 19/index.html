@@ -842,11 +842,6 @@
             sizeKB,
           };
 
-          // Keep resolution crisp (up to 1600px on longest side) so small math symbols stay clear
-          const MAX_DIM = 1600;
-          let targetW = img.naturalWidth;
-          let targetH = img.naturalHeight;
-          if (targetW > MAX_DIM || targetH > MAX_DIM) {
           // Keep resolution crisp yet lightweight (max 1024px) for fast AI vision processing
           const MAX_DIM = 1024;
           let targetW = img.naturalWidth;
@@ -1046,13 +1041,19 @@
 3. 數學式請用 LaTeX 單錢字號 $...$（例如 $\\frac{3}{4}$、$\\sqrt{5}$）。
 4. answer 填最簡純文字（不含單位與 $），單位放 unit，等價答案放 acceptableAnswers。
 5. hint 限 1 句話；explanation 簡潔扼要（2～3 行列式即可），避免冗長。
-6. 【圖形偵測與精簡 SVG】：
-   - 若原題有幾何圖、陰影面積、角度、數線、座標或圖表，設 hasDiagram=true，並為每題繪製結構相同但標註新數字的精簡 SVG（<svg viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg">...</svg>）。
-   - SVG 務必精簡（控制在 12 個以內的基本元素如 polygon/rect/circle/line/path/text，不留多餘空白與註解），線條 stroke="#1e293b" stroke-width="2"，陰影 fill="#c7d2fe" fill-opacity="0.7"，文字 font-size="14" font-weight="600" fill="#0f172a"，保留邊距不重疊。
+6. 【圖形偵測與「多變方向」精簡 SVG】：
+   - 若原題有幾何圖、陰影面積、角度、數線、座標或圖表，設 hasDiagram=true，並為每題繪製精簡 SVG（<svg viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg">...</svg>）。
+   - ★【嚴禁每題圖形長得一模一樣只改數字！】每一題的圖形都必須在「相同數學概念」下做出明確的視覺與空間變化，請在各題間輪流運用以下變換：
+     (a) 斜線／對角線／輔助線方向相反（例如原圖斜向右下，這題改為斜向左下）。
+     (b) 圖形左右鏡像或上下翻轉（例如直角、底邊、開口、陰影區換到對側或上方）。
+     (c) 旋轉不同擺放角度（例如旋轉 90°、180° 或改變底邊朝向，考驗學生辨識底與高、角度關係）。
+     (d) 改變長寬比例或形狀胖瘦（例如扁長改高瘦、銳角改鈍角、圓心角大小改變），並確保題目文字與圖形完全一致。
+   - ★【文字必須正向】：請直接透過「重新計算點位座標」來實現翻轉與旋轉，絕對不可對包含 <text> 的群組套用 scale(-1,1) 或倒立旋轉，以免數字與字母變反字。
+   - SVG 維持精簡（控制在 14 個以內的基本元素如 polygon/rect/circle/line/path/text，不留多餘空白與註解），線條 stroke="#1e293b" stroke-width="2"，陰影 fill="#c7d2fe" fill-opacity="0.7"，文字 font-size="14" font-weight="600" fill="#0f172a"，保留邊距不重疊。
    - 若原題無圖，hasDiagram=false 且 svgDiagram=""。
 7. ${countInstruction}`;
 
-      const userPrompt = `請解析這張數學題截圖（${width}×${height} px, ${sizeKB} KB），依規則生成 4～8 題同概念不同數字的類似題；若原題有圖，每題附上精簡 SVG 對應圖形。`;
+      const userPrompt = `請解析這張數學題截圖（${width}×${height} px, ${sizeKB} KB），依規則生成 4～8 題同概念不同數字的類似題；若原題有圖，每題附上精簡 SVG 對應圖形，且每題圖形必須有方向翻轉、斜線反向、旋轉或比例變化，不可只是複製原圖換數字。`;
 
       const payload = {
         contents: [
@@ -1110,7 +1111,7 @@
                     },
                     svgDiagram: {
                       type: 'STRING',
-                      description: '若 hasDiagram 為 true，為此題繪製的完整 <svg viewBox="0 0 320 220" xmlns="http://www.w3.org/2000/svg">...</svg> 向量圖（含對應新數字標註）；若無圖則為空字串',
+                      description: '若 hasDiagram 為 true，為此題繪製的完整 <svg viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg">...</svg> 向量圖；每題必須改變方向（如斜線反向、左右/上下翻轉、旋轉朝向或調整比例）並重新計算座標使文字正向；若無圖則為空字串',
                     },
                     hint: {
                       type: 'STRING',
