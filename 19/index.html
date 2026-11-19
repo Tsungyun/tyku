@@ -881,9 +881,9 @@
     // ==================== Gemini API Calls ====================
 
     /**
-     * Fetch with per-attempt timeout (45s), user cancellation, and exponential backoff
+     * Fetch with per-attempt timeout (90s), user cancellation, and exponential backoff
      */
-    async function fetchWithRetry(url, options, maxRetries = 2, timeoutMs = 45000) {
+    async function fetchWithRetry(url, options, maxRetries = 1, timeoutMs = 90000) {
       let delay = 1000;
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         const timeoutCtrl = new AbortController();
@@ -936,7 +936,7 @@
           }
 
           if (timeoutCtrl.signal.reason === 'timeout') {
-            const timeoutErr = new Error('連線逾時（超過 45 秒未收到回應）。建議將出題數量改為「固定 4 題」或重新試一次。');
+            const timeoutErr = new Error('連線逾時（超過 90 秒未收到回應）。建議將出題數量改為「固定 4 題」或重新試一次。');
             timeoutErr.noRetry = true;
             throw timeoutErr;
           }
@@ -1040,20 +1040,17 @@
 2. 每題數字與情境都不同、計算精確無誤且有唯一標準答案。
 3. 數學式請用 LaTeX 單錢字號 $...$（例如 $\\frac{3}{4}$、$\\sqrt{5}$）。
 4. answer 填最簡純文字（不含單位與 $），單位放 unit，等價答案放 acceptableAnswers。
-5. hint 限 1 句話；explanation 簡潔扼要（2～3 行列式即可），避免冗長。
-6. 【圖形偵測與「多變方向」精簡 SVG】：
-   - 若原題有幾何圖、陰影面積、角度、數線、座標或圖表，設 hasDiagram=true，並為每題繪製精簡 SVG（<svg viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg">...</svg>）。
-   - ★【嚴禁每題圖形長得一模一樣只改數字！】每一題的圖形都必須在「相同數學概念」下做出明確的視覺與空間變化，請在各題間輪流運用以下變換：
-     (a) 斜線／對角線／輔助線方向相反（例如原圖斜向右下，這題改為斜向左下）。
-     (b) 圖形左右鏡像或上下翻轉（例如直角、底邊、開口、陰影區換到對側或上方）。
-     (c) 旋轉不同擺放角度（例如旋轉 90°、180° 或改變底邊朝向，考驗學生辨識底與高、角度關係）。
-     (d) 改變長寬比例或形狀胖瘦（例如扁長改高瘦、銳角改鈍角、圓心角大小改變），並確保題目文字與圖形完全一致。
-   - ★【文字必須正向】：請直接透過「重新計算點位座標」來實現翻轉與旋轉，絕對不可對包含 <text> 的群組套用 scale(-1,1) 或倒立旋轉，以免數字與字母變反字。
-   - SVG 維持精簡（控制在 14 個以內的基本元素如 polygon/rect/circle/line/path/text，不留多餘空白與註解），線條 stroke="#1e293b" stroke-width="2"，陰影 fill="#c7d2fe" fill-opacity="0.7"，文字 font-size="14" font-weight="600" fill="#0f172a"，保留邊距不重疊。
-   - 若原題無圖，hasDiagram=false 且 svgDiagram=""。
-7. ${countInstruction}`;
+      const systemPrompt = `你是台灣數學老師，請解析截圖中的數學題核心概念，生成「概念相同、數字與情境不同」的類似練習題。
 
-      const userPrompt = `請解析這張數學題截圖（${width}×${height} px, ${sizeKB} KB），依規則生成 4～8 題同概念不同數字的類似題；若原題有圖，每題附上精簡 SVG 對應圖形，且每題圖形必須有方向翻轉、斜線反向、旋轉或比例變化，不可只是複製原圖換數字。`;
+規則：
+1. 使用繁體中文，每題數字不同、答案精確唯一，數學式用 $...$。
+2. answer 填最簡純文字（不含單位與 $），單位放 unit，等價答案放 acceptableAnswers。
+3. hint 限 1 句；explanation 簡潔 2～3 行。
+4. 若原題有幾何圖、陰影、角度、數線或圖表，設 hasDiagram=true，每題給精簡 SVG（<svg viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg">...</svg>，12 個元素內，stroke="#1e293b" stroke-width="2"，陰影 fill="#c7d2fe" fill-opacity="0.7"，文字 font-size="14" font-weight="600" fill="#0f172a"）。
+5. 含圖題每題必須變換方向（輪流套用：斜線改反方向、左右/上下翻轉、旋轉朝向或改比例），不可只改數字；直接用新座標畫圖，勿鏡像旋轉 <text> 以免反字。若無圖則 hasDiagram=false、svgDiagram=""。
+6. ${countInstruction}`;
+
+      const userPrompt = `解析此數學題截圖（${width}×${height} px, ${sizeKB} KB），生成同概念類似題；若原題有圖，每題附不同方向變化的精簡 SVG。`;
 
       const payload = {
         contents: [
@@ -1075,6 +1072,9 @@
         },
         generationConfig: {
           maxOutputTokens: 8192,
+          thinkingConfig: {
+            thinkingLevel: 'low',
+          },
           responseMimeType: 'application/json',
           responseSchema: {
             type: 'OBJECT',
