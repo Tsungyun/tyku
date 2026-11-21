@@ -111,6 +111,13 @@
         display: none !important;
       }
 
+      #worksheetModal {
+        position: static !important;
+        background: transparent !important;
+        padding: 0 !important;
+        overflow: visible !important;
+      }
+
       #printWorksheetView {
         display: block !important;
         position: static !important;
@@ -643,10 +650,12 @@
       </div>
     </div>
   </div>
-<!-- 專屬版權宣告頁尾 (乾淨、單行設計) -->
-    <div class="text-center text-gray-400 text-sm mt-8 mb-4 tracking-wider">
-        &copy; 谷宗芸老師設計 / AI 輔助生成
-    </div>
+
+  <!-- 專屬版權宣告頁尾 (乾淨、單行設計) -->
+  <div class="no-print text-center text-gray-400 text-sm mt-8 mb-4 tracking-wider">
+    &copy; 谷宗芸老師設計 / AI 輔助生成
+  </div>
+
   <!-- ==================== Application Logic ==================== -->
   <script>
     /**
@@ -1305,24 +1314,24 @@
 【嚴格命題與幾何繪圖守則】
 1. 使用繁體中文，每題數字不同、已知條件充分且無矛盾、答案精確唯一，數學式用 $...$。
 2. 【觸控友善分格作答（極重要！）】：
-   - 學生在觸控螢幕上只會用「數字與符號小鍵盤」作答，**完全不能要求學生輸入任何中文字**！
-   - 每題都必須填寫 answerFields 陣列，每個元素代表一個獨立輸入格：{ prefix: "格前標籤(可空)", answer: "純數字或數學式", acceptableAnswers: [], suffix: "格後單位(可空)" }。
-   - 凡是**複名數或多個數值的答案**，**嚴禁**把兩個單位合在一起（絕不可寫 unit="小時分鐘" 或 answer="13小時30分鐘"），必須拆成多個輸入格！
-     • 例如「13小時30分鐘」→ answerFields: [{ prefix: "", answer: "13", acceptableAnswers: [], suffix: "小時" }, { prefix: "", answer: "30", acceptableAnswers: [], suffix: "分鐘" }]
-     • 例如「2公尺15公分」→ answerFields: [{ prefix: "", answer: "2", acceptableAnswers: [], suffix: "公尺" }, { prefix: "", answer: "15", acceptableAnswers: [], suffix: "公分" }]
-     • 例如「商 7 餘 3」→ answerFields: [{ prefix: "商", answer: "7", acceptableAnswers: [], suffix: "" }, { prefix: "餘", answer: "3", acceptableAnswers: [], suffix: "" }]
-     • 例如單一數值「48 平方公分」→ answerFields: [{ prefix: "", answer: "48", acceptableAnswers: [], suffix: "平方公分" }]
-   - 同時保留 answer（完整參考答案純文字）與 unit（若為複名數可留空）。
+  - 學生在觸控螢幕上只會用「數字與符號小鍵盤」作答，**完全不能要求學生輸入任何中文字**！
+  - 每題都必須填寫 answerFields 陣列，每個元素代表一個獨立輸入格：{ prefix: "格前標籤(可空)", answer: "純數字或數學式", acceptableAnswers: [], suffix: "格後單位(可空)" }。
+  - 凡是**複名數或多個數值的答案**，**嚴禁**把兩個單位合在一起（絕不可寫 unit="小時分鐘" 或 answer="13小時30分鐘"），必須拆成多個輸入格！
+    - 例如「13小時30分鐘」→ answerFields: [{ prefix: "", answer: "13", acceptableAnswers: [], suffix: "小時" }, { prefix: "", answer: "30", acceptableAnswers: [], suffix: "分鐘" }]
+    - 例如「2公尺15公分」→ answerFields: [{ prefix: "", answer: "2", acceptableAnswers: [], suffix: "公尺" }, { prefix: "", answer: "15", acceptableAnswers: [], suffix: "公分" }]
+    - 例如「商 7 餘 3」→ answerFields: [{ prefix: "商", answer: "7", acceptableAnswers: [], suffix: "" }, { prefix: "餘", answer: "3", acceptableAnswers: [], suffix: "" }]
+    - 例如單一數值「48 平方公分」→ answerFields: [{ prefix: "", answer: "48", acceptableAnswers: [], suffix: "平方公分" }]
+  - 同時保留 answer（完整參考答案純文字）與 unit（若為複名數可留空）。
 3. hint 限 1 句；explanation 清楚寫出驗算步驟（2～4 行）。
 4. 若原題有幾何圖、分割圖、陰影、角度、數線或圖表，設 hasDiagram=true；若圖形屬於幾何形狀／面積／角度／多邊形／圓形（旋轉翻轉後仍完全合理），設 allowFreeRotation=true；若為座標平面、數線、長條圖或折線圖，設 allowFreeRotation=false。
 5. 【幾何拓樸絕對守恆（最重要！）】：
-   - 嚴禁亂改分割線的拓樸連接關係！若題目文字寫「三角形」，SVG 畫出來的那一塊就必須是精確的三邊形（線段端點必須剛好接到外框的頂點，絕不可畫成四邊形或梯形）；若寫「梯形」就必須有恰一組平行邊與四個頂點；若寫「平行四邊形」就必須兩組對邊完全平行（上下底偏移量完全相等）。
-   - 每個區域請優先使用獨立的 <polygon points="..."/> 精確定義頂點座標，再繪製外框或輔助線，這樣能確保邊數與圖形名稱 100% 吻合。
-   - **禁止漏標**：題目文字中提到的**每一個**區域代號（例如甲、乙、丙、丁）、頂點字母（A、B、C、D）以及所有已知邊長／高／角度數值，**全部**必須出現在 SVG 的 <text> 元素中，且位置必須在對應區域的重心（正中央）或對應邊的外側中點，絕不可遺漏或重疊。
-   - SVG 畫布統一用 <svg viewBox="0 0 320 220" xmlns="http://www.w3.org/2000/svg">...</svg>，四邊留白至少 35px 放數值標註；線條 stroke="#1e293b" stroke-width="2" fill="none"，陰影區用 fill="#c7d2fe" fill-opacity="0.65"，所有 <text> 必須加上 text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#0f172a"。
-   - 變化題目時，請改變「數值大小」與「圖形長寬比例」（且 SVG 邊長比例要大致符合數值大小），但**保持原題的幾何分割拓樸結構**。
-   - 題目文字請用「如圖所示」搭配明確的區域代號（甲、乙、丙）或頂點代號（A、B、C、D），避免寫死「左上方／最底下」，因為系統會提供旋轉與鏡像功能。
-   - 若無圖則 hasDiagram=false、allowFreeRotation=false、vertexPlan=""、svgDiagram=""。
+  - 嚴禁亂改分割線的拓樸連接關係！若題目文字寫「三角形」，SVG 畫出來的那一塊就必須是精確的三邊形（線段端點必須剛好接到外框的頂點，絕不可畫成四邊形或梯形）；若寫「梯形」就必須有恰一組平行邊與四個頂點；若寫「平行四邊形」就必須兩組對邊完全平行（上下底偏移量完全相等）。
+  - 每個區域請優先使用獨立的 <polygon points="..."/> 精確定義頂點座標，再繪製外框或輔助線，這樣能確保邊數與圖形名稱 100% 吻合。
+  - **禁止漏標**：題目文字中提到的**每一個**區域代號（例如甲、乙、丙、丁）、頂點字母（A、B、C、D）以及所有已知邊長／高／角度數值，**全部**必須出現在 SVG 的 <text> 元素中，且位置必須在對應區域的重心（正中央）或對應邊的外側中點，絕不可遺漏或重疊。
+  - SVG 畫布統一用 <svg viewBox="0 0 320 220" xmlns="http://www.w3.org/2000/svg">...</svg>，四邊留白至少 35px 放數值標註；線條 stroke="#1e293b" stroke-width="2" fill="none"，陰影區用 fill="#c7d2fe" fill-opacity="0.65"，所有 <text> 必須加上 text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#0f172a"。
+  - 變化題目時，請改變「數值大小」與「圖形長寬比例」（且 SVG 邊長比例要大致符合數值大小），但**保持原題的幾何分割拓樸結構**。
+  - 題目文字請用「如圖所示」搭配明確的區域代號（甲、乙、丙）或頂點代號（A、B、C、D），避免寫死「左上方／最底下」，因為系統會提供旋轉與鏡像功能。
+  - 若無圖則 hasDiagram=false、allowFreeRotation=false、vertexPlan=""、svgDiagram=""。
 6. 生成每題前，必須先在 vertexPlan 欄位寫出：(a) 外框與分割線的精確座標、(b) 確認每個區域的實際形狀（幾邊形）與題目文字名稱完全一致、(c) 列出所有會出現在 SVG 裡的 <text> 標註清單並確認與題目文字 100% 對應。
 7. ${countInstruction}`;
 
@@ -1829,6 +1838,26 @@
 
     // ==================== Question Interaction & Grading ====================
 
+    /**
+     * Re-render a single question's SVG diagram after rotation/flip/reset
+     */
+    function updateQuestionDiagram(idx) {
+      const q = state.practiceData?.questions?.[idx];
+      if (!q) return;
+      const cleanSvg = sanitizeSvg(q.svgDiagram);
+      const box = document.getElementById(`diagram-box-${idx}`);
+      const badge = document.getElementById(`diagram-badge-${idx}`);
+      if (box && cleanSvg) {
+        box.innerHTML = applySvgTransform(cleanSvg, state.diagramTransforms[idx]);
+      }
+      if (badge) {
+        badge.textContent = `📐 ${formatTransformLabel(state.diagramTransforms[idx])}`;
+      }
+    }
+
+    /**
+     * Bind all interactive events for generated question cards
+     */
     function bindQuestionEvents() {
       const inputs = document.querySelectorAll('.answer-input');
       inputs.forEach((input) => {
@@ -1875,8 +1904,41 @@
         });
       });
 
+      // Fixed: complete check-single-btn click listener
       document.querySelectorAll('.check-single-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
+          const idx = Number(btn.dataset.checkIdx);
+          checkSingleQuestion(idx);
+        });
+      });
+
+      // Restored: diagram rotation / mirror / reset button listeners
+      document.querySelectorAll('.diagram-ctrl-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (btn.dataset.rotIdx !== undefined) {
+            const idx = Number(btn.dataset.rotIdx);
+            const step = Number(btn.dataset.rotStep) || 90;
+            if (!state.diagramTransforms[idx]) {
+              state.diagramTransforms[idx] = { angle: 0, flipX: 1, flipY: 1 };
+            }
+            state.diagramTransforms[idx].angle = (state.diagramTransforms[idx].angle + step) % 360;
+            updateQuestionDiagram(idx);
+          } else if (btn.dataset.flipIdx !== undefined) {
+            const idx = Number(btn.dataset.flipIdx);
+            if (!state.diagramTransforms[idx]) {
+              state.diagramTransforms[idx] = { angle: 0, flipX: 1, flipY: 1 };
+            }
+            state.diagramTransforms[idx].flipX = state.diagramTransforms[idx].flipX === -1 ? 1 : -1;
+            updateQuestionDiagram(idx);
+          } else if (btn.dataset.resetIdx !== undefined) {
+            const idx = Number(btn.dataset.resetIdx);
+            state.diagramTransforms[idx] = { angle: 0, flipX: 1, flipY: 1 };
+            updateQuestionDiagram(idx);
+          }
+        });
+      });
+    }
+
     function setActiveQuestion(qIdx, fIdx = 0, shouldFocus = true) {
       if (!state.practiceData || qIdx < 0 || qIdx >= state.practiceData.questions.length) return;
       const q = state.practiceData.questions[qIdx];
