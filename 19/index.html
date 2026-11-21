@@ -544,8 +544,8 @@
 
       <button type="button" data-key="0" class="keypad-btn h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-sm">0</button>
       <button type="button" data-key="." class="keypad-btn h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-base">.</button>
-      <button type="button" data-action="clear" class="keypad-btn h-9 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold text-xs" title="清除本題">C</button>
-      <button type="button" data-action="next" class="keypad-btn h-9 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm" title="跳到下一題">下題↵</button>
+      <button type="button" data-action="clear" class="keypad-btn h-9 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 font-semibold text-xs" title="清除本格">C</button>
+      <button type="button" data-action="next" class="keypad-btn h-9 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm" title="跳到下一格或下一題">下格↵</button>
     </div>
 
     <!-- Compact Keypad Body: Page 2 (Algebra & Extended Symbols) -->
@@ -568,7 +568,7 @@
       <button type="button" data-key="," class="keypad-btn h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-sm">,</button>
       <button type="button" data-key=":" class="keypad-btn h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-sm" title="比例符號">:</button>
       <button type="button" data-key="±" class="keypad-btn h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-sm">±</button>
-      <button type="button" data-action="next" class="keypad-btn h-9 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm">下題↵</button>
+      <button type="button" data-action="next" class="keypad-btn h-9 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs shadow-sm" title="跳到下一格或下一題">下格↵</button>
     </div>
 
     <!-- Subtle footer tip for touch / whiteboard users -->
@@ -643,7 +643,10 @@
       </div>
     </div>
   </div>
-
+<!-- 專屬版權宣告頁尾 (乾淨、單行設計) -->
+    <div class="text-center text-gray-400 text-sm mt-8 mb-4 tracking-wider">
+        &copy; 谷宗芸老師設計 / AI 輔助生成
+    </div>
   <!-- ==================== Application Logic ==================== -->
   <script>
     /**
@@ -657,6 +660,7 @@
       practiceData: null,
       diagramTransforms: [],
       activeQuestionIndex: 0,
+      activeFieldIndex: 0,
       keypadMinimized: false,
       keypadSymMode: false,
       isGenerating: false,
@@ -858,6 +862,104 @@
       } catch (_) {
         return [];
       }
+    }
+
+    /**
+     * Resolve structured answer input fields for a question so compound units (e.g. 小時+分鐘, 公尺+公分, 商+餘)
+     * ALWAYS render as separate pure-number input boxes for touchscreens & numeric keypads.
+     */
+    function getQuestionAnswerFields(q) {
+      if (!q) return [{ prefix: '', answer: '', acceptableAnswers: [], suffix: '' }];
+
+      const splitCompoundAnswerText = (rawAns, rawUnit) => {
+        const text = String(rawAns || '').trim();
+        // Pattern 1: "商 5 餘 3" or "商5餘3"
+        const divMatch = text.match(/商\s*(-?\d+(?:\.\d+)?)\s*[，,、\s]*餘\s*(-?\d+(?:\.\d+)?)/);
+        if (divMatch) {
+          return [
+            { prefix: '商', answer: divMatch[1], acceptableAnswers: [], suffix: '' },
+            { prefix: '餘', answer: divMatch[2], acceptableAnswers: [], suffix: '' },
+          ];
+        }
+
+        // Pattern 2: "13小時30分鐘", "2公尺15公分", "3公斤400公克", "1日4小時20分"
+        const unitRegex = /(-?\d+(?:\.\d+)?(?:\/\d+)?)\s*(年|個月|月|週|星期|日|天|小時|時|分鐘|分|秒|公里|公尺|公分|毫米|公噸|公斤|公克|公秉|公升|毫升|元|角)/g;
+        const matches = [...text.matchAll(unitRegex)];
+        if (matches.length >= 2) {
+          return matches.map((m) => ({
+            prefix: '',
+            answer: m[1],
+            acceptableAnswers: [],
+            suffix: m[2],
+          }));
+        }
+
+        // Pattern 3: Answer has 2+ numbers separated by space/comma AND unit is a known compound string like "小時分鐘"
+        const compoundUnitPairs = [
+          ['小時', '分鐘'], ['小時', '分'], ['時', '分'], ['分鐘', '秒'], ['分', '秒'],
+          ['日', '小時'], ['天', '小時'], ['公里', '公尺'], ['公尺', '公分'], ['公分', '毫米'],
+          ['公斤', '公克'], ['公升', '毫升'], ['元', '角'],
+        ];
+        const cleanUnit = String(rawUnit || '').replace(/\s+/g, '');
+        const nums = text.match(/-?\d+(?:\.\d+)?/g);
+        if (nums && nums.length === 2) {
+          for (const [u1, u2] of compoundUnitPairs) {
+            if (cleanUnit === `${u1}${u2}` || cleanUnit === `${u1}、${u2}` || cleanUnit === `${u1}/${u2}`) {
+              return [
+                { prefix: '', answer: nums[0], acceptableAnswers: [], suffix: u1 },
+                { prefix: '', answer: nums[1], acceptableAnswers: [], suffix: u2 },
+              ];
+            }
+          }
+        }
+        return null;
+      };
+
+      // 1. Prefer structured answerFields from Gemini
+      if (Array.isArray(q.answerFields) && q.answerFields.length > 0) {
+        const cleanedFields = q.answerFields
+          .filter((f) => f && String(f.answer ?? '').trim() !== '')
+          .map((f) => ({
+            prefix: String(f.prefix || '').trim(),
+            answer: String(f.answer ?? '').trim(),
+            acceptableAnswers: Array.isArray(f.acceptableAnswers) ? f.acceptableAnswers : [],
+            suffix: String(f.suffix || '').trim(),
+          }));
+
+        if (cleanedFields.length === 1) {
+          const autoSplit = splitCompoundAnswerText(cleanedFields[0].answer, cleanedFields[0].suffix);
+          if (autoSplit) return autoSplit;
+        }
+        if (cleanedFields.length > 0) return cleanedFields;
+      }
+
+      // 2. Fallback auto-split from legacy answer + unit fields
+      const fallbackSplit = splitCompoundAnswerText(q.answer, q.unit);
+      if (fallbackSplit) return fallbackSplit;
+
+      // 3. Default single-field answer
+      return [
+        {
+          prefix: '',
+          answer: String(q.answer ?? '').trim(),
+          acceptableAnswers: Array.isArray(q.acceptableAnswers) ? q.acceptableAnswers : [],
+          suffix: String(q.unit || '').trim(),
+        },
+      ];
+    }
+
+    /**
+     * Format the full human-readable standard answer across all fields (e.g., "13 小時 30 分鐘")
+     */
+    function formatQuestionStandardAnswer(q) {
+      const fields = q._resolvedFields || getQuestionAnswerFields(q);
+      return fields
+        .map((f) => {
+          const pre = f.prefix ? `${f.prefix} ` : '';
+          const suf = f.suffix ? ` ${f.suffix}` : '';
+          return `${pre}${f.answer}${suf}`.trim();
+        })
+        .join(' ');
     }
 
     /**
@@ -1202,7 +1304,15 @@
 
 【嚴格命題與幾何繪圖守則】
 1. 使用繁體中文，每題數字不同、已知條件充分且無矛盾、答案精確唯一，數學式用 $...$。
-2. answer 填最簡純文字（不含單位與 $），單位放 unit，等價答案放 acceptableAnswers。
+2. 【觸控友善分格作答（極重要！）】：
+   - 學生在觸控螢幕上只會用「數字與符號小鍵盤」作答，**完全不能要求學生輸入任何中文字**！
+   - 每題都必須填寫 answerFields 陣列，每個元素代表一個獨立輸入格：{ prefix: "格前標籤(可空)", answer: "純數字或數學式", acceptableAnswers: [], suffix: "格後單位(可空)" }。
+   - 凡是**複名數或多個數值的答案**，**嚴禁**把兩個單位合在一起（絕不可寫 unit="小時分鐘" 或 answer="13小時30分鐘"），必須拆成多個輸入格！
+     • 例如「13小時30分鐘」→ answerFields: [{ prefix: "", answer: "13", acceptableAnswers: [], suffix: "小時" }, { prefix: "", answer: "30", acceptableAnswers: [], suffix: "分鐘" }]
+     • 例如「2公尺15公分」→ answerFields: [{ prefix: "", answer: "2", acceptableAnswers: [], suffix: "公尺" }, { prefix: "", answer: "15", acceptableAnswers: [], suffix: "公分" }]
+     • 例如「商 7 餘 3」→ answerFields: [{ prefix: "商", answer: "7", acceptableAnswers: [], suffix: "" }, { prefix: "餘", answer: "3", acceptableAnswers: [], suffix: "" }]
+     • 例如單一數值「48 平方公分」→ answerFields: [{ prefix: "", answer: "48", acceptableAnswers: [], suffix: "平方公分" }]
+   - 同時保留 answer（完整參考答案純文字）與 unit（若為複名數可留空）。
 3. hint 限 1 句；explanation 清楚寫出驗算步驟（2～4 行）。
 4. 若原題有幾何圖、分割圖、陰影、角度、數線或圖表，設 hasDiagram=true；若圖形屬於幾何形狀／面積／角度／多邊形／圓形（旋轉翻轉後仍完全合理），設 allowFreeRotation=true；若為座標平面、數線、長條圖或折線圖，設 allowFreeRotation=false。
 5. 【幾何拓樸絕對守恆（最重要！）】：
@@ -1271,18 +1381,45 @@
                       type: 'STRING',
                       description: '給學生的簡短解題提示',
                     },
+                    answerFields: {
+                      type: 'ARRAY',
+                      description: '作答輸入格陣列。複名數（如小時+分鐘、公尺+公分、公斤+公克）或商與餘數必須拆成多個物件，讓學生每格只需輸入純數字或數學符號',
+                      items: {
+                        type: 'OBJECT',
+                        properties: {
+                          prefix: {
+                            type: 'STRING',
+                            description: '輸入框前面的文字標籤（例如 "商"、"餘"、"x="，無則空字串）',
+                          },
+                          answer: {
+                            type: 'STRING',
+                            description: '此格最簡純數字或數學式答案（絕不可含中文單位與 $）',
+                          },
+                          acceptableAnswers: {
+                            type: 'ARRAY',
+                            items: { type: 'STRING' },
+                            description: '此格的等價可接受答案陣列',
+                          },
+                          suffix: {
+                            type: 'STRING',
+                            description: '輸入框後面的單一單位（例如 "小時"、"分鐘"、"平方公分"，無則空字串）',
+                          },
+                        },
+                        required: ['prefix', 'answer', 'acceptableAnswers', 'suffix'],
+                      },
+                    },
                     answer: {
                       type: 'STRING',
-                      description: '最簡純文字標準答案（不含單位、不含 $）',
+                      description: '完整參考答案純文字（不含 $）',
                     },
                     acceptableAnswers: {
                       type: 'ARRAY',
                       items: { type: 'STRING' },
-                      description: '等價可接受答案陣列',
+                      description: '單格題的等價可接受答案陣列',
                     },
                     unit: {
                       type: 'STRING',
-                      description: '答案單位（若無則為空字串）',
+                      description: '單一單位（若已透過 answerFields 拆成多格複名數，此欄請留空字串）',
                     },
                     explanation: {
                       type: 'STRING',
@@ -1295,6 +1432,7 @@
                     'questionText',
                     'svgDiagram',
                     'hint',
+                    'answerFields',
                     'answer',
                     'acceptableAnswers',
                     'unit',
@@ -1476,13 +1614,44 @@
 
       questionsContainer.innerHTML = '';
       data.questions.forEach((q, idx) => {
+        const fields = getQuestionAnswerFields(q);
+        q._resolvedFields = fields;
+        const isMultiField = fields.length > 1;
+
         const card = document.createElement('div');
         card.id = `question-card-${idx}`;
         card.className = 'bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 sm:p-5 transition-all duration-200';
 
-        const unitHtml = q.unit
-          ? `<span class="text-sm font-medium text-slate-500 shrink-0">${escapeHtml(q.unit)}</span>`
-          : '';
+        const inputsGroupHtml = fields
+          .map((field, fIdx) => {
+            const prefixHtml = field.prefix
+              ? `<span class="text-sm font-semibold text-slate-600 shrink-0">${escapeHtml(field.prefix)}</span>`
+              : '';
+            const suffixHtml = field.suffix
+              ? `<span class="text-sm font-semibold text-slate-600 shrink-0">${escapeHtml(field.suffix)}</span>`
+              : '';
+            const inputSizeClass = isMultiField
+              ? 'w-20 sm:w-24 text-center px-2.5 py-2'
+              : 'w-full min-w-[150px] max-w-xs px-3.5 py-2';
+            const placeholderText = isMultiField ? '數字' : '點擊輸入答案...';
+
+            return `
+              <div class="inline-flex items-center gap-1.5 ${isMultiField ? '' : 'flex-1 min-w-[160px] max-w-xs'}">
+                ${prefixHtml}
+                <input
+                  id="ans-input-${idx}-${fIdx}"
+                  data-q-index="${idx}"
+                  data-f-index="${fIdx}"
+                  type="text"
+                  autocomplete="off"
+                  placeholder="${placeholderText}"
+                  class="answer-input ${inputSizeClass} rounded-xl border border-slate-300 bg-slate-50/70 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 text-sm sm:text-base font-semibold text-slate-900 outline-none transition-all"
+                />
+                ${suffixHtml}
+              </div>
+            `;
+          })
+          .join('');
 
         const cleanSvg = sanitizeSvg(q.svgDiagram);
         const missingLabels = auditDiagramLabels(q.questionText, cleanSvg);
@@ -1527,17 +1696,9 @@
               ${diagramHtml}
 
               <div class="flex flex-wrap items-center gap-2 pt-1">
-                <label for="ans-input-${idx}" class="text-xs font-semibold text-slate-500">答：</label>
-                <div class="relative flex items-center gap-2 flex-1 min-w-[160px] max-w-xs">
-                  <input
-                    id="ans-input-${idx}"
-                    data-q-index="${idx}"
-                    type="text"
-                    autocomplete="off"
-                    placeholder="點擊輸入答案..."
-                    class="answer-input w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-slate-50/70 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 text-sm sm:text-base font-semibold text-slate-900 outline-none transition-all"
-                  />
-                  ${unitHtml}
+                <label for="ans-input-${idx}-0" class="text-xs font-semibold text-slate-500 shrink-0">答：</label>
+                <div class="flex flex-wrap items-center gap-2 flex-1 min-w-[180px]">
+                  ${inputsGroupHtml}
                 </div>
 
                 <div class="flex items-center gap-1.5 ml-auto">
@@ -1573,7 +1734,7 @@
       });
 
       bindQuestionEvents();
-      setActiveQuestion(0, false);
+      setActiveQuestion(0, 0, false);
     }
 
     // ==================== Worksheet / PDF Export & Screenshot View ====================
@@ -1587,7 +1748,17 @@
       wsAnswerKeyList.innerHTML = '';
 
       data.questions.forEach((q, idx) => {
-        const unitText = q.unit ? ` ${escapeHtml(q.unit)}` : '';
+        const fields = q._resolvedFields || getQuestionAnswerFields(q);
+        const blankLineHtml = fields
+          .map((f) => {
+            const pre = f.prefix ? `${escapeHtml(f.prefix)} ` : '';
+            const suf = f.suffix ? ` ${escapeHtml(f.suffix)}` : '';
+            const line = fields.length > 1 ? '__________' : '______________________';
+            return `${pre}${line}${suf}`;
+          })
+          .join('　');
+
+        const stdAnswerDisplay = formatQuestionStandardAnswer(q);
         const cleanSvg = sanitizeSvg(q.svgDiagram);
         const transformedSvg = cleanSvg ? applySvgTransform(cleanSvg, state.diagramTransforms[idx]) : '';
         const wsDiagramHtml = transformedSvg
@@ -1604,7 +1775,7 @@
               <div class="text-slate-900 text-base leading-relaxed">${escapeHtml(q.questionText)}</div>
               ${wsDiagramHtml}
               <div class="pt-3 flex items-center justify-end text-sm text-slate-600">
-                <span>答：______________________${unitText}</span>
+                <span>答：${blankLineHtml}</span>
               </div>
             </div>
           </div>
@@ -1615,7 +1786,7 @@
         const aItem = document.createElement('div');
         aItem.className = 'print-question-item rounded-xl bg-slate-50 border border-slate-200/70 p-3';
         aItem.innerHTML = `
-          <div class="font-bold text-slate-900 mb-1">第 ${idx + 1} 題答案：${escapeHtml(q.answer)}${unitText}</div>
+          <div class="font-bold text-slate-900 mb-1">第 ${idx + 1} 題答案：${escapeHtml(stdAnswerDisplay)}</div>
           <div class="text-slate-700 leading-relaxed">詳解：${escapeHtml(q.explanation)}</div>
         `;
         wsAnswerKeyList.appendChild(aItem);
@@ -1667,7 +1838,8 @@
 
         input.addEventListener('focus', () => {
           const idx = Number(input.dataset.qIndex);
-          setActiveQuestion(idx, false);
+          const fIdx = Number(input.dataset.fIndex || 0);
+          setActiveQuestion(idx, fIdx, false);
         });
 
         input.addEventListener('input', () => {
@@ -1678,9 +1850,17 @@
           if (e.key === 'Enter') {
             e.preventDefault();
             const idx = Number(input.dataset.qIndex);
-            checkSingleQuestion(idx);
-            if (idx + 1 < state.practiceData.questions.length) {
-              setActiveQuestion(idx + 1, true);
+            const fIdx = Number(input.dataset.fIndex || 0);
+            const q = state.practiceData?.questions?.[idx];
+            const fieldsCount = (q?._resolvedFields || getQuestionAnswerFields(q)).length;
+
+            if (fIdx + 1 < fieldsCount) {
+              setActiveQuestion(idx, fIdx + 1, true);
+            } else {
+              checkSingleQuestion(idx);
+              if (idx + 1 < state.practiceData.questions.length) {
+                setActiveQuestion(idx + 1, 0, true);
+              }
             }
           }
         });
@@ -1697,56 +1877,31 @@
 
       document.querySelectorAll('.check-single-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
-          const idx = Number(btn.dataset.checkIdx);
-          checkSingleQuestion(idx);
-        });
-      });
+    function setActiveQuestion(qIdx, fIdx = 0, shouldFocus = true) {
+      if (!state.practiceData || qIdx < 0 || qIdx >= state.practiceData.questions.length) return;
+      const q = state.practiceData.questions[qIdx];
+      const fields = q._resolvedFields || getQuestionAnswerFields(q);
+      const safeFIdx = Math.min(Math.max(0, fIdx), Math.max(0, fields.length - 1));
 
-      // Interactive per-question diagram rotation & mirror controls
-      document.querySelectorAll('.diagram-ctrl-btn').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const idx = Number(btn.dataset.rotIdx ?? btn.dataset.flipIdx ?? btn.dataset.resetIdx);
-          const q = state.practiceData?.questions?.[idx];
-          const t = state.diagramTransforms[idx];
-          if (!q || !t) return;
+      state.activeQuestionIndex = qIdx;
+      state.activeFieldIndex = safeFIdx;
 
-          if (btn.dataset.rotStep) {
-            t.angle = (t.angle + Number(btn.dataset.rotStep)) % 360;
-          } else if (btn.dataset.flipIdx !== undefined) {
-            t.flipX = t.flipX === -1 ? 1 : -1;
-          } else if (btn.dataset.resetIdx !== undefined) {
-            t.angle = 0;
-            t.flipX = 1;
-            t.flipY = 1;
-          }
-
-          const box = document.getElementById(`diagram-box-${idx}`);
-          const badge = document.getElementById(`diagram-badge-${idx}`);
-          const cleanSvg = sanitizeSvg(q.svgDiagram);
-          if (box && cleanSvg) {
-            box.innerHTML = applySvgTransform(cleanSvg, t);
-          }
-          if (badge) {
-            badge.textContent = `📐 ${formatTransformLabel(t)}`;
-          }
-        });
-      });
-    }
-
-    function setActiveQuestion(idx, shouldFocus = true) {
-      if (!state.practiceData || idx < 0 || idx >= state.practiceData.questions.length) return;
-      state.activeQuestionIndex = idx;
-      activeInputIndicator.textContent = `第 ${idx + 1} 題`;
+      if (fields.length > 1) {
+        const fieldLabel = fields[safeFIdx].suffix || fields[safeFIdx].prefix || `格${safeFIdx + 1}`;
+        activeInputIndicator.textContent = `第 ${qIdx + 1} 題・${fieldLabel}`;
+      } else {
+        activeInputIndicator.textContent = `第 ${qIdx + 1} 題`;
+      }
 
       document.querySelectorAll('[id^="question-card-"]').forEach((card, i) => {
-        if (i === idx) {
+        if (i === qIdx) {
           card.classList.add('ring-2', 'ring-indigo-400/70', 'border-indigo-300');
         } else {
           card.classList.remove('ring-2', 'ring-indigo-400/70', 'border-indigo-300');
         }
       });
 
-      const targetInput = document.getElementById(`ans-input-${idx}`);
+      const targetInput = document.getElementById(`ans-input-${qIdx}-${safeFIdx}`);
       if (shouldFocus && targetInput) {
         targetInput.focus();
       }
@@ -1767,11 +1922,11 @@
         .toLowerCase();
     }
 
-    function isAnswerCorrect(userInput, question) {
+    function isFieldAnswerCorrect(userInput, field) {
       const normUser = normalizeAnswer(userInput);
       if (!normUser) return false;
 
-      const candidates = [question.answer, ...(question.acceptableAnswers || [])]
+      const candidates = [field.answer, ...(field.acceptableAnswers || [])]
         .filter(Boolean)
         .map(normalizeAnswer);
 
@@ -1802,23 +1957,38 @@
       const q = state.practiceData?.questions?.[idx];
       if (!q) return false;
 
-      const input = document.getElementById(`ans-input-${idx}`);
+      const fields = q._resolvedFields || getQuestionAnswerFields(q);
       const feedbackBox = document.getElementById(`feedback-box-${idx}`);
-      const userVal = input.value.trim();
+      let allCorrect = true;
+      let anyFilled = false;
 
-      const correct = isAnswerCorrect(userVal, q);
+      fields.forEach((field, fIdx) => {
+        const input = document.getElementById(`ans-input-${idx}-${fIdx}`);
+        if (!input) return;
+        const userVal = input.value.trim();
+        if (userVal !== '') anyFilled = true;
+
+        const fieldOk = isFieldAnswerCorrect(userVal, field);
+        if (fieldOk) {
+          input.classList.remove('border-rose-400', 'bg-rose-50/40');
+          input.classList.add('border-emerald-500', 'bg-emerald-50/40');
+        } else {
+          allCorrect = false;
+          input.classList.remove('border-emerald-500', 'bg-emerald-50/40');
+          input.classList.add('border-rose-400', 'bg-rose-50/40');
+        }
+      });
+
       feedbackBox.classList.remove('hidden', 'bg-emerald-50', 'border-emerald-200', 'text-emerald-900', 'bg-rose-50', 'border-rose-200', 'text-rose-900');
 
-      const unitStr = q.unit ? ` ${escapeHtml(q.unit)}` : '';
+      const stdAnswerDisplay = formatQuestionStandardAnswer(q);
 
-      if (correct) {
+      if (allCorrect) {
         feedbackBox.classList.add('bg-emerald-50', 'border', 'border-emerald-200', 'text-emerald-900');
-        input.classList.remove('border-rose-400', 'bg-rose-50/40');
-        input.classList.add('border-emerald-500', 'bg-emerald-50/40');
         feedbackBox.innerHTML = `
           <div class="font-bold flex items-center gap-1.5 text-emerald-700">
             <span>✅ 答對了！</span>
-            <span class="font-normal text-emerald-600">標準答案：${escapeHtml(q.answer)}${unitStr}</span>
+            <span class="font-normal text-emerald-600">標準答案：${escapeHtml(stdAnswerDisplay)}</span>
           </div>
           <div class="text-slate-700 leading-relaxed pt-1 border-t border-emerald-200/60">
             <span class="font-semibold text-emerald-800">詳解：</span>${escapeHtml(q.explanation)}
@@ -1826,14 +1996,12 @@
         `;
       } else {
         feedbackBox.classList.add('bg-rose-50', 'border', 'border-rose-200', 'text-rose-900');
-        input.classList.remove('border-emerald-500', 'bg-emerald-50/40');
-        input.classList.add('border-rose-400', 'bg-rose-50/40');
-        const statusMsg = userVal ? '❌ 再想一下喔！' : '📝 尚未填寫答案';
+        const statusMsg = anyFilled ? '❌ 再想一下喔！' : '📝 尚未填寫答案';
         feedbackBox.innerHTML = `
           <div class="font-bold flex flex-wrap items-center gap-2 text-rose-700">
             <span>${statusMsg}</span>
             <span class="px-2 py-0.5 rounded-md bg-white/80 border border-rose-200 text-rose-800 text-xs">
-              標準答案：${escapeHtml(q.answer)}${unitStr}
+              標準答案：${escapeHtml(stdAnswerDisplay)}
             </span>
           </div>
           <div class="text-slate-700 leading-relaxed pt-1 border-t border-rose-200/60">
@@ -1843,7 +2011,7 @@
       }
 
       renderMathSafely(feedbackBox);
-      return correct;
+      return allCorrect;
     }
 
     function checkAllQuestions() {
@@ -1868,10 +2036,15 @@
     }
 
     function updateAnsweredCount() {
-      const inputs = document.querySelectorAll('.answer-input');
+      if (!state.practiceData?.questions) return;
       let count = 0;
-      inputs.forEach((inp) => {
-        if (inp.value.trim() !== '') count++;
+      state.practiceData.questions.forEach((q, idx) => {
+        const fields = q._resolvedFields || getQuestionAnswerFields(q);
+        const allFilled = fields.every((_, fIdx) => {
+          const inp = document.getElementById(`ans-input-${idx}-${fIdx}`);
+          return inp && inp.value.trim() !== '';
+        });
+        if (allFilled) count++;
       });
       answeredCountText.textContent = count;
     }
@@ -1879,7 +2052,7 @@
     // ==================== Floating Mini Keypad Logic ====================
 
     function handleKeypadPress(key, action) {
-      const input = document.getElementById(`ans-input-${state.activeQuestionIndex}`);
+      const input = document.getElementById(`ans-input-${state.activeQuestionIndex}-${state.activeFieldIndex}`);
       if (!input) return;
 
       const start = input.selectionStart ?? input.value.length;
@@ -1896,12 +2069,19 @@
       } else if (action === 'clear') {
         input.value = '';
       } else if (action === 'next') {
-        const total = state.practiceData?.questions?.length || 0;
+        const questions = state.practiceData?.questions || [];
+        const total = questions.length;
         if (total > 0) {
-          const nextIdx = (state.activeQuestionIndex + 1) % total;
-          setActiveQuestion(nextIdx, true);
-          const nextCard = document.getElementById(`question-card-${nextIdx}`);
-          nextCard?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          const curQ = questions[state.activeQuestionIndex];
+          const curFieldsLen = (curQ?._resolvedFields || getQuestionAnswerFields(curQ)).length;
+          if (state.activeFieldIndex + 1 < curFieldsLen) {
+            setActiveQuestion(state.activeQuestionIndex, state.activeFieldIndex + 1, true);
+          } else {
+            const nextIdx = (state.activeQuestionIndex + 1) % total;
+            setActiveQuestion(nextIdx, 0, true);
+            const nextCard = document.getElementById(`question-card-${nextIdx}`);
+            nextCard?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
         }
         return;
       } else if (key !== undefined) {
@@ -2183,7 +2363,7 @@
       document.querySelectorAll('[id^="feedback-box-"]').forEach((box) => box.classList.add('hidden'));
       scoreBadge.classList.add('hidden');
       updateAnsweredCount();
-      setActiveQuestion(0, true);
+      setActiveQuestion(0, 0, true);
     });
 
     resetAllBtn.addEventListener('click', () => {
