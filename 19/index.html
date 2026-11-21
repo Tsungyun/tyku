@@ -88,7 +88,7 @@
     .math-diagram-box svg {
       max-width: 100%;
       width: auto;
-      max-height: 220px;
+      max-height: 240px;
       height: auto;
       display: block;
     }
@@ -196,7 +196,7 @@
       <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-5 sm:p-8">
         <div class="text-center max-w-xl mx-auto mb-6">
           <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold mb-3">
-            <span>✨</span> Gemini AI 圖片辨識 × 同概念自動出題
+            <span>✨</span> Gemini AI 圖片辨識 × 嚴格幾何驗算自動出題
           </span>
           <h2 class="text-xl sm:text-2xl font-bold text-slate-900 mb-2">把數學題目截圖放進來</h2>
           <p class="text-sm text-slate-500">
@@ -249,7 +249,7 @@
             </select>
           </div>
           <p class="text-xs text-slate-400">
-            💡 計算題通常出 6～8 題；字數較多的應用題則精選 4～5 題
+            💡 計算題通常出 6～8 題；含圖或字數較多的應用題精選 4～5 題並嚴格驗算圖形座標
           </p>
         </div>
 
@@ -302,9 +302,9 @@
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
             </svg>
           </div>
-          <h3 class="text-lg font-bold text-slate-900 mb-1">Gemini 正在解析數學題並生成類似題...</h3>
+          <h3 class="text-lg font-bold text-slate-900 mb-1">Gemini 正在解析數學題並嚴格驗算圖形與解答...</h3>
           <p id="loadingStatusText" class="text-sm text-slate-500 animate-pulse-soft">
-            正在辨識題目概念、評估字數與設計不同數字的練習題
+            正在辨識題目概念、規劃精確頂點座標並核對圖文一致性
           </p>
           <p id="loadingTimerText" class="text-xs text-slate-400 mt-2 font-mono">已等待 0 秒</p>
           <div class="mt-5">
@@ -836,20 +836,45 @@
     }
 
     /**
+     * Client-side consistency audit: verify that region labels (甲、乙、丙、丁) mentioned in questionText
+     * actually appear inside the SVG <text> elements so missing labels are caught immediately.
+     */
+    function auditDiagramLabels(questionText, cleanSvgStr) {
+      if (!cleanSvgStr || !questionText) return [];
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(cleanSvgStr, 'image/svg+xml');
+        const svgTexts = Array.from(doc.querySelectorAll('text'))
+          .map((el) => (el.textContent || '').trim())
+          .join(' ');
+
+        const missing = [];
+        ['甲', '乙', '丙', '丁'].forEach((label) => {
+          if (questionText.includes(label) && !svgTexts.includes(label)) {
+            missing.push(label);
+          }
+        });
+        return missing;
+      } catch (_) {
+        return [];
+      }
+    }
+
+    /**
      * Build a shuffled pool of genuinely diverse 360° rotations, 90°/270° orientation swaps, and mirror flips
      */
     function buildDiverseTransformPool(count) {
       const presets = [
+        { angle: 0, flipX: 1, flipY: 1 },     // 原方向（保留一題正向方便對照）
         { angle: 90, flipX: 1, flipY: 1 },    // 橫變直 / 直變橫 (90°)
-        { angle: 45, flipX: 1, flipY: 1 },    // 斜置 45°
         { angle: 180, flipX: 1, flipY: 1 },   // 上下顛倒 180°
-        { angle: -35, flipX: -1, flipY: 1 },  // 鏡像 + 斜轉 -35°
-        { angle: 270, flipX: 1, flipY: 1 },   // 橫變直 / 直變橫 (270°)
-        { angle: 135, flipX: 1, flipY: 1 },   // 斜置 135°
         { angle: 0, flipX: -1, flipY: 1 },    // 左右鏡像
-        { angle: -60, flipX: 1, flipY: -1 },  // 上下翻轉 + 斜置 -60°
+        { angle: 270, flipX: 1, flipY: 1 },   // 橫變直 / 直變橫 (270°)
+        { angle: 45, flipX: 1, flipY: 1 },    // 斜置 45°
+        { angle: -35, flipX: -1, flipY: 1 },  // 鏡像 + 斜轉 -35°
+        { angle: 135, flipX: 1, flipY: 1 },   // 斜置 135°
       ];
-      // Fisher-Yates shuffle so every generation produces fresh orientations
+      // Shuffle all presets so orientations vary across generations
       for (let i = presets.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [presets[i], presets[j]] = [presets[j], presets[i]];
@@ -895,11 +920,11 @@
         const svgEl = doc.querySelector('svg');
         if (!svgEl || doc.querySelector('parsererror')) return cleanSvgStr;
 
-        const vbParts = (svgEl.getAttribute('viewBox') || '0 0 300 200').trim().split(/[\s,]+/).map(Number);
+        const vbParts = (svgEl.getAttribute('viewBox') || '0 0 320 220').trim().split(/[\s,]+/).map(Number);
         const vx = Number.isFinite(vbParts[0]) ? vbParts[0] : 0;
         const vy = Number.isFinite(vbParts[1]) ? vbParts[1] : 0;
-        const vw = Number.isFinite(vbParts[2]) && vbParts[2] > 0 ? vbParts[2] : 300;
-        const vh = Number.isFinite(vbParts[3]) && vbParts[3] > 0 ? vbParts[3] : 200;
+        const vw = Number.isFinite(vbParts[2]) && vbParts[2] > 0 ? vbParts[2] : 320;
+        const vh = Number.isFinite(vbParts[3]) && vbParts[3] > 0 ? vbParts[3] : 220;
 
         const cx = vx + vw / 2;
         const cy = vy + vh / 2;
@@ -940,7 +965,7 @@
         // Expand viewBox to prevent clipping when rotated 45°, 90°, 135°, 270°, etc.
         const normAngle = ((angle % 360) + 360) % 360;
         if (normAngle !== 0 && normAngle !== 180) {
-          const diag = Math.ceil(Math.hypot(vw, vh)) + 24;
+          const diag = Math.ceil(Math.hypot(vw, vh)) + 28;
           const newVx = Math.round(cx - diag / 2);
           const newVy = Math.round(cy - diag / 2);
           svgEl.setAttribute('viewBox', `${newVx} ${newVy} ${diag} ${diag}`);
@@ -996,7 +1021,7 @@
           ctx.drawImage(img, 0, 0, targetW, targetH);
 
           // High-clarity JPEG (~80-180KB) uploads and processes much faster than multi-MB PNG
-          const processedDataUrl = canvas.toDataURL('image/jpeg', 0.86);
+          const processedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
           state.imageMimeType = 'image/jpeg';
           state.imageBase64 = processedDataUrl.split(',')[1];
 
@@ -1016,9 +1041,9 @@
     // ==================== Gemini API Calls ====================
 
     /**
-     * Fetch with per-attempt timeout (90s), user cancellation, and exponential backoff
+     * Fetch with per-attempt timeout (110s), user cancellation, and exponential backoff
      */
-    async function fetchWithRetry(url, options, maxRetries = 1, timeoutMs = 90000) {
+    async function fetchWithRetry(url, options, maxRetries = 1, timeoutMs = 110000) {
       let delay = 1000;
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         const timeoutCtrl = new AbortController();
@@ -1075,7 +1100,7 @@
           }
 
           if (timeoutCtrl.signal.reason === 'timeout') {
-            const timeoutErr = new Error('連線逾時（超過 90 秒未收到回應）。建議將出題數量改為「固定 4 題」或重新試一次。');
+            const timeoutErr = new Error('連線逾時（超過 110 秒未收到回應）。建議將出題數量改為「固定 4 題」或重新試一次。');
             timeoutErr.noRetry = true;
             throw timeoutErr;
           }
@@ -1133,6 +1158,7 @@
 
     /**
      * Call Gemini API to analyze the math screenshot and generate 4-8 similar concept problems
+     * with strict geometric topology and coordinate verification
      */
     async function generateSimilarQuestions() {
       if (!state.imageBase64 || state.isGenerating) return;
@@ -1155,9 +1181,9 @@
         elapsedSec++;
         loadingTimerText.textContent = `已等待 ${elapsedSec} 秒`;
         if (elapsedSec === 4) {
-          loadingStatusText.textContent = 'Gemini 正在設計同概念題目與對應圖形，請稍候...';
-        } else if (elapsedSec === 15) {
-          loadingStatusText.textContent = '題目較複雜或含圖形繪製，正在整理格式中...';
+          loadingStatusText.textContent = 'Gemini 正在驗算數學條件與精確幾何座標，請稍候...';
+        } else if (elapsedSec === 16) {
+          loadingStatusText.textContent = '正在核對每張 SVG 圖形與文字標註是否 100% 一致...';
         }
       }, 1000);
 
@@ -1167,26 +1193,34 @@
       const countInstruction =
         selectedMode === 'auto'
           ? `請依據圖片中題目的字數、複雜度與是否含圖智慧決定出題數量（4 到 8 題）：
-             - 若原題【包含圖形】，請精選 4 題（確保圖文清晰且生成快速）。
-             - 若原題為純文字且字數少、基礎計算題，請出 6 到 8 題。
-             - 若原題為純文字且字數多的應用題，請出 4 到 5 題。`
+- 若原題【包含圖形】，請精選 4 題（確保幾何座標精確驗算且圖文完全一致）。
+- 若原題為純文字且字數少、基礎計算題，請出 6 到 8 題。
+- 若原題為純文字且字數多的應用題，請出 4 到 5 題。`
           : `請固定生成恰好 ${selectedMode} 題類似題（recommendedCount 請填 ${selectedMode}）。`;
 
-      const systemPrompt = `你是台灣數學老師，請解析截圖中的數學題核心概念，生成「概念相同、數字與情境不同」的類似練習題。
+      const systemPrompt = `你是嚴謹的台灣數學命題老師，請解析截圖中的數學題核心概念，生成「概念相同、數字與比例不同、幾何與數學絕對正確」的類似練習題。
 
-規則：
-1. 使用繁體中文，每題數字不同、答案精確唯一，數學式用 $...$。
+【嚴格命題與幾何繪圖守則】
+1. 使用繁體中文，每題數字不同、已知條件充分且無矛盾、答案精確唯一，數學式用 $...$。
 2. answer 填最簡純文字（不含單位與 $），單位放 unit，等價答案放 acceptableAnswers。
-3. hint 限 1 句；explanation 簡潔 2～3 行。
-4. 若原題有幾何圖、陰影、角度、數線或圖表，設 hasDiagram=true；若圖形屬於幾何形狀／面積／角度／多邊形／圓形（旋轉翻轉後仍完全合理），設 allowFreeRotation=true；若為座標平面、數線、長條圖或折線圖，設 allowFreeRotation=false。
-5. 含圖題每題給精簡 SVG（<svg viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg">...</svg>，12 個元素內，stroke="#1e293b" stroke-width="2"，陰影 fill="#c7d2fe" fill-opacity="0.7"，所有 <text> 標註請加上 text-anchor="middle" font-size="14" font-weight="600" fill="#0f172a"）。每題圖形的長寬比例、切割位置或形狀細節要盡量變化；且題目文字請用「如圖所示」或頂點代號（如 A、B、C、D），避免寫死「左上方／最底下」，因為系統會自動對圖形進行 360° 旋轉、橫直轉換與鏡像翻轉。若無圖則 hasDiagram=false、allowFreeRotation=false、svgDiagram=""。
-6. ${countInstruction}`;
+3. hint 限 1 句；explanation 清楚寫出驗算步驟（2～4 行）。
+4. 若原題有幾何圖、分割圖、陰影、角度、數線或圖表，設 hasDiagram=true；若圖形屬於幾何形狀／面積／角度／多邊形／圓形（旋轉翻轉後仍完全合理），設 allowFreeRotation=true；若為座標平面、數線、長條圖或折線圖，設 allowFreeRotation=false。
+5. 【幾何拓樸絕對守恆（最重要！）】：
+   - 嚴禁亂改分割線的拓樸連接關係！若題目文字寫「三角形」，SVG 畫出來的那一塊就必須是精確的三邊形（線段端點必須剛好接到外框的頂點，絕不可畫成四邊形或梯形）；若寫「梯形」就必須有恰一組平行邊與四個頂點；若寫「平行四邊形」就必須兩組對邊完全平行（上下底偏移量完全相等）。
+   - 每個區域請優先使用獨立的 <polygon points="..."/> 精確定義頂點座標，再繪製外框或輔助線，這樣能確保邊數與圖形名稱 100% 吻合。
+   - **禁止漏標**：題目文字中提到的**每一個**區域代號（例如甲、乙、丙、丁）、頂點字母（A、B、C、D）以及所有已知邊長／高／角度數值，**全部**必須出現在 SVG 的 <text> 元素中，且位置必須在對應區域的重心（正中央）或對應邊的外側中點，絕不可遺漏或重疊。
+   - SVG 畫布統一用 <svg viewBox="0 0 320 220" xmlns="http://www.w3.org/2000/svg">...</svg>，四邊留白至少 35px 放數值標註；線條 stroke="#1e293b" stroke-width="2" fill="none"，陰影區用 fill="#c7d2fe" fill-opacity="0.65"，所有 <text> 必須加上 text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#0f172a"。
+   - 變化題目時，請改變「數值大小」與「圖形長寬比例」（且 SVG 邊長比例要大致符合數值大小），但**保持原題的幾何分割拓樸結構**。
+   - 題目文字請用「如圖所示」搭配明確的區域代號（甲、乙、丙）或頂點代號（A、B、C、D），避免寫死「左上方／最底下」，因為系統會提供旋轉與鏡像功能。
+   - 若無圖則 hasDiagram=false、allowFreeRotation=false、vertexPlan=""、svgDiagram=""。
+6. 生成每題前，必須先在 vertexPlan 欄位寫出：(a) 外框與分割線的精確座標、(b) 確認每個區域的實際形狀（幾邊形）與題目文字名稱完全一致、(c) 列出所有會出現在 SVG 裡的 <text> 標註清單並確認與題目文字 100% 對應。
+7. ${countInstruction}`;
 
-      const userPrompt = `解析此數學題截圖（${width}×${height} px, ${sizeKB} KB），生成同概念類似題；若原題有圖，每題附不同比例與結構變化的精簡 SVG。`;
+      const userPrompt = `解析此數學題截圖（${width}×${height} px, ${sizeKB} KB），先看清楚原題每個區域的形狀與分割線接點，再生成同概念類似題。若原題有圖，請在每題的 vertexPlan 精確計算頂點座標並核對所有形狀名稱與標註（甲、乙、丙與邊長數字）無任何遺漏或矛盾後，再輸出對應的 SVG。`;
 
       const buildPayload = (modelName) => {
         const genConfig = {
-          maxOutputTokens: 8192,
+          maxOutputTokens: 12288,
           responseMimeType: 'application/json',
           responseSchema: {
             type: 'OBJECT',
@@ -1221,13 +1255,17 @@
                   type: 'OBJECT',
                   properties: {
                     id: { type: 'INTEGER' },
+                    vertexPlan: {
+                      type: 'STRING',
+                      description: '若 hasDiagram 為 true，在此先精確規劃 SVG 頂點座標、核對每個分割區域的邊數與圖形名稱（三角形/平行四邊形/梯形等）是否完全一致，並列出所有必須標註的代號與數字清單；若無圖則為空字串',
+                    },
                     questionText: {
                       type: 'STRING',
-                      description: '類似題目敘述，數學式請用 $...$ 包覆',
+                      description: '類似題目敘述（數學式用 $...$ 包覆），提到的所有圖形名稱與代號必須與 vertexPlan 及 svgDiagram 100% 一致',
                     },
                     svgDiagram: {
                       type: 'STRING',
-                      description: '若 hasDiagram 為 true，為此題繪製的完整 <svg viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg">...</svg> 向量圖（每題變化長寬比例與結構細節，<text> 加 text-anchor="middle"）；若無圖則為空字串',
+                      description: '若 hasDiagram 為 true，嚴格依照 vertexPlan 繪製的完整 <svg viewBox="0 0 320 220" xmlns="http://www.w3.org/2000/svg">...</svg> 向量圖（包含題目提到的所有區域代號與數值 <text>）；若無圖則為空字串',
                     },
                     hint: {
                       type: 'STRING',
@@ -1253,6 +1291,7 @@
                   },
                   required: [
                     'id',
+                    'vertexPlan',
                     'questionText',
                     'svgDiagram',
                     'hint',
@@ -1276,9 +1315,9 @@
           },
         };
 
-        // Only Gemini 3 models support thinkingLevel
+        // Use medium thinking level for Gemini 3 models so geometry coordinates & math logic are verified
         if (modelName.startsWith('gemini-3')) {
-          genConfig.thinkingConfig = { thinkingLevel: 'low' };
+          genConfig.thinkingConfig = { thinkingLevel: 'medium' };
         }
 
         return {
@@ -1446,6 +1485,13 @@
           : '';
 
         const cleanSvg = sanitizeSvg(q.svgDiagram);
+        const missingLabels = auditDiagramLabels(q.questionText, cleanSvg);
+        const missingWarnHtml = missingLabels.length > 0
+          ? `<div class="mt-1.5 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1 inline-flex items-center gap-1">
+               <span>⚠️ 系統偵測圖中可能缺少標註「${escapeHtml(missingLabels.join('、'))}」，建議點上方「再出一組新數字」重繪</span>
+             </div>`
+          : '';
+
         const transformedSvg = cleanSvg ? applySvgTransform(cleanSvg, state.diagramTransforms[idx]) : '';
         const transformControlsHtml = cleanSvg && canRotate
           ? `<div class="flex flex-wrap items-center justify-between gap-2 mt-1.5 max-w-md text-[11px] text-slate-500">
@@ -1465,6 +1511,7 @@
           ? `<div class="my-2">
                <div id="diagram-box-${idx}" class="math-diagram-box max-w-md">${transformedSvg}</div>
                ${transformControlsHtml}
+               ${missingWarnHtml}
              </div>`
           : '';
 
