@@ -232,9 +232,15 @@
               <p class="text-xs text-slate-400 mt-1">也可以在網頁任何地方直接按貼上（支援 PNG、JPG、WebP）</p>
             </div>
             <div class="mt-2 flex flex-wrap items-center justify-center gap-2">
-              <span class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-xs font-medium">📋 剪貼簿貼上</span>
-              <span class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-xs font-medium">🖱️ 拖移放開</span>
-              <span class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-xs font-medium">📁 選取檔案</span>
+              <button
+                id="pasteClipboardBtn"
+                type="button"
+                class="pointer-events-auto px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 text-xs font-semibold transition-colors"
+              >
+                📋 從剪貼簿貼上截圖
+              </button>
+              <span class="px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-medium">🖱️ 拖移放開</span>
+              <span class="px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-xs font-medium">📁 點擊選取檔案</span>
             </div>
           </div>
         </div>
@@ -1392,9 +1398,9 @@
     - 例如單一數值「48 平方公分」→ answerFields: [{ prefix: "", answer: "48", acceptableAnswers: [], suffix: "平方公分" }]
   - 同時保留 answer（完整參考答案純文字）與 unit（若為複名數可留空）。
 4. 【先算詳解、再填答案（絕對不可矛盾！）】：
-  - 每一題都必須**先寫出完整的 `explanation`**（2～4 行，逐一驗算每個選項或計算步驟，並在最後一句明確寫出唯一結論，例如「故選項 3 錯誤」）。
-  - 接著**嚴格依照 `explanation` 的最終結論**填寫 `answerFields` 與 `answer`，確保「圖形、題幹、詳解、標準答案」四者 100% 一致，絕不可發生詳解寫 ③ 錯誤、答案卻填 2 的矛盾！
-  - `hint` 限 1 句，只給思考方向不暴雷答案。
+  - 每一題都必須**先寫出完整的 explanation**（2～4 行，逐一驗算每個選項或計算步驟，並在最後一句明確寫出唯一結論，例如「故選項 3 錯誤」）。
+  - 接著**嚴格依照 explanation 的最終結論**填寫 answerFields 與 answer，確保「圖形、題幹、詳解、標準答案」四者 100% 一致，絕不可發生詳解寫 ③ 錯誤、答案卻填 2 的矛盾！
+  - hint 限 1 句，只給思考方向不暴雷答案。
 5. 若原題有幾何圖、分割圖、陰影、角度、數線、線段圖或圖表，設 hasDiagram=true；若圖形屬於幾何形狀／面積／角度／多邊形／圓形（旋轉翻轉後仍完全合理），設 allowFreeRotation=true；若為座標平面、數線、線段比較圖、條狀圖、長條圖或折線圖，設 allowFreeRotation=false。
 6. 【幾何拓樸與線段圖絕對精確守則（最重要！）】：
   - **嚴禁配色洩題**：凡是選擇題（①②③④）或「找出錯誤／正確」的題目，**所有選項的線段或圖形必須使用完全相同的顏色與線寬**（例如全部統一用 stroke="#2563eb" 或 "#1e293b"），**絕對禁止**將錯誤選項或正確答案畫成紅色或與其他選項不同的顏色！
@@ -2383,13 +2389,48 @@
 
     // ==================== Drag, Drop, File Select & Global Paste Events ====================
 
-    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('click', (e) => {
+      if (e.target.closest('#pasteClipboardBtn')) return;
+      fileInput.click();
+    });
     dropZone.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         fileInput.click();
       }
     });
+
+    const pasteClipboardBtn = document.getElementById('pasteClipboardBtn');
+    if (pasteClipboardBtn) {
+      pasteClipboardBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (navigator.clipboard && typeof navigator.clipboard.read === 'function') {
+          try {
+            const clipItems = await navigator.clipboard.read();
+            for (const clipItem of clipItems) {
+              const imgType = clipItem.types.find((t) => t.startsWith('image/'));
+              if (imgType) {
+                const blob = await clipItem.getType(imgType);
+                const ext = imgType.split('/')[1] || 'png';
+                const file = new File([blob], `pasted-math.${ext}`, { type: imgType });
+                showToast('已從剪貼簿讀取截圖，開始解析題目！', 'info');
+                handleImageFile(file);
+                return;
+              }
+            }
+            showToast('剪貼簿裡目前沒有圖片喔，請先截圖（Win+Shift+S / Cmd+Ctrl+Shift+4）', 'warning');
+            return;
+          } catch (err) {
+            // In sandboxed iframe environments, Clipboard API read() may be blocked; focus dropZone for Ctrl+V
+            dropZone.focus();
+            showToast('已聚焦上傳區，請直接按 Ctrl+V（Mac 按 ⌘V）貼上，或拖移／選取檔案', 'info');
+            return;
+          }
+        }
+        dropZone.focus();
+        showToast('請直接按 Ctrl+V（Mac 按 ⌘V）貼上截圖，或拖移／選取檔案', 'info');
+      });
+    }
 
     fileInput.addEventListener('change', (e) => {
       if (e.target.files && e.target.files[0]) {
@@ -2415,27 +2456,27 @@
     });
 
     dropZone.addEventListener('drop', (e) => {
-      const files = e.dataTransfer?.files;
-      if (files && files.length > 0) {
-        handleImageFile(files[0]);
-      }
-    });
+    document.addEventListener('paste', (e) => {
+      const cb = e.clipboardData;
+      if (!cb) return;
 
-    window.addEventListener('dragover', (e) => e.preventDefault());
-    window.addEventListener('drop', (e) => {
-      e.preventDefault();
-      if (e.target.closest('#dropZone')) return;
-      const files = e.dataTransfer?.files;
-      if (files && files.length > 0 && files[0].type.startsWith('image/')) {
-        handleImageFile(files[0]);
+      // 1. Check clipboardData.files first (more reliable on some Windows/Mac screenshot tools)
+      if (cb.files && cb.files.length > 0) {
+        for (const file of cb.files) {
+          if (file.type.startsWith('image/')) {
+            e.preventDefault();
+            showToast('已偵測到剪貼簿截圖，開始解析題目！', 'info');
+            handleImageFile(file);
+            return;
+          }
+        }
       }
-    });
 
-    window.addEventListener('paste', (e) => {
-      const items = e.clipboardData?.items;
+      // 2. Fallback to clipboardData.items
+      const items = cb.items;
       if (!items) return;
       for (const item of items) {
-        if (item.type.startsWith('image/')) {
+        if (item.kind === 'file' && item.type.startsWith('image/')) {
           e.preventDefault();
           const file = item.getAsFile();
           if (file) {
