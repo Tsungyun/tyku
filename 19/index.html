@@ -1372,6 +1372,24 @@
       const selectedMode = countModeSelect.value;
       const { width, height, sizeKB } = state.imageMeta;
 
+      // 程式端預先洗牌生成均勻分散且不連續重複的選擇題答案位置（1～4），杜絕 AI 偷懶全放選項 4
+      const shuffleFour = () => {
+        const arr = [1, 2, 3, 4];
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+      };
+      const firstBatch = shuffleFour();
+      const secondBatch = shuffleFour();
+      if (secondBatch[0] === firstBatch[3]) {
+        [secondBatch[0], secondBatch[1]] = [secondBatch[1], secondBatch[0]];
+      }
+      const choiceTargetPlan = [...firstBatch, ...secondBatch]
+        .map((ans, i) => `第${i + 1}題→選項${ans}`)
+        .join('、');
+
       const countInstruction =
         selectedMode === 'auto'
           ? `請依據圖片中題目的字數、複雜度與是否含圖智慧決定出題數量（4 到 8 題）：
@@ -1386,6 +1404,10 @@
 1. 使用繁體中文，每題數字不同、已知條件充分且無矛盾、答案精確唯一，數學式用 $...$。請勿使用 Markdown 粗體符號（不要寫 **錯誤**，直接寫「錯誤」即可）。
 2. 【題幹完整性與選擇題強制規範（極重要！）】：
   - **嚴禁漏寫選項條件**：凡是包含 ①②③④ 的選擇題或多人比較題，**questionText 必須逐一完整列出 ①、②、③、④ 每個選項對應的完整數學算式或條件**（例如：「下列四位同學分別畫出不同算式的圖示：① 小安畫 $1 \\times 1$ 條、② 小芸畫 $1 \\times \\frac{1}{3}$ 條、③ 小和畫 $1 \\times \\frac{4}{3}$ 條、④ 小明畫 $1 \\times \\frac{5}{3}$ 條。請問哪一個選項所畫出的圖示錯誤？」），**絕對不可只寫人名卻漏掉算式**！
+  - **強制打散正確選項位置（嚴禁全部放在選項 4！）**：若本題型為 4 選 1 選擇題，**絕對禁止**每題都把正確答案或錯誤選項放在 ④！請嚴格依照系統隨機分配的選項位置命題：${choiceTargetPlan}（依實際題數對應套用，確保 ①②③④ 均勻分布）。
+  - **具鑑別度的真實迷思誘答（嚴禁離譜送分錯項！）**：若是找錯題或圖示比較題，錯誤選項**絕對不可**畫得與正確長度相差太誇張（例如應畫 3 格卻畫成 8 格，讓人一眼秒殺）。錯誤選項必須貼近學生的真實迷思概念，且視覺誤差精巧：
+    - 線段／格數類型的錯誤選項，與正確格數的差距請控制在 **±1 格**（最多不超過 ±2 格），或是反映真實計算迷思（例如把 $\\frac{2}{3}$ 未通分直接看分子畫 2 格、帶分數漏算整數部分、或基準未換算成 1 條）。
+    - **禁止**總是把最長或最短的那一條當作錯誤選項，各選項長度須自然錯落。
   - **角色不重複**：基準圖示與下方四位同學的人名不可重複混淆。
   - **問法與數字鍵盤對齊**：選擇題請明確問「請問哪一個選項（填 1～4）...」，並將 answerFields 設為 [{ prefix: "選項", answer: "1~4其中一個數字", acceptableAnswers: [], suffix: "" }]，切勿只問「請問誰...」卻不給編號，避免學生困惑是否要輸入人名。
 3. 【觸控友善分格作答（極重要！）】：
@@ -1416,7 +1438,7 @@
 7. 生成每題前，必須先在 vertexPlan 欄位寫出：(a) 精確座標計算（若是線段比較圖，必須明確列出共用起點 x0、每格寬度 u、基準線與各選項 ①②③④ 的精確起終點 x0 到 x1 並確認沒有使用不同顏色洩題；若是幾何多邊形，列出外框與分割線頂點座標並確認邊數與圖形名稱完全一致）、(b) 列出所有會出現在 SVG 裡的 <text> 標註清單、(c) **可解性自檢**：確認僅看 questionText 與 svgDiagram（不看詳解），所有選項算式與已知條件皆已完整寫出且能推出唯一答案。
 8. ${countInstruction}`;
 
-      const userPrompt = `解析此數學題截圖（${width}×${height} px, ${sizeKB} KB），先看清楚原題每個區域的形狀與分割線接點，再生成同概念類似題。若原題有圖，請在每題的 vertexPlan 精確計算頂點座標並核對所有形狀名稱與標註（甲、乙、丙與邊長數字）無任何遺漏或矛盾後，再輸出對應的 SVG。`;
+      const userPrompt = `解析此數學題截圖（${width}×${height} px, ${sizeKB} KB），先看清楚原題每個區域的形狀與分割線接點，再生成同概念類似題。若原題為選擇題，請務必嚴格依照系統指定的答案位置分散命題（${choiceTargetPlan}），並設計具鑑別度、差距精巧（如僅差 1 格或真實計算迷思）的錯誤選項，嚴禁每題都把答案放在選項 4 或畫出離譜長度的送分題。若原題有圖，請在每題的 vertexPlan 精確計算頂點座標並核對所有形狀名稱與標註（甲、乙、丙與邊長數字）無任何遺漏或矛盾後，再輸出對應的 SVG。`;
 
       const buildPayload = (modelName) => {
         const genConfig = {
