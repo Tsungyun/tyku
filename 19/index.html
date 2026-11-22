@@ -907,6 +907,38 @@
     }
 
     /**
+     * Client-side self-consistency audit for choice questions (1~4):
+     * Detect if explanation explicitly concludes a different choice number than answerFields.
+     */
+    function auditChoiceAnswerConsistency(q, resolvedFields) {
+      if (!q || !q.explanation || !Array.isArray(resolvedFields) || resolvedFields.length !== 1) {
+        return null;
+      }
+      const ans = String(resolvedFields[0].answer || '').trim();
+      if (!/^[1-4]$/.test(ans)) return null;
+
+      const circleMap = { '①': '1', '②': '2', '③': '3', '④': '4' };
+      const exp = String(q.explanation);
+
+      // Match patterns like "③ ... 故錯誤" or "故選 ③" or "答案為 (3)"
+      const conclusionPatterns = [
+        /([①②③④])[^。；\n]{0,40}(?:故錯誤|為錯誤|是錯誤|畫錯|不正確|故選|為正確答案)/,
+        /(?:故選|答案為|正確答案為|應選|選項)\s*[（(]?\s*([1-4①②③④])\s*[）)]?/,
+      ];
+
+      for (const regex of conclusionPatterns) {
+        const m = exp.match(regex);
+        if (m && m[1]) {
+          const detected = circleMap[m[1]] || m[1];
+          if (/^[1-4]$/.test(detected) && detected !== ans) {
+            return `詳解結論疑似指向選項 ${detected}，但標準答案欄為 ${ans}`;
+          }
+        }
+      }
+      return null;
+    }
+
+    /**
      * Resolve structured answer input fields for a question so compound units (e.g. 小時+分鐘, 公尺+公分, 商+餘)
      * ALWAYS render as separate pure-number input boxes for touchscreens & numeric keypads.
      */
@@ -1359,7 +1391,10 @@
     - 例如「商 7 餘 3」→ answerFields: [{ prefix: "商", answer: "7", acceptableAnswers: [], suffix: "" }, { prefix: "餘", answer: "3", acceptableAnswers: [], suffix: "" }]
     - 例如單一數值「48 平方公分」→ answerFields: [{ prefix: "", answer: "48", acceptableAnswers: [], suffix: "平方公分" }]
   - 同時保留 answer（完整參考答案純文字）與 unit（若為複名數可留空）。
-4. hint 限 1 句；explanation 清楚寫出驗算步驟（2～4 行）。
+4. 【先算詳解、再填答案（絕對不可矛盾！）】：
+  - 每一題都必須**先寫出完整的 `explanation`**（2～4 行，逐一驗算每個選項或計算步驟，並在最後一句明確寫出唯一結論，例如「故選項 3 錯誤」）。
+  - 接著**嚴格依照 `explanation` 的最終結論**填寫 `answerFields` 與 `answer`，確保「圖形、題幹、詳解、標準答案」四者 100% 一致，絕不可發生詳解寫 ③ 錯誤、答案卻填 2 的矛盾！
+  - `hint` 限 1 句，只給思考方向不暴雷答案。
 5. 若原題有幾何圖、分割圖、陰影、角度、數線、線段圖或圖表，設 hasDiagram=true；若圖形屬於幾何形狀／面積／角度／多邊形／圓形（旋轉翻轉後仍完全合理），設 allowFreeRotation=true；若為座標平面、數線、線段比較圖、條狀圖、長條圖或折線圖，設 allowFreeRotation=false。
 6. 【幾何拓樸與線段圖絕對精確守則（最重要！）】：
   - **嚴禁配色洩題**：凡是選擇題（①②③④）或「找出錯誤／正確」的題目，**所有選項的線段或圖形必須使用完全相同的顏色與線寬**（例如全部統一用 stroke="#2563eb" 或 "#1e293b"），**絕對禁止**將錯誤選項或正確答案畫成紅色或與其他選項不同的顏色！
@@ -1430,19 +1465,23 @@
                       type: 'STRING',
                       description: '給學生的簡短解題提示',
                     },
+                    explanation: {
+                      type: 'STRING',
+                      description: '【請先寫此欄再填答案】清楚的逐步驗算詳解（數學式用 $...$），最後明確寫出唯一答案結論',
+                    },
                     answerFields: {
                       type: 'ARRAY',
-                      description: '作答輸入格陣列。複名數（如小時+分鐘、公尺+公分、公斤+公克）或商與餘數必須拆成多個物件，讓學生每格只需輸入純數字或數學符號',
+                      description: '作答輸入格陣列，必須與上方 explanation 的最終結論 100% 一致。複名數或商與餘數必須拆成多個物件，讓學生每格只需輸入純數字或數學符號',
                       items: {
                         type: 'OBJECT',
                         properties: {
                           prefix: {
                             type: 'STRING',
-                            description: '輸入框前面的文字標籤（例如 "商"、"餘"、"x="，無則空字串）',
+                            description: '輸入框前面的文字標籤（例如 "商"、"餘"、"選項"、"x="，無則空字串）',
                           },
                           answer: {
                             type: 'STRING',
-                            description: '此格最簡純數字或數學式答案（絕不可含中文單位與 $）',
+                            description: '此格最簡純數字或數學式答案（必須與 explanation 結論完全一致，絕不可含中文單位與 $）',
                           },
                           acceptableAnswers: {
                             type: 'ARRAY',
@@ -1459,7 +1498,7 @@
                     },
                     answer: {
                       type: 'STRING',
-                      description: '完整參考答案純文字（不含 $）',
+                      description: '完整參考答案純文字（不含 $，必須與 explanation 及 answerFields 完全一致）',
                     },
                     acceptableAnswers: {
                       type: 'ARRAY',
@@ -1470,22 +1509,30 @@
                       type: 'STRING',
                       description: '單一單位（若已透過 answerFields 拆成多格複名數，此欄請留空字串）',
                     },
-                    explanation: {
-                      type: 'STRING',
-                      description: '清楚的逐步解題詳解（數學式用 $...$）',
-                    },
                   },
+                  propertyOrdering: [
+                    'id',
+                    'vertexPlan',
+                    'questionText',
+                    'svgDiagram',
+                    'hint',
+                    'explanation',
+                    'answerFields',
+                    'answer',
+                    'acceptableAnswers',
+                    'unit',
+                  ],
                   required: [
                     'id',
                     'vertexPlan',
                     'questionText',
                     'svgDiagram',
                     'hint',
+                    'explanation',
                     'answerFields',
                     'answer',
                     'acceptableAnswers',
                     'unit',
-                    'explanation',
                   ],
                 },
               },
@@ -1705,12 +1752,16 @@
         const cleanSvg = sanitizeSvg(q.svgDiagram);
         const missingLabels = auditDiagramLabels(q.questionText, cleanSvg);
         const missingChoiceText = auditMissingChoiceText(q.questionText, cleanSvg);
+        const answerConflict = auditChoiceAnswerConsistency(q, fields);
         const auditWarnings = [];
         if (missingLabels.length > 0) {
           auditWarnings.push(`圖中可能缺少標註「${missingLabels.join('、')}」`);
         }
         if (missingChoiceText) {
           auditWarnings.push('題幹可能漏寫了 ①②③④ 各選項的算式或條件');
+        }
+        if (answerConflict) {
+          auditWarnings.push(answerConflict);
         }
         const missingWarnHtml = auditWarnings.length > 0
           ? `<div class="mt-1.5 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1 inline-flex items-center gap-1">
@@ -1737,7 +1788,6 @@
           ? `<div class="my-2">
                <div id="diagram-box-${idx}" class="math-diagram-box max-w-md">${transformedSvg}</div>
                ${transformControlsHtml}
-               ${missingWarnHtml}
              </div>`
           : '';
 
@@ -1751,6 +1801,7 @@
                 ${formatMathText(q.questionText)}
               </div>
               ${diagramHtml}
+              ${missingWarnHtml}
 
               <div class="flex flex-wrap items-center gap-2 pt-1">
                 <label for="ans-input-${idx}-0" class="text-xs font-semibold text-slate-500 shrink-0">答：</label>
