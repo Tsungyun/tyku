@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>成語填充互動教學＆考卷產生器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 定義台灣教育標準楷體 */
+        .font-kai {
+            font-family: 'BiauKai', 'DFKai-SB', 'Kaiti TC', 'Kaiti', 'TW-Kai', '楷體', serif;
+        }
+
+        /* A4 考卷頁面設定（邊界盡量縮小以放大內容區） */
+        .a4-page {
+            width: 210mm;
+            height: 297mm;
+            padding: 8mm 10mm;
+            background: white;
+            margin: 20px auto;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+            page-break-after: always;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* 列印模式下隱藏所有互動介面，確保印滿 A4 */
+        @page {
+            size: A4 portrait;
+            margin: 0;
+        }
+
+        @media print {
+            body {
+                background: white !important;
+            }
+            .no-print {
+                display: none !important;
+            }
+            #preview-view {
+                display: block !important;
+                padding: 0 !important;
+            }
+            .a4-page {
+                margin: 0;
+                box-shadow: none;
+                border: none;
+                padding: 8mm 10mm;
+                width: 210mm;
+                height: 297mm;
+                overflow: hidden;
+            }
+        }
+
+        /* A4 紙本考卷：讓學生直接手寫四字成語的超寬大括號 */
+        .idiom-bracket {
+            display: inline-flex;
+            align-items: baseline;
+            white-space: nowrap;
+            margin: 0 1px;
+        }
+        .idiom-space {
+            display: inline-block;
+            min-width: 8em; /* 預留寬裕手寫空間 */
+            text-align: center;
+            padding: 0 4px;
+        }
+
+        /* 紙本成語參考區外框 */
+        .word-bank-box {
+            border: 2px solid #000;
+            border-radius: 6px;
+            padding: 6px 10px;
+        }
+
+        /* 網頁互動填空按鈕樣式 */
+        .blank-slot {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 6.5em;
+            padding: 2px 10px;
+            margin: 0 4px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            vertical-align: baseline;
+            user-select: none;
+        }
+
+        /* 超精巧浮動數字小鍵盤動畫 */
+        #mini-keypad {
+            transition: opacity 0.18s ease, transform 0.18s ease;
+            touch-action: none;
+        }
+        #mini-keypad.keypad-hidden {
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(12px) scale(0.95);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-gray-800 min-h-screen flex flex-col">
+
+    <!-- 自訂系統提示框 (不使用原生 alert) -->
+    <div id="alert-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden no-print px-4">
+        <div class="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-gray-100">
+            <h3 class="text-xl font-bold mb-3 text-blue-700 flex items-center gap-2">
+                <span>💡</span> 系統提示
+            </h3>
+            <p id="alert-message" class="mb-6 text-gray-700 whitespace-pre-line leading-relaxed text-base"></p>
+            <div class="flex justify-end">
+                <button onclick="closeAlert()" class="bg-blue-600 text-white px-5 py-2 rounded-xl hover:bg-blue-700 transition font-bold">確定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI 生成中遮罩 -->
+    <div id="loading-modal" class="fixed inset-0 bg-black/70 flex flex-col items-center justify-center z-50 hidden no-print px-4 text-center">
+        <div class="animate-spin rounded-full h-14 w-14 border-t-4 border-b-4 border-blue-400 mb-5"></div>
+        <h3 id="loading-title" class="text-2xl font-bold text-white tracking-widest font-kai">AI 老師正在為您出題中...</h3>
+        <p id="loading-desc" class="text-gray-200 mt-2 text-base">系統正從 12 個成語中隨機挑選 10 個並撰寫全新例句，請稍候約 5～10 秒。</p>
+    </div>
+
+    <!-- ==================== 主畫面：互動教學與作答區 (列印時隱藏) ==================== -->
+    <div id="main-view" class="flex-1 no-print pb-24">
+        <!-- 頂部功能導覽列 -->
+        <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+            <div class="container mx-auto max-w-6xl px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-2.5">
+                    <span class="text-2xl">📝</span>
+                    <div>
+                        <h1 class="text-lg sm:text-xl font-extrabold text-blue-900 leading-tight">成語填充互動練習＆考卷產生器</h1>
+                        <p class="text-xs text-slate-500 hidden sm:block">點擊句子空格開啟迷你數字鍵盤作答，或一鍵匯出 A4 手寫紙本考卷</p>
+                    </div>
+                </div>
+
+                <!-- 核心操作按鈕群 -->
+                <div class="flex flex-wrap items-center gap-2">
+                    <!-- 按鈕 1：同樣 12 個成語，重新生成 10 個新句子 -->
+                    <button onclick="regenerateSameIdioms()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold px-3.5 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5" title="保留目前這 12 個成語，隨機重挑 10 個並生成全新的句子">
+                        <span>🔄</span>
+                        <span>同組12題重出新句</span>
+                    </button>
+
+                    <!-- 按鈕 2：換 12 個全新成語，並生成 10 個句子 -->
+                    <button onclick="generateBrandNewIdioms()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold px-3.5 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5" title="從 500 個不重複題庫中抽出 12 個全新成語，並由 AI 隨機出 10 題">
+                        <span>✨</span>
+                        <span>換12個全新成語出題</span>
+                    </button>
+
+                    <!-- 按鈕 3：匯出 A4 紙本考卷 / PDF -->
+                    <button onclick="openPdfPreview()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold px-3.5 py-2 rounded-xl shadow-sm transition flex items-center gap-1.5">
+                        <span>🖨️</span>
+                        <span>匯出 A4 考卷 / PDF</span>
+                    </button>
+
+                    <!-- 設定 / 手動編輯開關 -->
+                    <button onclick="toggleSettingsPanel()" id="settings-toggle-btn" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold px-3 py-2 rounded-xl border border-slate-300 transition flex items-center gap-1">
+                        <span>⚙️</span>
+                        <span>設定與編輯</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main class="container mx-auto max-w-6xl px-4 mt-4 space-y-5">
+
+            <!-- 可收合的「設定、自訂成語與手動微調區」 -->
+            <section id="settings-panel" class="hidden bg-white rounded-2xl shadow-md border border-slate-200 p-5">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+                    <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <span>⚙️</span> 自訂成語、API 金鑰與手動微調題目
+                    </h2>
+                    <button onclick="toggleSettingsPanel()" class="text-slate-400 hover:text-slate-600 font-bold text-sm px-2 py-1">收合 ▲</button>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- 左側：12 個成語設定與 API 金鑰 -->
+                    <div class="flex flex-col space-y-3">
+                        <div class="flex items-center justify-between">
+                            <label class="text-sm font-bold text-slate-700">目前 12 個成語（可自行修改貼上）</label>
+                            <button onclick="pickRandomIdiomsOnly()" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold px-2.5 py-1 rounded-lg transition">
+                                🎲 僅換 12 個成語
+                            </button>
+                        </div>
+                        <textarea id="idiom-input" class="w-full h-32 border border-slate-300 rounded-xl p-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-kai leading-relaxed" placeholder="請貼上 12 個成語，用頓號、逗號或換行隔開..." spellcheck="false"></textarea>
+                        <div class="flex justify-between items-center text-xs text-slate-500">
+                            <span>不重複題庫剩餘：<strong id="deck-remaining" class="text-indigo-600">500</strong> / <span id="deck-total">500</span></span>
+                            <span>已輸入：<strong id="idiom-count" class="text-blue-600">0</strong> 個</span>
+                        </div>
+
+                        <!-- API 金鑰欄位 -->
+                        <div class="p-3.5 bg-amber-50 rounded-xl border border-amber-200">
+                            <label class="block text-xs font-bold text-amber-900 mb-1">🔑 Gemini API 金鑰（自動記憶於本機）</label>
+                            <p class="text-[11px] text-amber-700 mb-2">
+                                離線單檔使用時請貼上金鑰。
+                                <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-600 underline font-bold hover:text-blue-800">免費取得金鑰</a>
+                            </p>
+                            <input type="password" id="api-key-input" placeholder="請貼上 AIza 開頭的金鑰..." class="w-full border border-amber-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono bg-white">
+                        </div>
+
+                        <button onclick="loadMockData(true)" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 px-3 rounded-xl border border-slate-300 transition text-sm">
+                            📋 載入內建範例題目（免金鑰測試）
+                        </button>
+                    </div>
+
+                    <!-- 右側：10 題句子手動微調 -->
+                    <div class="lg:col-span-2 flex flex-col">
+                        <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                            <span class="text-sm font-bold text-slate-700">手動微調 10 道題目（答案成語請用 <code class="bg-green-100 text-green-800 px-1 rounded">{成語}</code> 標記）</span>
+                            <button onclick="applyManualEdits()" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-3.5 py-1.5 rounded-lg shadow-sm transition">
+                                ✓ 套用修改到互動畫面
+                            </button>
+                        </div>
+                        <div id="questions-editor" class="space-y-2 max-h-72 overflow-y-auto pr-1">
+                            <!-- JS 動態產生 1~10 題輸入框 -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 上方編號成語參考區（置頂方便作答對照） -->
+            <section class="bg-white rounded-2xl shadow-sm border-2 border-blue-200 p-4 sticky top-[62px] z-20">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="bg-blue-600 text-white text-xs font-bold px-2.5 py-1 rounded-full">成語參考區</span>
+                        <span class="text-xs sm:text-sm text-slate-600 font-medium">共 12 個選項（順序已打亂），請點選下方句子空格，用迷你數字鍵盤選擇編號</span>
+                    </div>
+                    <button onclick="reshuffleBankOrder()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2.5 py-1 rounded-lg font-bold transition">
+                        🔀 重新打亂編號順序
+                    </button>
+                </div>
+
+                <!-- 12 個編號成語格線 -->
+                <div id="interactive-word-bank" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 font-kai">
+                    <!-- JS 動態渲染 1~12 號成語 -->
+                </div>
+            </section>
+
+            <!-- 中間：10 道互動填空題 -->
+            <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6">
+                <div class="flex flex-wrap items-center justify-between gap-3 pb-4 mb-4 border-b border-slate-100">
+                    <div>
+                        <h2 class="text-lg sm:text-xl font-bold text-slate-800 flex items-center gap-2">
+                            <span>✏️</span> 互動填充題（共 10 題）
+                        </h2>
+                        <p class="text-xs text-slate-500 mt-0.5">每題作答完可直接點右側「對答案」，或全部寫完後統一批改</p>
+                    </div>
+                    <!-- 快捷批改與重置列 -->
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span id="score-badge" class="hidden bg-amber-100 text-amber-900 border border-amber-300 font-bold text-sm px-3 py-1.5 rounded-xl">
+                            得分：0 / 100
+                        </span>
+                        <button onclick="checkAllAnswers()" class="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-bold text-xs sm:text-sm px-3 py-1.5 rounded-xl transition">
+                            ✅ 全部對答案
+                        </button>
+                        <button onclick="revealAllSolutions()" class="bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-bold text-xs sm:text-sm px-3 py-1.5 rounded-xl transition">
+                            👁️ 顯示全部解答
+                        </button>
+                        <button onclick="resetAllUserAnswers()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 font-bold text-xs sm:text-sm px-3 py-1.5 rounded-xl transition">
+                            ↺ 清空重作
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 10 題列表容器 -->
+                <div id="interactive-questions-list" class="space-y-3.5">
+                    <!-- JS 動態渲染 1~10 題 -->
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- ==================== 超精巧浮動迷你數字小鍵盤 (不擋畫面) ==================== -->
+    <div id="mini-keypad" class="keypad-hidden fixed bottom-4 right-4 z-40 w-[204px] bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border-2 border-indigo-400 p-2.5 no-print select-none">
+        <!-- 小鍵盤頂部標題列（支援拖曳移動） -->
+        <div id="keypad-drag-handle" class="flex items-center justify-between pb-1.5 mb-2 border-b border-slate-200 cursor-move">
+            <span id="keypad-header-text" class="text-xs font-extrabold text-indigo-700 flex items-center gap-1">
+                <span>🔢</span> 第 1 題選號
+            </span>
+            <button onclick="closeKeypad()" class="w-5 h-5 rounded-full bg-slate-100 hover:bg-red-100 text-slate-500 hover:text-red-600 flex items-center justify-center text-xs font-bold transition" title="關閉小鍵盤">
+                ✕
+            </button>
+        </div>
+
+        <!-- 1 ~ 12 緊湊數字按鈕（4x3） -->
+        <div id="keypad-grid" class="grid grid-cols-4 gap-1.5">
+            <!-- JS 動態產生 1~12 號按鈕 -->
+        </div>
+
+        <!-- 懸停預覽成語名稱（極小一行，方便確認） -->
+        <div id="keypad-hover-preview" class="text-[11px] text-center text-slate-500 font-kai mt-1.5 h-4 truncate">
+            點選編號填入空格
+        </div>
+
+        <!-- 底部快捷操作：清除與下一題 -->
+        <div class="grid grid-cols-2 gap-1.5 mt-1.5 pt-1.5 border-t border-slate-100">
+            <button onclick="clearActiveBlank()" class="bg-slate-100 hover:bg-red-50 hover:text-red-600 text-slate-600 text-xs font-bold py-1 rounded-lg transition">
+                清除
+            </button>
+            <button onclick="focusNextBlank()" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold py-1 rounded-lg transition">
+                下一題 →
+            </button>
+        </div>
+    </div>
+
+    <!-- ==================== A4 考卷預覽與列印區 ==================== -->
+    <div id="preview-view" class="hidden pb-20">
+        <div class="no-print bg-slate-800 text-white p-3.5 sticky top-0 z-40 shadow-md flex flex-wrap justify-between items-center gap-3">
+            <button onclick="closePdfPreview()" class="bg-slate-600 hover:bg-slate-500 px-4 py-2 rounded-xl transition font-bold text-sm sm:text-base">
+                ← 返回互動教學畫面
+            </button>
+            <div class="text-base sm:text-lg font-bold">A4 紙本手寫考卷預覽（共 2 頁：題目版 ＋ 解答版）</div>
+            <button onclick="window.print()" class="bg-emerald-500 hover:bg-emerald-400 text-white font-bold px-5 py-2 rounded-xl shadow transition flex items-center gap-2 text-sm sm:text-base">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                <span>列印考卷 / 存成 PDF</span>
+            </button>
+        </div>
+
+        <div id="print-pages-container" class="font-kai text-black">
+            <!-- JS 動態生成 Page 1 (題目版) 與 Page 2 (解答版) -->
+        </div>
+    </div>
+
+    <!-- 專屬版權宣告頁尾 -->
+    <footer class="text-center text-gray-400 text-sm py-4 tracking-wider no-print">
+        &copy; 谷宗芸老師設計 / AI 輔助生成
+    </footer>
+
+    <script>
+        // =========================================================================
+        // 1. 內建 500 個常用國小/國中成語庫（不重複抽牌機制）
+        // =========================================================================
+        const COMMON_IDIOMS = [
+            // 1. 寓言與歷史典故 (50)
+            "一舉兩得", "半途而廢", "畫蛇添足", "守株待兔", "對牛彈琴", "井底之蛙", "狐假虎威", "亡羊補牢", "刻舟求劍", "掩耳盜鈴",
+            "自相矛盾", "拔苗助長", "塞翁失馬", "水落石出", "愚公移山", "精衛填海", "夸父追日", "望梅止渴", "畫龍點睛", "破釜沉舟",
+            "臥薪嘗膽", "負荊請罪", "完璧歸趙", "三顧茅廬", "草船借箭", "四面楚歌", "紙上談兵", "指鹿為馬", "朝三暮四", "葉公好龍",
+            "濫竽充數", "買櫝還珠", "杞人憂天", "螳臂擋車", "盲人摸象", "杯弓蛇影", "驚弓之鳥", "黔驢技窮", "南轅北轍", "東施效顰",
+            "班門弄斧", "毛遂自薦", "懸梁刺股", "鑿壁偷光", "囊螢映雪", "聞雞起舞", "鐵杵磨針", "程門立雪", "一鳴驚人", "名落孫山",
+
+            // 2. 學習態度與求知 (50)
+            "一目十行", "專心致志", "持之以恆", "事半功倍", "不恥下問", "溫故知新", "循序漸進", "全神貫注", "名列前茅", "全力以赴",
+            "學以致用", "舉一反三", "融會貫通", "博學多聞", "學富五車", "才高八斗", "出口成章", "妙筆生花", "引人入勝", "愛不釋手",
+            "手不釋卷", "開卷有益", "勤能補拙", "水滴石穿", "聚精會神", "目不轉睛", "字斟句酌", "一絲不苟", "實事求是", "精益求精",
+            "教學相長", "青出於藍", "後來居上", "茅塞頓開", "豁然開朗", "恍然大悟", "大徹大悟", "如夢初醒", "百思不解", "一知半解",
+            "囫圇吞棗", "不求甚解", "走馬看花", "生吞活剝", "照本宣科", "按圖索驥", "閉門造車", "坐井觀天", "不學無術", "才疏學淺",
+
+            // 3. 品德修養與團結合作 (50)
+            "雪中送炭", "錦上添花", "同舟共濟", "飲水思源", "知足常樂", "居安思危", "未雨綢繆", "以身作則", "助人為樂", "拾金不昧",
+            "光明磊落", "大公無私", "公而忘私", "捨己為人", "見義勇為", "樂善好施", "古道熱腸", "誠心誠意", "言行一致", "表裡如一",
+            "一諾千金", "言而有信", "信守承諾", "謙虛謹慎", "不卑不亢", "寬宏大量", "寬大為懷", "忍辱負重", "克勤克儉", "勤儉持家",
+            "知恩圖報", "結草銜環", "知過能改", "改過自新", "痛改前非", "浪子回頭", "潔身自愛", "一塵不染", "奉公守法", "安分守己",
+            "百折不撓", "眾志成城", "團結一致", "齊心協力", "同心協力", "萬眾一心", "守望相助", "互通有無", "相輔相成", "集思廣益",
+
+            // 4. 處事智慧與奮鬥成功 (50)
+            "胸有成竹", "從容不迫", "冷靜沉著", "臨危不亂", "泰然自若", "處變不驚", "隨機應變", "見機行事", "因地制宜", "對症下藥",
+            "防微杜漸", "防患未然", "有備無患", "深思熟慮", "三思而行", "謹言慎行", "步步為營", "穩扎穩打", "按部就班", "有條不紊",
+            "井井有條", "條理分明", "輕重緩急", "當機立斷", "斬釘截鐵", "一針見血", "一語道破", "迎刃而解", "化險為夷", "逢凶化吉",
+            "一帆風順", "大功告成", "馬到成功", "如魚得水", "得心應手", "游刃有餘", "旗開得勝", "百戰百勝", "所向披靡", "脫穎而出",
+            "堅持不懈", "鍥而不捨", "再接再厲", "自強不息", "奮發圖強", "力爭上游", "不屈不撓", "勇往直前", "披荊斬棘", "乘風破浪",
+
+            // 5. 喜怒哀樂與神情情緒 (50)
+            "神采奕奕", "興高采烈", "眉開眼笑", "心滿意足", "喜出望外", "欣喜若狂", "手舞足蹈", "歡天喜地", "喜氣洋洋", "樂不可支",
+            "笑容滿面", "笑逐顏開", "開懷大笑", "捧腹大笑", "忍俊不禁", "會心一笑", "迫不及待", "流連忘返", "樂不思蜀", "心花怒放",
+            "垂頭喪氣", "無精打采", "灰心喪氣", "心灰意冷", "悶悶不樂", "鬱鬱寡歡", "愁眉苦臉", "悲痛欲絕", "痛不欲生", "淚流滿面",
+            "大驚小怪", "驚慌失措", "手忙腳亂", "張皇失措", "六神無主", "心驚膽戰", "提心吊膽", "忐忑不安", "坐立難安", "毛骨悚然",
+            "怒氣沖沖", "怒火中燒", "勃然大怒", "火冒三丈", "暴跳如雷", "咬牙切齒", "氣急敗壞", "忍氣吞聲", "啞口無言", "目瞪口呆",
+
+            // 6. 自然風景與四季氣候 (50)
+            "風和日麗", "鳥語花香", "山明水秀", "五顏六色", "萬紫千紅", "春暖花開", "百花齊放", "繁花似錦", "綠意盎然", "生機勃勃",
+            "風光明媚", "風景如畫", "如詩如畫", "美不勝收", "世外桃源", "湖光山色", "青山綠水", "水天一色", "波光粼粼", "水平如鏡",
+            "晴空萬里", "萬里無雲", "風平浪靜", "風調雨順", "電閃雷鳴", "狂風暴雨", "傾盆大雨", "烏雲密布", "天寒地凍", "冰天雪地",
+            "滴水成冰", "寒冬臘月", "秋高氣爽", "天高雲淡", "烈日當空", "驕陽似火", "揮汗如雨", "寒風刺骨", "大雪紛飛", "繁星點點",
+            "月明星稀", "花好月圓", "綠樹成蔭", "懸崖峭壁", "崇山峻嶺", "一望無際", "無邊無際", "波濤洶湧", "驚濤駭浪", "氣勢非凡",
+
+            // 7. 場景氛圍、生活與言語 (50)
+            "川流不息", "車水馬龍", "人山人海", "水洩不通", "摩肩接踵", "絡繹不絕", "熙來攘往", "門庭若市", "萬人空巷", "熱鬧非凡",
+            "鴉雀無聲", "萬籟俱寂", "悄無聲息", "寂靜無聲", "風聲鶴唳", "門可羅雀", "人煙稀少", "荒無人煙", "孤苦伶仃", "形單影隻",
+            "津津有味", "狼吞虎嚥", "細嚼慢嚥", "大快朵頤", "垂涎三尺", "食指大動", "色香味全", "美味佳餚", "山珍海味", "粗茶淡飯",
+            "豐衣足食", "安居樂業", "國泰民安", "家喻戶曉", "舉世聞名", "名揚四海", "無人不知", "司空見慣", "習以為常", "理所當然",
+            "異口同聲", "不約而同", "眾說紛紜", "七嘴八舌", "喋喋不休", "滔滔不絕", "口若懸河", "能言善道", "侃侃而談", "娓娓道來",
+
+            // 8. 溝通表達、人物與親情 (50)
+            "語重心長", "苦口婆心", "循循善誘", "金玉良言", "忠言逆耳", "言簡意賅", "長話短說", "一語雙關", "支支吾吾", "吞吞吐吐",
+            "結結巴巴", "胡說八道", "信口開河", "無中生有", "添油加醋", "誇大其詞", "花言巧語", "油嘴滑舌", "冷言冷語", "惡語傷人",
+            "和藹可親", "平易近人", "溫文儒雅", "風度翩翩", "儀表堂堂", "相貌堂堂", "眉清目秀", "亭亭玉立", "明眸皓齒", "冰清玉潔",
+            "英姿颯爽", "精神抖擻", "容光煥發", "鶴髮童顏", "老當益壯", "健步如飛", "身強體壯", "力大無窮", "弱不禁風", "面黃肌瘦",
+            "天倫之樂", "父慈子孝", "兄友弟恭", "情同手足", "相親相愛", "相依為命", "形影不離", "情深意重", "肝膽相照", "患難與共",
+
+            // 9. 人際交誼、時間變化與數量 (50)
+            "莫逆之交", "忘年之交", "志同道合", "一見如故", "心心相印", "推心置腹", "無話不談", "賓至如歸", "高朋滿座", "門當戶對",
+            "光陰似箭", "歲月如梭", "白駒過隙", "日新月異", "瞬息萬變", "滄海桑田", "物換星移", "時過境遷", "千變萬化", "煥然一新",
+            "爭分奪秒", "分秒必爭", "惜時如金", "刻不容緩", "迫在眉睫", "燃眉之急", "十萬火急", "當務之急", "夜以繼日", "廢寢忘食",
+            "數不勝數", "不計其數", "琳瑯滿目", "應有盡有", "五花八門", "各式各樣", "包羅萬象", "千奇百怪", "無奇不有", "應接不暇",
+            "微不足道", "九牛一毛", "滄海一粟", "鳳毛麟角", "屈指可數", "寥寥無幾", "千載難逢", "獨一無二", "舉世無雙", "無與倫比",
+
+            // 10. 處世警惕、藝術才華與比較 (50)
+            "自私自利", "損人利己", "見利忘義", "忘恩負義", "過河拆橋", "落井下石", "幸災樂禍", "袖手旁觀", "置身事外", "視而不見",
+            "充耳不聞", "熟視無睹", "敷衍了事", "馬馬虎虎", "粗心大意", "丟三落四", "顧此失彼", "得不償失", "因小失大", "本末倒置",
+            "好高騖遠", "眼高手低", "驕傲自滿", "自以為是", "目中無人", "不可一世", "得意忘形", "趾高氣昂", "盛氣凌人", "仗勢欺人",
+            "栩栩如生", "惟妙惟肖", "巧奪天工", "鬼斧神工", "別出心裁", "獨具匠心", "精雕細琢", "餘音繞樑", "動人心弦", "扣人心弦",
+            "一視同仁", "一模一樣", "大同小異", "截然不同", "天壤之別", "南腔北調", "半斤八兩", "旗鼓相當", "勢均力敵", "各有千秋"
+        ];
+
+        const UNIQUE_IDIOMS = [...new Set(COMMON_IDIOMS)];
+        let idiomDeck = [];
+
+        // =========================================================================
+        // 2. 應用程式核心狀態
+        // =========================================================================
+        let currentWordBank = [];    // 12 個成語（已打亂順序，編號 1 ~ 12）
+        let questionsState = [];     // 10 題狀態陣列：{ raw, answer, userChoiceIdx, status, showSolution }
+        let activeQuestionIdx = null; // 目前點選要填入的題號索引 (0 ~ 9)
+
+        // =========================================================================
+        // 3. 初始化與共用工具函式
+        // =========================================================================
+        window.onload = () => {
+            initManualEditorInputs();
+            document.getElementById('deck-total').innerText = UNIQUE_IDIOMS.length;
+            idiomDeck = shuffle(UNIQUE_IDIOMS);
+            updateDeckStatus();
+
+            // 監聽手動成語輸入
+            document.getElementById('idiom-input').addEventListener('input', updateIdiomCount);
+
+            // 讀取本機儲存的 API Key
+            try {
+                const savedKey = localStorage.getItem('gemini_api_key');
+                if (savedKey) {
+                    document.getElementById('api-key-input').value = savedKey;
+                }
+            } catch (e) {
+                console.warn('無法讀取本機儲存空間:', e);
+            }
+
+            // 預設載入範例題目，一打開就能立即體驗互動作答與小鍵盤
+            loadMockData(false);
+
+            // 初始化浮動小鍵盤拖曳功能
+            initKeypadDrag();
+        };
+
+        // 建立設定面板中的 1~10 題手動編輯欄位
+        function initManualEditorInputs() {
+            const container = document.getElementById('questions-editor');
+            container.innerHTML = '';
+            for (let i = 1; i <= 10; i++) {
+                const row = document.createElement('div');
+                row.className = 'flex items-center gap-2';
+                row.innerHTML = `
+                    <span class="font-bold text-slate-500 w-6 text-right text-sm shrink-0">${i}.</span>
+                    <input type="text" id="q-${i}" class="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-sm font-kai focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="第 ${i} 題例句，成語請用 {成語} 標記">
+                `;
+                container.appendChild(row);
+            }
+        }
+
+        function showAlert(msg) {
+            document.getElementById('alert-message').innerText = msg;
+            document.getElementById('alert-modal').classList.remove('hidden');
+        }
+        function closeAlert() {
+            document.getElementById('alert-modal').classList.add('hidden');
+        }
+
+        function showLoading(title, desc) {
+            if (title) document.getElementById('loading-title').innerText = title;
+            if (desc) document.getElementById('loading-desc').innerText = desc;
+            document.getElementById('loading-modal').classList.remove('hidden');
+        }
+        function hideLoading() {
+            document.getElementById('loading-modal').classList.add('hidden');
+        }
+
+        function toggleSettingsPanel() {
+            const panel = document.getElementById('settings-panel');
+            panel.classList.toggle('hidden');
+        }
+
+        // Fisher-Yates 洗牌演算法
+        function shuffle(array) {
+            const arr = [...array];
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        }
+
+        // 解析左側文字框成語
+        function parseIdiomInput() {
+            const raw = document.getElementById('idiom-input').value;
+            const items = raw
+                .split(/[\s、，,；;。.\n\r]+/)
+                .map(s => s.trim())
+                .filter(s => s.length >= 2);
+            return [...new Set(items)];
+        }
+
+        function updateIdiomCount() {
+            document.getElementById('idiom-count').innerText = parseIdiomInput().length;
+        }
+
+        function updateDeckStatus() {
+            const el = document.getElementById('deck-remaining');
+            if (el) el.innerText = idiomDeck.length;
+        }
+
+        // 從 500 題庫中抽出 12 個不重複成語
+        function draw12IdiomsFromDeck() {
+            const picked = [];
+            if (idiomDeck.length === 0) {
+                idiomDeck = shuffle(UNIQUE_IDIOMS);
+            }
+            if (idiomDeck.length >= 12) {
+                picked.push(...idiomDeck.splice(0, 12));
+            } else {
+                picked.push(...idiomDeck.splice(0, idiomDeck.length));
+                const pickedSet = new Set(picked);
+                const freshDeck = shuffle(UNIQUE_IDIOMS).filter(item => !pickedSet.has(item));
+                const needed = 12 - picked.length;
+                picked.push(...freshDeck.splice(0, needed));
+                idiomDeck = freshDeck;
+            }
+            updateDeckStatus();
+            return picked;
+        }
+
+        // 僅在設定區隨機換 12 個成語（尚未呼叫 AI）
+        function pickRandomIdiomsOnly() {
+            const picked = draw12IdiomsFromDeck();
+            document.getElementById('idiom-input').value = picked.join('、');
+            updateIdiomCount();
+        }
+
+        // 打亂參考區 12 個成語順序，盡量避免與 1~10 題答案順序相同
+        function shuffleBankAvoidingOrder(bank, questionAnswers) {
+            let shuffled = shuffle(bank);
+            for (let attempt = 0; attempt < 15; attempt++) {
+                let samePos = 0;
+                for (let i = 0; i < Math.min(shuffled.length, questionAnswers.length); i++) {
+                    if (shuffled[i] === questionAnswers[i]) samePos++;
+                }
+                if (samePos === 0) break;
+                shuffled = shuffle(bank);
+            }
+            return shuffled;
+        }
+
+        // =========================================================================
+        // 4. 題目資料建構與渲染（互動教學介面）
+        // =========================================================================
+
+        // 從原始例句陣列建立互動狀態並渲染畫面
+        function loadQuestionsIntoInteractiveView(bank12, rawSentences) {
+            const answers = rawSentences.map(s => {
+                const m = s.match(/\{([^}]+)\}/);
+                return m ? m[1].trim() : '';
+            });
+
+            // 確保 12 個參考成語順序被打亂，不照題號排列
+            currentWordBank = shuffleBankAvoidingOrder(bank12, answers);
+
+            // 同步更新手動編輯框
+            document.getElementById('idiom-input').value = bank12.join('、');
+            updateIdiomCount();
+            rawSentences.forEach((s, idx) => {
+                const input = document.getElementById(`q-${idx + 1}`);
+                if (input) input.value = s;
+            });
+
+            // 建立 10 題互動資料
+            questionsState = rawSentences.map((s, idx) => ({
+                raw: s,
+                answer: answers[idx],
+                userChoiceIdx: null,
+                status: 'unanswered', // 'unanswered' | 'correct' | 'wrong'
+                showSolution: false
+            }));
+
+            activeQuestionIdx = null;
+            closeKeypad();
+            document.getElementById('score-badge').classList.add('hidden');
+            renderAllInteractive();
+        }
+
+        // 渲染整個互動區域（成語參考區 + 10 題 + 小鍵盤）
+        function renderAllInteractive() {
+            renderInteractiveWordBank();
+            renderInteractiveQuestions();
+            renderKeypadButtons();
+        }
+
+        // 取得目前已被選用過的參考區索引 Set
+        function getUsedBankIndices() {
+            const used = new Set();
+            questionsState.forEach(q => {
+                if (q.userChoiceIdx !== null) used.add(q.userChoiceIdx);
+            });
+            return used;
+        }
+
+        // 渲染上方 1~12 編號成語參考區
+        function renderInteractiveWordBank() {
+            const container = document.getElementById('interactive-word-bank');
+            const usedSet = getUsedBankIndices();
+
+            container.innerHTML = currentWordBank.map((idiom, idx) => {
+                const num = idx + 1;
+                const isUsed = usedSet.has(idx);
+                const cardClass = isUsed
+                    ? 'bg-slate-100 border-slate-200 text-slate-400'
+                    : 'bg-blue-50/60 border-blue-200 text-slate-800 hover:bg-blue-100 hover:border-blue-400';
+                const badgeClass = isUsed
+                    ? 'bg-slate-300 text-white'
+                    : 'bg-blue-600 text-white';
+
+                return `
+                    <button type="button" onclick="handleWordBankClick(${idx})"
+                        class="flex items-center gap-2 px-2.5 py-2 rounded-xl border transition text-left ${cardClass}"
+                        title="點選可填入目前選中的空格">
+                        <span class="w-6 h-6 rounded-full text-xs font-sans font-extrabold flex items-center justify-center shrink-0 ${badgeClass}">
+                            ${num}
+                        </span>
+                        <span class="text-lg sm:text-xl font-bold tracking-wider truncate ${isUsed ? 'line-through decoration-slate-400' : ''}">
+                            ${idiom}
+                        </span>
+                    </button>
+                `;
+            }).join('');
+        }
+
+        // 渲染 10 道互動填空題
+        function renderInteractiveQuestions() {
+            const container = document.getElementById('interactive-questions-list');
+
+            container.innerHTML = questionsState.map((q, idx) => {
+                const isActive = activeQuestionIdx === idx;
+                const chosenIdiom = q.userChoiceIdx !== null ? currentWordBank[q.userChoiceIdx] : null;
+                const chosenNum = q.userChoiceIdx !== null ? q.userChoiceIdx + 1 : null;
+                const correctBankIdx = currentWordBank.indexOf(q.answer);
+                const correctNum = correctBankIdx >= 0 ? correctBankIdx + 1 : '?';
+
+                // 決定空格按鈕的外觀樣式
+                let slotStyle = 'bg-slate-100 border-2 border-dashed border-slate-400 text-slate-500 hover:border-indigo-400 hover:bg-indigo-50';
+                if (q.status === 'correct') {
+                    slotStyle = 'bg-emerald-50 border-2 border-emerald-500 text-emerald-800 font-bold';
+                } else if (q.status === 'wrong') {
+                    slotStyle = 'bg-red-50 border-2 border-red-400 text-red-700 font-bold';
+                } else if (chosenIdiom) {
+                    slotStyle = 'bg-indigo-50 border-2 border-indigo-400 text-indigo-900 font-bold';
+                }
+
+                if (isActive) {
+                    slotStyle += ' ring-4 ring-indigo-300/70 border-indigo-600';
+                }
+
+                // 空格顯示文字
+                const slotInner = chosenIdiom
+                    ? `<span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-indigo-600 text-white text-xs font-sans mr-1.5">${chosenNum}</span><span class="tracking-widest">${chosenIdiom}</span>`
+                    : `<span class="text-sm font-sans font-bold tracking-normal">點選選號</span>`;
+
+                // 將句子中的 {成語} 替換成互動空格
+                const sentenceHTML = q.raw.replace(/\{([^}]+)\}/, () => {
+                    return `<button type="button" onclick="selectBlank(${idx})" class="blank-slot ${slotStyle}">${slotInner}</button>`;
+                });
+
+                // 右側個別對答案按鈕與回饋狀態
+                let rightControls = '';
+                if (q.status === 'correct') {
+                    rightControls = `
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <span class="bg-emerald-100 text-emerald-700 border border-emerald-300 text-xs sm:text-sm font-bold px-3 py-1.5 rounded-xl flex items-center gap-1">
+                                <span>✓</span> 答對了
+                            </span>
+                        </div>
+                    `;
+                } else if (q.status === 'wrong') {
+                    rightControls = `
+                        <div class="flex flex-wrap items-center gap-1.5 shrink-0">
+                            <span class="bg-red-100 text-red-700 border border-red-200 text-xs font-bold px-2.5 py-1.5 rounded-xl">
+                                ✗ 再想想
+                            </span>
+                            <button type="button" onclick="checkSingleAnswer(${idx})" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-2.5 py-1.5 rounded-xl transition">
+                                重對
+                            </button>
+                            <button type="button" onclick="toggleSingleSolution(${idx})" class="bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold px-2.5 py-1.5 rounded-xl transition">
+                                ${q.showSolution ? '隱藏正解' : '看正解'}
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    rightControls = `
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <button type="button" onclick="checkSingleAnswer(${idx})" class="bg-slate-800 hover:bg-blue-600 text-white text-xs sm:text-sm font-bold px-3.5 py-1.5 rounded-xl shadow-sm transition">
+                                對答案
+                            </button>
+                        </div>
+                    `;
+                }
+
+                // 若開啟「看正解」，顯示正確編號與成語
+                const solutionBanner = q.showSolution
+                    ? `<div class="mt-2 ml-9 text-sm font-sans bg-amber-50 border border-amber-200 text-amber-900 px-3 py-1.5 rounded-lg inline-flex items-center gap-2">
+                           <span class="font-bold">正確答案：</span>
+                           <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-600 text-white text-xs font-bold">${correctNum}</span>
+                           <span class="font-kai text-base font-bold tracking-widest">${q.answer}</span>
+                       </div>`
+                    : '';
+
+                return `
+                    <div class="p-3.5 sm:p-4 rounded-2xl border transition ${isActive ? 'bg-indigo-50/40 border-indigo-300 shadow-sm' : 'bg-white border-slate-200 hover:border-slate-300'}">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div class="flex items-start gap-2.5 flex-1 font-kai text-xl sm:text-2xl leading-relaxed text-slate-900">
+                                <span class="font-sans font-extrabold text-slate-400 text-lg sm:text-xl w-7 text-right shrink-0 mt-0.5">${idx + 1}.</span>
+                                <div class="flex-1 leading-[1.9]">${sentenceHTML}</div>
+                            </div>
+                            <div class="flex justify-end sm:ml-2">
+                                ${rightControls}
+                            </div>
+                        </div>
+                        ${solutionBanner}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // =========================================================================
+        // 5. 迷你數字小鍵盤互動邏輯
+        // =========================================================================
+
+        // 點選某一題的空格
+        function selectBlank(questionIdx) {
+            activeQuestionIdx = questionIdx;
+            document.getElementById('keypad-header-text').innerHTML = `<span>🔢</span> 第 ${questionIdx + 1} 題選號`;
+            document.getElementById('mini-keypad').classList.remove('keypad-hidden');
+            renderInteractiveQuestions();
+            renderKeypadButtons();
+        }
+
+        function closeKeypad() {
+            document.getElementById('mini-keypad').classList.add('keypad-hidden');
+            activeQuestionIdx = null;
+            renderInteractiveQuestions();
+        }
+
+        // 渲染迷你小鍵盤內的 1~12 號按鈕
+        function renderKeypadButtons() {
+            const grid = document.getElementById('keypad-grid');
+            const usedSet = getUsedBankIndices();
+            const currentChoice = activeQuestionIdx !== null ? questionsState[activeQuestionIdx]?.userChoiceIdx : null;
+
+            grid.innerHTML = currentWordBank.map((idiom, idx) => {
+                const num = idx + 1;
+                const isSelectedHere = currentChoice === idx;
+                const isUsedElsewhere = usedSet.has(idx) && !isSelectedHere;
+
+                let btnClass = 'bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-900 border border-indigo-200';
+                if (isSelectedHere) {
+                    btnClass = 'bg-indigo-600 text-white border border-indigo-700 ring-2 ring-indigo-300';
+                } else if (isUsedElsewhere) {
+                    btnClass = 'bg-slate-100 hover:bg-indigo-500 hover:text-white text-slate-400 border border-slate-200';
+                }
+
+                return `
+                    <button type="button"
+                        onclick="pickNumberForActiveBlank(${idx})"
+                        onmouseenter="previewKeypadIdiom('${idiom}', ${num})"
+                        onmouseleave="resetKeypadPreview()"
+                        class="h-8 rounded-lg font-sans font-extrabold text-sm transition flex items-center justify-center relative ${btnClass}"
+                        title="${num}. ${idiom}">
+                        ${num}
+                        ${isUsedElsewhere ? '<span class="w-1.5 h-1.5 rounded-full bg-slate-400 absolute top-1 right-1"></span>' : ''}
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function previewKeypadIdiom(idiom, num) {
+            document.getElementById('keypad-hover-preview').innerText = `${num}. ${idiom}`;
+        }
+        function resetKeypadPreview() {
+            document.getElementById('keypad-hover-preview').innerText = '點選編號填入空格';
+        }
+
+        // 透過小鍵盤選擇編號填入目前空格
+        function pickNumberForActiveBlank(bankIdx) {
+            if (activeQuestionIdx === null) return;
+            const q = questionsState[activeQuestionIdx];
+            q.userChoiceIdx = bankIdx;
+            q.status = 'unanswered'; // 重新選擇後重置該題批改狀態
+            renderAllInteractive();
+        }
+
+        // 若直接點擊上方參考區成語，有選中空格時也能直接填入
+        function handleWordBankClick(bankIdx) {
+            if (activeQuestionIdx !== null) {
+                pickNumberForActiveBlank(bankIdx);
+            } else {
+                // 若還沒選空格，自動選第一個空白題目並填入
+                const firstEmpty = questionsState.findIndex(q => q.userChoiceIdx === null);
+                if (firstEmpty !== -1) {
+                    selectBlank(firstEmpty);
+                    pickNumberForActiveBlank(bankIdx);
+                }
+            }
+        }
+
+        // 清除目前空格答案
+        function clearActiveBlank() {
+            if (activeQuestionIdx === null) return;
+            const q = questionsState[activeQuestionIdx];
+            q.userChoiceIdx = null;
+            q.status = 'unanswered';
+            renderAllInteractive();
+        }
+
+        // 跳至下一題（優先跳下一個尚未填寫的題目，否則依序往下一題）
+        function focusNextBlank() {
+            if (activeQuestionIdx === null) {
+                selectBlank(0);
+                return;
+            }
+            const nextIdx = (activeQuestionIdx + 1) % questionsState.length;
+            selectBlank(nextIdx);
+        }
+
+        // 讓迷你小鍵盤支援滑鼠/觸控拖曳，避免任何情況下擋到文字
+        function initKeypadDrag() {
+            const keypad = document.getElementById('mini-keypad');
+            const handle = document.getElementById('keypad-drag-handle');
+            let isDragging = false;
+            let startX, startY, origLeft, origTop;
+
+            const startDrag = (clientX, clientY) => {
+                isDragging = true;
+                const rect = keypad.getBoundingClientRect();
+                origLeft = rect.left;
+                origTop = rect.top;
+                startX = clientX;
+                startY = clientY;
+                keypad.style.right = 'auto';
+                keypad.style.bottom = 'auto';
+                keypad.style.left = `${origLeft}px`;
+                keypad.style.top = `${origTop}px`;
+            };
+
+            const moveDrag = (clientX, clientY) => {
+                if (!isDragging) return;
+                const dx = clientX - startX;
+                const dy = clientY - startY;
+                const maxX = window.innerWidth - keypad.offsetWidth - 8;
+                const maxY = window.innerHeight - keypad.offsetHeight - 8;
+                const newLeft = Math.max(8, Math.min(maxX, origLeft + dx));
+                const newTop = Math.max(8, Math.min(maxY, origTop + dy));
+                keypad.style.left = `${newLeft}px`;
+                keypad.style.top = `${newTop}px`;
+            };
+
+            const endDrag = () => { isDragging = false; };
+
+            handle.addEventListener('mousedown', (e) => {
+                if (e.target.tagName === 'BUTTON') return;
+                startDrag(e.clientX, e.clientY);
+            });
+            window.addEventListener('mousemove', (e) => moveDrag(e.clientX, e.clientY));
+            window.addEventListener('mouseup', endDrag);
+
+            handle.addEventListener('touchstart', (e) => {
+                if (e.target.tagName === 'BUTTON') return;
+                const t = e.touches[0];
+                startDrag(t.clientX, t.clientY);
+            }, { passive: true });
+            window.addEventListener('touchmove', (e) => {
+                if (!isDragging) return;
+                const t = e.touches[0];
+                moveDrag(t.clientX, t.clientY);
+            }, { passive: true });
+            window.addEventListener('touchend', endDrag);
+        }
+
+        // =========================================================================
+        // 6. 個別對答案、全部批改與重打亂順序
+        // =========================================================================
+
+        // 單題對答案
+        function checkSingleAnswer(idx) {
+            const q = questionsState[idx];
+            if (q.userChoiceIdx === null) {
+                selectBlank(idx);
+                showAlert(`第 ${idx + 1} 題還沒有選擇成語編號喔！\n請點選右下角迷你數字鍵盤來作答。`);
+                return;
+            }
+            const chosenIdiom = currentWordBank[q.userChoiceIdx];
+            if (chosenIdiom === q.answer) {
+                q.status = 'correct';
+                q.showSolution = false;
+            } else {
+                q.status = 'wrong';
+            }
+            updateScoreBadgeIfNeeded();
+            renderInteractiveQuestions();
+        }
+
+        // 單題顯示／隱藏正解
+        function toggleSingleSolution(idx) {
+            questionsState[idx].showSolution = !questionsState[idx].showSolution;
+            renderInteractiveQuestions();
+        }
+
+        // 全部對答案
+        function checkAllAnswers() {
+            let correctCount = 0;
+            questionsState.forEach(q => {
+                if (q.userChoiceIdx !== null && currentWordBank[q.userChoiceIdx] === q.answer) {
+                    q.status = 'correct';
+                    q.showSolution = false;
+                    correctCount++;
+                } else {
+                    q.status = 'wrong';
+                }
+            });
+            const badge = document.getElementById('score-badge');
+            badge.innerText = `得分：${correctCount * 10} / 100`;
+            badge.classList.remove('hidden');
+            closeKeypad();
+            renderInteractiveQuestions();
+        }
+
+        function updateScoreBadgeIfNeeded() {
+            const badge = document.getElementById('score-badge');
+            if (!badge.classList.contains('hidden')) {
+                const correctCount = questionsState.filter(q => q.status === 'correct').length;
+                badge.innerText = `得分：${correctCount * 10} / 100`;
+            }
+        }
+
+        // 顯示全部解答
+        function revealAllSolutions() {
+            questionsState.forEach(q => {
+                q.showSolution = true;
+            });
+            renderInteractiveQuestions();
+        }
+
+        // 清空全部作答重來
+        function resetAllUserAnswers() {
+            questionsState.forEach(q => {
+                q.userChoiceIdx = null;
+                q.status = 'unanswered';
+                q.showSolution = false;
+            });
+            document.getElementById('score-badge').classList.add('hidden');
+            closeKeypad();
+            renderAllInteractive();
+        }
+
+        // 重新打亂上方 1~12 成語編號順序（並保留學生原本已選的成語對應）
+        function reshuffleBankOrder() {
+            if (currentWordBank.length === 0) return;
+            const oldChosenIdioms = questionsState.map(q =>
+                q.userChoiceIdx !== null ? currentWordBank[q.userChoiceIdx] : null
+            );
+            const answers = questionsState.map(q => q.answer);
+            currentWordBank = shuffleBankAvoidingOrder(currentWordBank, answers);
+
+            questionsState.forEach((q, idx) => {
+                if (oldChosenIdioms[idx]) {
+                    q.userChoiceIdx = currentWordBank.indexOf(oldChosenIdioms[idx]);
+                }
+            });
+            renderAllInteractive();
+        }
+
+        // 套用設定面板中的手動修改
+        function applyManualEdits() {
+            const bank = parseIdiomInput();
+            if (bank.length < 10) {
+                showAlert("請在左側至少輸入 10～12 個不重複的成語。");
+                return;
+            }
+            const editedSentences = [];
+            for (let i = 1; i <= 10; i++) {
+                const val = document.getElementById(`q-${i}`).value.trim();
+                if (!val || !/\{[^}]+\}/.test(val)) {
+                    showAlert(`第 ${i} 題格式不完整，請確認句子內有使用 {成語} 標記答案喔！`);
+                    return;
+                }
+                editedSentences.push(val);
+            }
+            loadQuestionsIntoInteractiveView(bank.slice(0, 12), editedSentences);
+            toggleSettingsPanel();
+            showAlert("✅ 已將修改後的成語與題目套用到互動教學畫面！");
+        }
+
+        // =========================================================================
+        // 7. 兩大核心 AI 出題功能 + 範例保底
+        // =========================================================================
+
+        // 具指數退避重試機制的 fetch
+        async function fetchWithRetry(url, options, retries = 3) {
+            const delays = [1000, 2000, 4000];
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const res = await fetch(url, options);
+                    if (!res.ok) {
+                        const errData = await res.json().catch(() => ({}));
+                        const errMsg = errData?.error?.message || `HTTP 錯誤狀態碼 ${res.status}`;
+                        if (res.status === 400 || res.status === 401 || res.status === 403) {
+                            throw new Error(`AUTH_ERROR:${errMsg}`);
+                        }
+                        throw new Error(errMsg);
+                    }
+                    return res;
+                } catch (e) {
+                    if (e.message.startsWith('AUTH_ERROR:') || i === retries - 1) throw e;
+                    await new Promise(resolve => setTimeout(resolve, delays[i] || 2000));
+                }
+            }
+        }
+
+        // 按鈕 1：同樣 12 個成語，重新隨機挑 10 個並生成 10 句全新句子
+        async function regenerateSameIdioms() {
+            let bank12 = parseIdiomInput();
+            if (bank12.length < 12) {
+                if (currentWordBank.length >= 12) {
+                    bank12 = [...currentWordBank];
+                } else {
+                    showAlert(`目前只偵測到 ${bank12.length} 個成語，請先設定滿 12 個成語，或直接點擊「✨ 換12個全新成語出題」。`);
+                    return;
+                }
+            } else {
+                bank12 = bank12.slice(0, 12);
+            }
+            await callAiToGenerateSentences(
+                bank12,
+                "AI 老師正在重新編寫 10 句全新題目...",
+                "保留目前這 12 個成語，隨機重挑 10 個並撰寫與先前不同的自然例句，請稍候..."
+            );
+        }
+
+        // 按鈕 2：換 12 個全新不重複成語，並立即請 AI 隨機挑 10 個出題
+        async function generateBrandNewIdioms() {
+            const newBank12 = draw12IdiomsFromDeck();
+            document.getElementById('idiom-input').value = newBank12.join('、');
+            updateIdiomCount();
+
+            await callAiToGenerateSentences(
+                newBank12,
+                "已抽出 12 個全新成語，AI 老師出題中...",
+                "系統正從這 12 個全新成語中隨機挑選 10 個撰寫例句，並自動打亂選項編號，請稍候..."
+            );
+        }
+
+        // 共用 AI 出題主流程
+        async function callAiToGenerateSentences(bank12, loadingTitle, loadingDesc) {
+            const apiKeyInput = document.getElementById('api-key-input').value.trim();
+            if (apiKeyInput) {
+                try {
+                    localStorage.setItem('gemini_api_key', apiKeyInput);
+                } catch (e) {
+                    console.warn('無法儲存 API 金鑰至本機:', e);
+                }
+            }
+
+            // 從 12 個成語中隨機抽出 10 個出題
+            const selected10 = shuffle(bank12).slice(0, 10);
+
+            showLoading(loadingTitle, loadingDesc);
+
+            const prompt = `你是一位專業的台灣國小國語老師。
+請使用以下 10 個成語，各自撰寫 1 句全新、自然、通順、符合國小中高年級閱讀程度的中文例句（共 10 句，每句約 22～36 字，生活化且語境清楚明確，讓學生能從上下文判斷出唯一最適合的成語）：
+
+指定成語清單（共 10 個）：
+${selected10.join('、')}
+
+【重要規則】：
+1. 每個成語剛好出 1 題，總共 10 題，順序請直接打亂，不要與原清單相同。
+2. 在每句例句中，請將該成語用大括號包起來，格式為 \`{成語}\`，例如：「學習任何才藝都要{持之以恆}，不能遇到困難就放棄。」
+3. 每句只能出現 1 組 \`{成語}\`，不可加上括號（）或題號。
+4. 例句請使用台灣繁體中文與標準全形標點符號，並避免重複套用老套句型。
+5. 請務必回傳嚴格的 JSON 格式，結構為：{"questions": ["例句1", "例句2", ..., "例句10"]}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    responseMimeType: "application/json"
+                }
+            };
+
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKeyInput}`;
+
+            try {
+                const response = await fetchWithRetry(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                if (result.error) {
+                    throw new Error(`AUTH_ERROR:${result.error.message || 'API 金鑰無效'}`);
+                }
+
+                if (result.candidates && result.candidates.length > 0) {
+                    let jsonStr = result.candidates[0].content.parts[0].text;
+                    jsonStr = jsonStr.replace(/```json/g, '').replace(/```/g, '').trim();
+                    const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
+                    if (jsonMatch) jsonStr = jsonMatch[0];
+
+                    const data = JSON.parse(jsonStr);
+                    if (!Array.isArray(data.questions) || data.questions.length < 10) {
+                        throw new Error("AI 回傳的題目數量不足 10 題，請再試一次。");
+                    }
+
+                    const shuffledQuestions = shuffle(data.questions.slice(0, 10)).map(q => q.trim());
+                    loadQuestionsIntoInteractiveView(bank12, shuffledQuestions);
+                } else {
+                    throw new Error("API 沒有回傳預期的內容。");
+                }
+            } catch (error) {
+                console.error("生成錯誤:", error);
+                if (error.message.startsWith('AUTH_ERROR:')) {
+                    // 若在離線單檔執行且未填金鑰，自動展開設定面板方便填寫
+                    document.getElementById('settings-panel').classList.remove('hidden');
+                    showAlert("🔑 需要設定 Gemini API 金鑰才能呼叫 AI 出題！\n\n已為您展開「設定與編輯」面板，請貼上您的 API 金鑰後再試一次（系統會自動記憶金鑰）。");
+                } else {
+                    showAlert(`⚠️ 系統連線異常：\n\n${error.message}\n\n請稍後再試，或檢查網路連線與 API 金鑰。`);
+                }
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // 載入內建範例題目（免金鑰測試）
+        function loadMockData(notify = true) {
+            const mockBank = [
+                "一舉兩得", "半途而廢", "畫蛇添足", "亡羊補牢",
+                "井底之蛙", "專心致志", "雪中送炭", "胸有成竹",
+                "風和日麗", "川流不息", "持之以恆", "水落石出"
+            ];
+            const mockQuestions = [
+                "這個週末天氣{風和日麗}，非常適合全家人一起到郊外踏青。",
+                "學習任何才藝都要{持之以恆}，只要每天練習，一定能看到進步。",
+                "這篇作文已經寫得很完整了，再多加無關的段落反而顯得{畫蛇添足}。",
+                "放學時間校門口的車輛{川流不息}，過馬路時一定要特別注意安全。",
+                "他在賽前做了充分的準備，因此站上舞台時顯得{胸有成竹}，一點也不緊張。",
+                "騎腳踏車上學既可以運動又能節省交通費，真是{一舉兩得}的好方法。",
+                "雖然這次段考不小心失常了，但現在開始認真複習還來得及{亡羊補牢}。",
+                "正當大家陷入困境時，鄰居主動伸出援手，這種{雪中送炭}的精神令人感動。",
+                "我們應該多閱讀課外書籍增廣見聞，才不會成為眼界狹小的{井底之蛙}。",
+                "遇到困難時不可以輕易{半途而廢}，堅持到最後才能體會成功的喜悅。"
+            ];
+
+            loadQuestionsIntoInteractiveView(mockBank, mockQuestions);
+            if (notify) {
+                showAlert("✅ 已載入範例成語與 10 道互動題目！\n點選句子中的空格即可開啟迷你數字鍵盤作答。");
+            }
+        }
+
+        // =========================================================================
+        // 8. A4 紙本手寫考卷預覽與 PDF 匯出（保留寬大填字格）
+        // =========================================================================
+
+        // 將例句中的 {成語} 轉換為 A4 紙本寬大書寫括號（題目版留白手寫，解答版填紅字）
+        function formatPaperSentence(sentence, isAnswerKey) {
+            return sentence.replace(/\{([^}]+)\}/g, (match, idiom) => {
+                if (isAnswerKey) {
+                    return `<span class="idiom-bracket">（<span class="idiom-space text-red-600 font-bold tracking-widest">${idiom}</span>）</span>`;
+                }
+                return `<span class="idiom-bracket">（<span class="idiom-space">&nbsp;</span>）</span>`;
+            });
+        }
+
+        // 組合單頁 A4 紙本考卷 HTML
+        function buildWorksheetPageHTML(title, bank, questions, isAnswerKey) {
+            const bankCells = bank
+                .map(idiom => `<div class="text-center py-0.5 text-[22px] font-bold tracking-widest leading-snug">${idiom}</div>`)
+                .join('');
+
+            const questionItems = questions
+                .map((q, idx) => `
+                    <div class="flex items-start text-[22px] leading-[1.58] tracking-normal">
+                        <span class="font-bold mr-1.5 shrink-0 w-8 text-right">${idx + 1}.</span>
+                        <div class="flex-1 text-justify">${formatPaperSentence(q.raw, isAnswerKey)}</div>
+                    </div>
+                `)
+                .join('');
+
+            return `
+            <div class="a4-page">
+                <!-- 標題與班級姓名列 -->
+                <div class="flex justify-between items-end mb-1">
+                    <h1 class="text-[22px] font-bold tracking-widest">${title}</h1>
+                    <div class="text-[16px] font-bold tracking-widest flex items-center">
+                        <span class="w-7 inline-block mx-1"></span>年
+                        <span class="w-7 inline-block mx-1"></span>班
+                        <span class="w-7 inline-block mx-1"></span>號
+                        <span class="ml-2">姓名：</span><span class="w-24 inline-block"></span>
+                    </div>
+                </div>
+
+                <!-- 分數與家長簽名列 -->
+                <div class="flex justify-end items-center text-[16px] font-bold tracking-widest mb-2 pb-1.5 border-b-2 border-black">
+                    <span>分數：</span><span class="w-16 inline-block"></span>
+                    <span class="ml-5">家長簽名：</span><span class="w-36 inline-block"></span>
+                </div>
+
+                <!-- 作答說明與計分方式 -->
+                <div class="mb-2 text-[15px] font-bold leading-snug">
+                    請從下方的成語參考區中，選出最適合的成語，將正確國字填入括號內。（一題 10 分，寫錯一個字扣 1 分，共 100 分）
+                </div>
+
+                <!-- 成語參考區（12 個選項，打亂順序，紙本手寫填字） -->
+                <div class="word-bank-box mb-3">
+                    <div class="text-[14px] font-bold text-gray-700 mb-0.5 tracking-widest">【成語參考區】</div>
+                    <div class="grid grid-cols-4 gap-x-2 gap-y-0.5">
+                        ${bankCells}
+                    </div>
+                </div>
+
+                <!-- 10 題手寫填充題（寬大括號、精簡行距，確保完整印於單張 A4 直向） -->
+                <div class="space-y-1.5 flex-1">
+                    ${questionItems}
+                </div>
+            </div>`;
+        }
+
+        // 開啟 A4 紙本考卷預覽／匯出模式
+        function openPdfPreview() {
+            if (!questionsState || questionsState.length < 10) {
+                showAlert("目前尚未生成完整的 10 道題目，請先出題或載入範例題目！");
+                return;
+            }
+            closeKeypad();
+
+            const page1HTML = buildWorksheetPageHTML('成語填充練習', currentWordBank, questionsState, false);
+            const page2HTML = buildWorksheetPageHTML('成語填充練習（解答版）', currentWordBank, questionsState, true);
+
+            document.getElementById('print-pages-container').innerHTML = page1HTML + page2HTML;
+            document.getElementById('main-view').classList.add('hidden');
+            document.getElementById('preview-view').classList.remove('hidden');
+            window.scrollTo(0, 0);
+        }
+
+        // 返回互動教學畫面
+        function closePdfPreview() {
+            document.getElementById('preview-view').classList.add('hidden');
+            document.getElementById('main-view').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
