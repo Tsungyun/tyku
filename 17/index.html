@@ -12,6 +12,11 @@
         }
         
         /* 列印與 A4 頁面設定 */
+        @page {
+            size: A4 portrait;
+            margin: 0;
+        }
+
         body {
             background-color: #f3f4f6;
             margin: 0;
@@ -21,7 +26,7 @@
         .a4-page {
             width: 210mm;
             height: 297mm;
-            padding: 15mm 18mm;
+            padding: 8mm 10mm; /* 邊界縮小至最小安全列印範圍 */
             background: white;
             margin: 20px auto;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -30,6 +35,7 @@
             box-sizing: border-box;
             page-break-after: always;
             position: relative;
+            overflow: hidden;
         }
 
         /* 列印模式下隱藏不必要的 UI */
@@ -40,19 +46,29 @@
                 margin: 0; 
                 box-shadow: none; 
                 border: none;
-                padding: 12mm 15mm; 
+                padding: 8mm 10mm; 
             }
         }
 
-        /* 考卷表格樣式 */
+        /* 考卷表格樣式：壓縮題號列、放大答案格 */
         .test-table {
             width: 100%;
             border-collapse: collapse;
+            table-layout: fixed;
         }
         .test-table th, .test-table td {
             border: 2px solid #000;
             text-align: center;
-            height: 40px; /* 統一格子高度 */
+            vertical-align: middle;
+        }
+        .test-table .row-num th {
+            height: 28px;
+            font-size: 16px;
+            padding: 2px 0;
+        }
+        .test-table .row-ans th,
+        .test-table .row-ans td {
+            height: 68px; /* 放大填空書寫高度 */
         }
 
         /* 隱藏捲軸但可滾動 */
@@ -66,7 +82,7 @@
     <div id="alert-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden no-print">
         <div class="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-2xl transform transition-all">
             <h3 class="text-xl font-bold mb-4 text-red-600">系統提示</h3>
-            <p id="alert-message" class="mb-6 text-gray-700"></p>
+            <p id="alert-message" class="mb-6 text-gray-700 whitespace-pre-line"></p>
             <div class="flex justify-end">
                 <button onclick="closeAlert()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">確定</button>
             </div>
@@ -155,8 +171,8 @@
         </div>
     </div>
 
-<!-- 專屬版權宣告頁尾 (乾淨、單行設計) -->
-    <div class="text-center text-gray-400 text-sm mt-8 mb-4 tracking-wider">
+    <!-- 專屬版權宣告頁尾 (列印時隱藏，避免多出一頁空白) -->
+    <div class="text-center text-gray-400 text-sm mt-8 mb-4 tracking-wider no-print">
         &copy; 谷宗芸老師設計 / AI 輔助生成
     </div>
     
@@ -191,7 +207,7 @@
             document.getElementById('loading-modal').classList.add('hidden');
         }
 
-        // 新增：載入範例文章 (避免 AI 故障時完全卡死，確保隨時可排版)
+        // 載入範例文章
         function loadMockData() {
             document.getElementById('draft-1').value = "在一個風和日麗的{情|晴}天，我們全家人去市中心遊玩。早上，媽媽幫我準備了{簿|薄}片般的餅乾當點心。我們來到一棟非常高的商業大{樓|樓}，並搭乘電梯直達頂樓的觀景{踏|塔}。從上面往下看，可以看到一條壯觀的大{瞧|橋}橫跨在寬廣的河面上。中午吃飯時，我不小心{站|沾}到了衣服，因為我正在吃美味的番茄肉{獎|醬}義大利{綿|麵}。吃飽後，爸爸點了一杯熱呼呼的{加|咖}啡，突然感覺到一陣輕微的地{陣|震}，幸好平安無事。";
             document.getElementById('draft-2').value = "上個週末，我們在電視上看到關於日本東{驚|京}的旅遊資{迅|訊}，這讓我留下深刻的{映|印}象。由於爸爸最近工作一直坐在電腦前，導致肩{景|頸}痠痛，於是我們決定去參加一場有{易|益}身心的健行活動。這次活動是由當地的經{記|濟}發展局舉辦。中午，我們在山下吃{獸|壽}司，飯裡拌了微酸的{錯|醋}，十分爽口。店裡擺放著精緻的瓷{氣|器}，看起來非常漂亮。我們聽著老闆說哪{理|哩}有好玩的景點，度過充實的下午。";
@@ -209,7 +225,7 @@
             return array;
         }
 
-        // 具有重試機制的 fetch，避免 AI 伺服器繁忙
+        // 具有重試機制的 fetch
         async function fetchWithRetry(url, options, retries = 3, delay = 2000) {
             for (let i = 0; i < retries; i++) {
                 try {
@@ -223,7 +239,7 @@
             }
         }
 
-        // 透過 AI 生成草稿 (直接連結回主系統的思維)
+        // 透過 AI 生成草稿
         async function generateDrafts() {
             const text = document.getElementById('vocab-input').value;
             const apiKeyInput = document.getElementById('api-key-input').value.trim();
@@ -233,11 +249,9 @@
                 return;
             }
             
-            // 儲存金鑰，下次打開網頁不用再填
             localStorage.setItem('gemini_api_key', apiKeyInput);
             const apiKey = apiKeyInput;
 
-            // 過濾掉非中文字元並去重
             const chars = [...new Set(text.replace(/[^\u4E00-\u9FA5]/g, '').split(''))];
             
             if (chars.length < 20) {
@@ -288,10 +302,7 @@
                 
                 if (result.candidates && result.candidates.length > 0) {
                     let jsonStr = result.candidates[0].content.parts[0].text;
-                    
-                    // 強制清理可能出現的 markdown 標記 (防呆機制)
                     jsonStr = jsonStr.replace(/```json/g, '').replace(/```/g, '').trim();
-                    
                     const data = JSON.parse(jsonStr);
                     
                     document.getElementById('draft-1').value = data.draft1;
@@ -308,18 +319,16 @@
             }
         }
 
-        // 解析草稿中的標記並生成對應格式
+        // 解析草稿中的標記
         function parseDraft(text) {
             const regex = /\{([^|]+)\|([^}]+)\}/g;
             let answers = [];
             
-            // 題目版文字：替換標記為「錯字」，不加任何樣式
             let questionText = text.replace(regex, (match, wrong, correct) => {
                 answers.push({ wrong, correct });
                 return wrong;
             });
 
-            // 解答版文字：保留錯字，但標示紅色與底線讓老師方便對答案
             let answerText = text.replace(regex, (match, wrong, correct) => {
                 return `<span class="text-red-600 font-extrabold underline decoration-red-400 decoration-2 underline-offset-4">${wrong}</span>`;
             });
@@ -327,26 +336,50 @@
             return { questionText, answerText, answers };
         }
 
-        // 建立考卷表格 HTML (依照 PDF 橫式樣式)
+        // 建立考卷表格 HTML (題號列精簡、答案格放大)
         function buildTableHTML(answers, isAnswerKey) {
-            let tableHTML = `<table class="test-table text-xl font-bold font-kai mb-6">
-                <tr>
-                    <th class="py-2 w-20">題號</th>`;
+            let tableHTML = `<table class="test-table font-bold font-kai mb-3">
+                <tr class="row-num">
+                    <th class="w-16">題號</th>`;
             for(let i = 1; i <= 10; i++) {
-                tableHTML += `<th class="w-12">${i}</th>`;
+                tableHTML += `<th>${i}</th>`;
             }
-            tableHTML += `</tr><tr>
-                    <th class="py-4">答案</th>`;
+            tableHTML += `</tr><tr class="row-ans">
+                    <th class="text-lg">答案</th>`;
             for(let i = 0; i < 10; i++) {
                 let cellContent = '';
                 if (isAnswerKey && answers[i]) {
-                    // 解答版表格填入正確字，紅色標示
-                    cellContent = `<span class="text-red-600 text-2xl">${answers[i].correct}</span>`;
+                    cellContent = `<span class="text-red-600 text-4xl">${answers[i].correct}</span>`;
                 }
                 tableHTML += `<td>${cellContent}</td>`;
             }
             tableHTML += `</tr></table>`;
             return tableHTML;
+        }
+
+        // 建立精簡版頁首 (小標題 + 學生資訊 + 家長簽名)
+        function buildHeaderHTML(title) {
+            return `
+            <div class="flex justify-between items-start border-b border-black pb-1.5 mb-2 font-kai">
+                <div>
+                    <h1 class="text-lg font-bold tracking-wider leading-tight">${title}</h1>
+                    <div class="text-xs font-bold leading-snug text-gray-800 mt-0.5">
+                        從文章中圈出錯別字，按出現順序寫進下方表格改成正確的字。<br>
+                        (寫錯順序每字扣1分；順序和字都對得5分，共100分)
+                    </div>
+                </div>
+                <div class="text-sm font-bold tracking-wider text-right shrink-0 ml-2">
+                    <div class="mb-1">
+                        <span class="w-6 inline-block border-b border-black"></span>年
+                        <span class="w-6 inline-block border-b border-black"></span>班
+                        <span class="w-6 inline-block border-b border-black"></span>號
+                        <span class="ml-1">姓名：</span><span class="w-20 inline-block border-b border-black"></span>
+                    </div>
+                    <div>
+                        <span>家長簽名：</span><span class="w-28 inline-block border-b border-black"></span>
+                    </div>
+                </div>
+            </div>`;
         }
 
         // 預覽與排版考卷
@@ -366,70 +399,56 @@
                 showAlert(`警告：\n第一篇偵測到 ${parsed1.answers.length} 個考點。\n第二篇偵測到 ${parsed2.answers.length} 個考點。\n建議修改確保每篇皆為 10 個考點，以符合百分制計算。`);
             }
             
-            // 產生 Page 1 (題目版) - 完整一頁包含兩篇
+            // 產生 Page 1 (題目版)
             let page1HTML = `
             <div class="a4-page">
-                <div class="flex justify-between items-end mb-2">
-                    <h1 class="text-2xl font-bold tracking-widest font-kai">標題:改錯字練習</h1>
-                    <div class="text-lg font-bold tracking-widest flex items-center font-kai">
-                        <span class="w-8 inline-block mx-1"></span>年
-                        <span class="w-8 inline-block mx-1"></span>班
-                        <span class="w-8 inline-block mx-1"></span>號
-                        <span class="ml-2">姓名:</span><span class="w-24 inline-block"></span>
+                ${buildHeaderHTML('改錯字練習')}
+                
+                <div class="flex-1 flex flex-col justify-between">
+                    <div>
+                        <h2 class="text-base font-bold mb-0.5 font-kai">【第一篇】</h2>
+                        <div class="text-[23px] leading-[1.55] tracking-[0.06em] mb-2 text-justify text-gray-900 indent-10 font-kai">
+                            ${parsed1.questionText}
+                        </div>
+                        ${buildTableHTML(parsed1.answers, false)}
+                    </div>
+
+                    <div>
+                        <h2 class="text-base font-bold mb-0.5 font-kai">【第二篇】</h2>
+                        <div class="text-[23px] leading-[1.55] tracking-[0.06em] mb-2 text-justify text-gray-900 indent-10 font-kai">
+                            ${parsed2.questionText}
+                        </div>
+                        ${buildTableHTML(parsed2.answers, false)}
                     </div>
                 </div>
-                <div class="mb-4 text-base font-bold leading-relaxed font-kai">
-                    從文章中圈出錯別字,寫進下方的表格裡改成正確的字。<br>
-                    (按文字出現順序寫,寫錯順序每字扣1分。順序和字都對得5分,共100分)
-                </div>
-                
-                <h2 class="text-xl font-bold mb-2 font-kai">【第一篇】</h2>
-                <div class="text-xl leading-[2.1] tracking-[0.1em] mb-4 text-justify text-gray-900 indent-8 font-kai">
-                    ${parsed1.questionText}
-                </div>
-                ${buildTableHTML(parsed1.answers, false)}
-
-                <h2 class="text-xl font-bold mb-2 font-kai">【第二篇】</h2>
-                <div class="text-xl leading-[2.1] tracking-[0.1em] mb-4 text-justify text-gray-900 indent-8 font-kai">
-                    ${parsed2.questionText}
-                </div>
-                ${buildTableHTML(parsed2.answers, false)}
             </div>`;
 
-            // 產生 Page 2 (解答版) - 樣式與第一頁相同，但帶有紅字解答
+            // 產生 Page 2 (解答版)
             let page2HTML = `
             <div class="a4-page">
-                <div class="flex justify-between items-end mb-2">
-                    <h1 class="text-2xl font-bold tracking-widest font-kai">改錯字練習(解答版)</h1>
-                    <div class="text-lg font-bold tracking-widest flex items-center font-kai">
-                        <span class="w-8 inline-block mx-1"></span>年
-                        <span class="w-8 inline-block mx-1"></span>班
-                        <span class="w-8 inline-block mx-1"></span>號
-                        <span class="ml-2">姓名:</span><span class="w-24 inline-block"></span>
+                ${buildHeaderHTML('改錯字練習（解答版）')}
+                
+                <div class="flex-1 flex flex-col justify-between">
+                    <div>
+                        <h2 class="text-base font-bold mb-0.5 font-kai">【第一篇】</h2>
+                        <div class="text-[23px] leading-[1.55] tracking-[0.06em] mb-2 text-justify text-gray-900 indent-10 font-kai">
+                            ${parsed1.answerText}
+                        </div>
+                        ${buildTableHTML(parsed1.answers, true)}
+                    </div>
+
+                    <div>
+                        <h2 class="text-base font-bold mb-0.5 font-kai">【第二篇】</h2>
+                        <div class="text-[23px] leading-[1.55] tracking-[0.06em] mb-2 text-justify text-gray-900 indent-10 font-kai">
+                            ${parsed2.answerText}
+                        </div>
+                        ${buildTableHTML(parsed2.answers, true)}
                     </div>
                 </div>
-                <div class="mb-4 text-base font-bold leading-relaxed font-kai">
-                    從文章中圈出錯別字,寫進下方的表格裡改成正確的字。<br>
-                    (按文字出現順序寫,寫錯順序每字扣1分。順序和字都對得5分,共100分)
-                </div>
-                
-                <h2 class="text-xl font-bold mb-2 font-kai">【第一篇】</h2>
-                <div class="text-xl leading-[2.1] tracking-[0.1em] mb-4 text-justify text-gray-900 indent-8 font-kai">
-                    ${parsed1.answerText}
-                </div>
-                ${buildTableHTML(parsed1.answers, true)}
-
-                <h2 class="text-xl font-bold mb-2 font-kai">【第二篇】</h2>
-                <div class="text-xl leading-[2.1] tracking-[0.1em] mb-4 text-justify text-gray-900 indent-8 font-kai">
-                    ${parsed2.answerText}
-                </div>
-                ${buildTableHTML(parsed2.answers, true)}
             </div>`;
 
-            // 注入 DOM
             document.getElementById('print-pages-container').innerHTML = page1HTML + page2HTML;
 
-            // 切換畫面
             document.getElementById('setup-view').classList.add('hidden');
             document.getElementById('preview-view').classList.remove('hidden');
             window.scrollTo(0, 0);
