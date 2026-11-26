@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>改錯字練習卷產生器</title>
+    <title>改錯字練習卷產生器（多元文體版）</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* 定義教育用標準楷體 */
@@ -12,11 +12,6 @@
         }
         
         /* 列印與 A4 頁面設定 */
-        @page {
-            size: A4 portrait;
-            margin: 0;
-        }
-
         body {
             background-color: #f3f4f6;
             margin: 0;
@@ -25,8 +20,8 @@
 
         .a4-page {
             width: 210mm;
-            height: 297mm;
-            padding: 8mm 10mm; /* 邊界縮小至最小安全列印範圍 */
+            min-height: 297mm;
+            padding: 15mm 18mm;
             background: white;
             margin: 20px auto;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -35,40 +30,39 @@
             box-sizing: border-box;
             page-break-after: always;
             position: relative;
-            overflow: hidden;
+        }
+
+        /* 行動裝置預覽時避免水平捲動破版 */
+        @media screen and (max-width: 820px) {
+            .a4-wrapper {
+                overflow-x: auto;
+                padding: 0 12px;
+            }
         }
 
         /* 列印模式下隱藏不必要的 UI */
         @media print {
             body { background: white; }
             .no-print { display: none !important; }
+            .a4-wrapper { overflow: visible; padding: 0; }
             .a4-page { 
                 margin: 0; 
                 box-shadow: none; 
                 border: none;
-                padding: 8mm 10mm; 
+                padding: 12mm 15mm; 
+                height: 297mm;
             }
         }
 
-        /* 考卷表格樣式：壓縮題號列、放大答案格 */
+        /* 考卷表格樣式 */
         .test-table {
             width: 100%;
             border-collapse: collapse;
-            table-layout: fixed;
         }
         .test-table th, .test-table td {
             border: 2px solid #000;
             text-align: center;
-            vertical-align: middle;
-        }
-        .test-table .row-num th {
-            height: 28px;
-            font-size: 16px;
-            padding: 2px 0;
-        }
-        .test-table .row-ans th,
-        .test-table .row-ans td {
-            height: 68px; /* 放大填空書寫高度 */
+            height: 40px; /* 統一格子高度 */
         }
 
         /* 隱藏捲軸但可滾動 */
@@ -80,71 +74,159 @@
 
     <!-- 系統提示框 -->
     <div id="alert-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden no-print">
-        <div class="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-2xl transform transition-all">
-            <h3 class="text-xl font-bold mb-4 text-red-600">系統提示</h3>
-            <p id="alert-message" class="mb-6 text-gray-700 whitespace-pre-line"></p>
+        <div class="bg-white rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl transform transition-all">
+            <h3 class="text-xl font-bold mb-4 text-blue-700">系統提示</h3>
+            <p id="alert-message" class="mb-6 text-gray-700 whitespace-pre-line leading-relaxed"></p>
             <div class="flex justify-end">
-                <button onclick="closeAlert()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">確定</button>
+                <button onclick="closeAlert()" class="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 transition font-bold">確定</button>
             </div>
         </div>
     </div>
 
     <!-- AI 載入中提示框 -->
-    <div id="loading-modal" class="fixed inset-0 bg-black bg-opacity-70 flex flex-col items-center justify-center z-50 hidden no-print">
+    <div id="loading-modal" class="fixed inset-0 bg-black bg-opacity-70 flex flex-col items-center justify-center z-50 hidden no-print px-4 text-center">
         <div class="animate-spin rounded-full h-20 w-20 border-t-4 border-b-4 border-blue-400 mb-6"></div>
-        <h3 class="text-2xl font-bold text-white tracking-widest font-kai">AI 老師正在為您編寫文章...</h3>
-        <p class="text-gray-200 mt-2 text-lg">系統正根據您的生字撰寫語意通順的短文，並自動配置常見錯字，請稍候約 5~10 秒。</p>
+        <h3 class="text-2xl font-bold text-white tracking-widest font-kai">AI 老師正在為您編寫多元文章...</h3>
+        <p id="loading-subtext" class="text-gray-200 mt-2 text-lg">系統正根據您選擇的文體與生字撰寫短文，並配置常見錯字，請稍候約 5~10 秒。</p>
     </div>
 
     <!-- 設定與操作介面 (列印時隱藏) -->
-    <div id="setup-view" class="container mx-auto p-4 max-w-5xl no-print">
+    <div id="setup-view" class="container mx-auto p-4 max-w-6xl no-print">
         <header class="text-center mb-8 mt-4">
-            <h1 class="text-4xl font-extrabold text-blue-800 mb-2">📄 改錯字練習卷產生器</h1>
-            <p class="text-gray-600">自動生成同音/形似字，一鍵排版成 PDF 格式</p>
+            <h1 class="text-3xl sm:text-4xl font-extrabold text-blue-800 mb-2">📄 改錯字練習卷產生器</h1>
+            <p class="text-gray-600">支援多元文體（議論文、論說文、抒情文等），自動配置同音／形似錯字，一鍵排版 A4 考卷</p>
         </header>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- 左側：生字輸入區 -->
-            <div class="bg-white rounded-xl shadow-md p-6 border-t-4 border-blue-500">
-                <h2 class="text-xl font-bold mb-3 flex items-center"><span class="text-2xl mr-2">1.</span> 輸入正確生字</h2>
-                <p class="text-sm text-gray-500 mb-3">請貼上至少 20 個<strong class="text-blue-600">正確的字</strong>。系統會透過 AI 自動為您寫出通順的文章，並替換常見的同音/形似錯字。</p>
-                <textarea id="vocab-input" class="w-full h-64 border border-gray-300 rounded p-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-kai" spellcheck="false"></textarea>
-                
-                <!-- API 金鑰欄位 (加入自動記憶) -->
-                <div class="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                    <label class="block text-sm font-bold text-yellow-900 mb-1">🔑 設定 API 金鑰 (通行證)</label>
-                    <p class="text-xs text-yellow-700 mb-2">第一次使用請貼上金鑰。系統會自動記憶，之後不用再填。<a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-600 underline font-bold hover:text-blue-800">點此免費取得</a></p>
-                    <input type="password" id="api-key-input" placeholder="請貼上 AIza 開頭的金鑰..." class="w-full border border-yellow-300 rounded p-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500 font-mono">
+            <!-- 左側：生字輸入與文體設定區 -->
+            <div class="bg-white rounded-xl shadow-md p-6 border-t-4 border-blue-500 flex flex-col justify-between">
+                <div>
+                    <h2 class="text-xl font-bold mb-3 flex items-center"><span class="text-2xl mr-2">1.</span> 輸入正確生字與設定</h2>
+                    <p class="text-sm text-gray-500 mb-3">請貼上至少 20 個<strong class="text-blue-600">正確的字</strong>。系統會自動分配給兩篇不同文體的文章。</p>
+                    <textarea id="vocab-input" class="w-full h-36 border border-gray-300 rounded-lg p-3 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-kai" spellcheck="false"></textarea>
+                    
+                    <!-- 新增：文體與年段設定區 -->
+                    <div class="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200 space-y-3">
+                        <div class="text-sm font-bold text-blue-900 flex items-center">
+                            <span class="mr-1">🎨</span> 文章體裁與難度設定
+                        </div>
+                        
+                        <div>
+                            <label for="genre-1" class="block text-xs font-bold text-gray-700 mb-1">【第一篇】文體：</label>
+                            <select id="genre-1" class="w-full border border-blue-300 rounded-lg p-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="random">🎲 隨機多元（自動避開重複）</option>
+                                <option value="argumentative">⚖️ 議論文（觀點論述、舉例說理）</option>
+                                <option value="expository">🔬 論說文／科普說明文（知識介紹、原理解說）</option>
+                                <option value="lyrical">🌸 抒情文（情感描寫、感官摹寫）</option>
+                                <option value="fable">🦊 寓言／想像故事（童話、擬人化寓意）</option>
+                                <option value="practical">✉️ 應用文（書信、演講稿、倡議書）</option>
+                                <option value="narrative">📖 生活記敘文（校園趣事、成長體驗）</option>
+                                <option value="classical_rewrite">📜 古文白話改寫／歷史典故（經典故事新說）</option>
+                                <option value="news">📰 新聞報導（校園快訊、地方趣聞、科技新知）</option>
+                                <option value="biography">🌟 人物小傳／專訪（名人奮鬥、職人精神）</option>
+                                <option value="review">🎬 讀書心得／藝文賞析（好書推薦、觀後感）</option>
+                                <option value="mystery">🔍 推理／偵探小品（線索觀察、邏輯解謎）</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="genre-2" class="block text-xs font-bold text-gray-700 mb-1">【第二篇】文體：</label>
+                            <select id="genre-2" class="w-full border border-blue-300 rounded-lg p-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="random">🎲 隨機多元（自動避開重複）</option>
+                                <option value="argumentative">⚖️ 議論文（觀點論述、舉例說理）</option>
+                                <option value="expository">🔬 論說文／科普說明文（知識介紹、原理解說）</option>
+                                <option value="lyrical">🌸 抒情文（情感描寫、感官摹寫）</option>
+                                <option value="fable">🦊 寓言／想像故事（童話、擬人化寓意）</option>
+                                <option value="practical">✉️ 應用文（書信、演講稿、倡議書）</option>
+                                <option value="narrative">📖 生活記敘文（校園趣事、成長體驗）</option>
+                                <option value="classical_rewrite">📜 古文白話改寫／歷史典故（經典故事新說）</option>
+                                <option value="news">📰 新聞報導（校園快訊、地方趣聞、科技新知）</option>
+                                <option value="biography">🌟 人物小傳／專訪（名人奮鬥、職人精神）</option>
+                                <option value="review">🎬 讀書心得／藝文賞析（好書推薦、觀後感）</option>
+                                <option value="mystery">🔍 推理／偵探小品（線索觀察、邏輯解謎）</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="genre-2" class="block text-xs font-bold text-gray-700 mb-1">【第二篇】文體：</label>
+                            <select id="genre-2" class="w-full border border-blue-300 rounded-lg p-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="random">🎲 隨機多元（自動避開重複）</option>
+                                <option value="argumentative">⚖️ 議論文（觀點論述、舉例說理）</option>
+                                <option value="expository">🔬 論說文／科普說明文（知識介紹、原理解說）</option>
+                                <option value="lyrical">🌸 抒情文（情感描寫、感官摹寫）</option>
+                                <option value="fable">🦊 寓言／想像故事（童話、擬人化寓意）</option>
+                                <option value="practical">✉️ 應用文（書信、演講稿、倡議書）</option>
+                                <option value="narrative">📖 生活記敘文（校園趣事、成長體驗）</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="grade-level" class="block text-xs font-bold text-gray-700 mb-1">🎓 適用年段（影響用詞與深度）：</label>
+                            <select id="grade-level" class="w-full border border-blue-300 rounded-lg p-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="國小中年級（三、四年級）">國小中年級（淺顯活潑、句型自然）</option>
+                                <option value="國小高年級（五、六年級）" selected>國小高年級（邏輯清晰、適度修辭）</option>
+                                <option value="國中生">國中階段（深入思辨、豐富詞彙）</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- API 金鑰欄位 (加入自動記憶) -->
+                    <div class="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                        <label class="block text-sm font-bold text-yellow-900 mb-1">🔑 設定 API 金鑰 (通行證)</label>
+                        <p class="text-xs text-yellow-700 mb-2">第一次使用請貼上金鑰，系統會自動記憶。<a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-blue-600 underline font-bold hover:text-blue-800">點此免費取得</a></p>
+                        <input type="password" id="api-key-input" placeholder="請貼上 AIza 開頭的金鑰..." class="w-full border border-yellow-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500 font-mono">
+                    </div>
                 </div>
                 
-                <button onclick="generateDrafts()" class="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded shadow transition flex justify-center items-center">
-                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-                    呼叫 AI 生成通順文章與錯字
-                </button>
-                
-                <!-- 保底測試按鈕 -->
-                <button onclick="loadMockData()" class="w-full mt-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded shadow transition text-sm flex justify-center items-center">
-                    測試排版功能 (載入範例文章)
-                </button>
+                <div class="mt-4 space-y-2">
+                    <button onclick="generateDrafts()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow transition flex justify-center items-center">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                        呼叫 AI 生成多元文章與錯字
+                    </button>
+                    
+                    <!-- 保底測試按鈕 -->
+                    <button onclick="loadMockData()" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg shadow-sm transition text-sm flex justify-center items-center">
+                        載入多元文體範例（議論文＋抒情文）
+                    </button>
+                </div>
             </div>
 
             <!-- 右側：文章草稿區 -->
-            <div class="lg:col-span-2 bg-white rounded-xl shadow-md p-6 border-t-4 border-green-500">
-                <h2 class="text-xl font-bold mb-3 flex items-center"><span class="text-2xl mr-2">2.</span> 確認與編輯文章</h2>
-                <p class="text-sm text-gray-500 mb-3">AI 已為您撰寫通順的短文並配置好常見的錯別字！<br>您可以在這裡檢視或微調文章內容。格式為 <strong class="text-green-600">{錯字|正確字}</strong>。</p>
-                
-                <div class="mb-4">
-                    <label class="block text-gray-700 font-bold mb-2">【第一篇】草稿 (包含 10 個考點)：</label>
-                    <textarea id="draft-1" class="w-full h-32 border border-gray-300 rounded p-3 focus:outline-none focus:ring-2 focus:ring-green-500 font-kai text-lg leading-relaxed" spellcheck="false"></textarea>
-                </div>
-                
-                <div class="mb-4">
-                    <label class="block text-gray-700 font-bold mb-2">【第二篇】草稿 (包含 10 個考點)：</label>
-                    <textarea id="draft-2" class="w-full h-32 border border-gray-300 rounded p-3 focus:outline-none focus:ring-2 focus:ring-green-500 font-kai text-lg leading-relaxed" spellcheck="false"></textarea>
+            <div class="lg:col-span-2 bg-white rounded-xl shadow-md p-6 border-t-4 border-green-500 flex flex-col justify-between">
+                <div>
+                    <h2 class="text-xl font-bold mb-3 flex items-center"><span class="text-2xl mr-2">2.</span> 確認與編輯文章</h2>
+                    <p class="text-sm text-gray-500 mb-4">AI 會根據您指定的文體撰寫通順短文並配置常見錯別字。您可在此微調內容，格式為 <strong class="text-green-600">{錯字|正確字}</strong>。</p>
+                    
+                    <div class="mb-5">
+                        <div class="flex flex-wrap justify-between items-center mb-2 gap-2">
+                            <label class="text-gray-700 font-bold flex items-center gap-2">
+                                <span>【第一篇】草稿</span>
+                                <span id="badge-genre-1" class="hidden text-xs bg-indigo-100 text-indigo-800 px-2.5 py-0.5 rounded-full font-bold"></span>
+                            </label>
+                            <span id="count-1" class="text-xs font-bold px-2.5 py-1 rounded-full bg-gray-100 text-gray-600">偵測考點：0 / 10</span>
+                        </div>
+                        <textarea id="draft-1" oninput="updateCounts()" class="w-full h-44 border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-green-500 font-kai text-lg leading-relaxed" spellcheck="false" placeholder="點擊左側「呼叫 AI 生成」或「載入範例」後，文章將顯示於此..."></textarea>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <div class="flex flex-wrap justify-between items-center mb-2 gap-2">
+                            <label class="text-gray-700 font-bold flex items-center gap-2">
+                                <span>【第二篇】草稿</span>
+                                <span id="badge-genre-2" class="hidden text-xs bg-teal-100 text-teal-800 px-2.5 py-0.5 rounded-full font-bold"></span>
+                            </label>
+                            <span id="count-2" class="text-xs font-bold px-2.5 py-1 rounded-full bg-gray-100 text-gray-600">偵測考點：0 / 10</span>
+                        </div>
+                        <textarea id="draft-2" oninput="updateCounts()" class="w-full h-44 border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-green-500 font-kai text-lg leading-relaxed" spellcheck="false" placeholder="點擊左側「呼叫 AI 生成」或「載入範例」後，文章將顯示於此..."></textarea>
+                    </div>
                 </div>
 
-                <div class="flex justify-end mt-6">
-                    <button onclick="previewWorksheet()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded shadow-lg transition text-lg flex items-center">
+                <div class="flex flex-col sm:flex-row justify-between items-center mt-4 pt-4 border-t border-gray-100 gap-4">
+                    <label class="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer select-none">
+                        <input type="checkbox" id="show-genre-on-print" class="w-4 h-4 text-green-600 rounded focus:ring-green-500" checked>
+                        <span>考卷標題旁顯示文體標籤（例如：【第一篇】議論文）</span>
+                    </label>
+
+                    <button onclick="previewWorksheet()" class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg shadow-lg transition text-lg flex items-center justify-center">
                         <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
                         預覽並建立考卷
                     </button>
@@ -155,23 +237,25 @@
 
     <!-- 考卷預覽與列印區 -->
     <div id="preview-view" class="hidden pb-20">
-        <div class="no-print bg-gray-800 text-white p-4 sticky top-0 z-40 shadow-md flex justify-between items-center">
-            <button onclick="backToSetup()" class="bg-gray-600 hover:bg-gray-500 px-4 py-2 rounded transition">
+        <div class="no-print bg-gray-800 text-white p-4 sticky top-0 z-40 shadow-md flex flex-wrap justify-between items-center gap-3">
+            <button onclick="backToSetup()" class="bg-gray-600 hover:bg-gray-500 px-4 py-2 rounded-lg transition font-bold">
                 ← 返回修改
             </button>
-            <div class="text-xl font-bold">考卷預覽模式 (按 PDF 樣式排版)</div>
-            <button onclick="window.print()" class="bg-blue-500 hover:bg-blue-400 text-white font-bold px-6 py-2 rounded shadow transition flex items-center">
+            <div class="text-lg sm:text-xl font-bold">考卷預覽模式（A4 列印排版）</div>
+            <button onclick="window.print()" class="bg-blue-500 hover:bg-blue-400 text-white font-bold px-6 py-2 rounded-lg shadow transition flex items-center">
                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
                 列印考卷 / 存成 PDF
             </button>
         </div>
 
-        <div id="print-pages-container" class="font-kai text-black">
-            <!-- JS 將在這裡生成 Page 1 (題目版) 和 Page 2 (解答版) -->
+        <div class="a4-wrapper">
+            <div id="print-pages-container" class="font-kai text-black">
+                <!-- JS 將在這裡生成 Page 1 (題目版) 和 Page 2 (解答版) -->
+            </div>
         </div>
     </div>
 
-    <!-- 專屬版權宣告頁尾 (列印時隱藏，避免多出一頁空白) -->
+    <!-- 專屬版權宣告頁尾 (乾淨、單行設計) -->
     <div class="text-center text-gray-400 text-sm mt-8 mb-4 tracking-wider no-print">
         &copy; 谷宗芸老師設計 / AI 輔助生成
     </div>
@@ -179,6 +263,58 @@
     <script>
         // 預設填入的生字 (測試用)
         const defaultVocab = "晴 薄 樓 塔 橋 沾 醬 麵 咖 震 京 訊 印 頸 義 濟 壽 醋 器 哩 幻 厲 型 斑 撥 辨 慕 燥 買 待 毫 暑 候 既 練 蜜 幸 底 渴 座 採 峰 籃 響 具 免 孤 崇 盆 塵";
+
+        // 記錄目前兩篇的文體名稱
+        let currentGenreName1 = "";
+        let currentGenreName2 = "";
+
+        // 定義多元文體庫與專屬寫作指引
+        const GENRE_CATALOG = {
+            argumentative: {
+                name: '議論文',
+                guide: '針對貼近學生生活或社會的議題（例如：閱讀的重要性、如何面對失敗、團隊合作與個人表現、科技與人際互動、節約與環保等），提出明確的中心論點，透過舉例或正反對比進行論述，最後提出有力的結論。語氣客觀而有說服力。'
+            },
+            expository: {
+                name: '論說文／科普說明文',
+                guide: '以條理分明、引人入勝的知識性口吻，介紹一項自然現象、科學原理、飲食文化、建築特色或歷史生活常識，運用舉例或比較的方式讓讀者學到新知，語氣客觀清晰。'
+            },
+            lyrical: {
+                name: '抒情文',
+                guide: '細膩抒發對季節更迭、家人的關愛、摯友的情誼、成長記憶或某件日常物品的深厚情感。多運用感官摹寫（視覺、聽覺、嗅覺等）與譬喻修辭，營造溫馨、寧靜或令人動容的氛圍。'
+            },
+            fable: {
+                name: '寓言／想像故事',
+                guide: '創作一篇富有想像力的擬人化故事、奇幻小品或微科幻短篇（例如會說話的文具、森林裡的動物會議、未來的奇妙發明），情節生動有趣，並在結尾自然帶出啟發性的道理。'
+            },
+            practical: {
+                name: '應用文',
+                guide: '以「寫給朋友或長輩的一封信」、「班級分享演講稿」或「愛護環境倡議書」的形式撰寫（需保留自然段落，不需過度複雜的抬頭格式），語氣真誠親切，有明確的溝通對象與主旨。'
+            },
+            narrative: {
+                name: '生活記敘文',
+                guide: '描寫貼近日常的校園挑戰、社團練習、解決生活小難題或家庭互動故事。注意：請避開「風和日麗全家去風景區遊玩」這種千篇一律的流水帳遊記。'
+            },
+            classical_rewrite: {
+                name: '古文白話改寫',
+                guide: '取材自古典詩文、歷史軼事或成語典故，以生動流暢的現代白話文重新演繹故事背景、人物互動與深遠寓意，兼具文學韻味與易讀性。'
+            },
+            news: {
+                name: '新聞報導',
+                guide: '以客觀精鍊的新聞記者口吻撰寫（例如以「本報訊……」開頭），報導一則校園創新活動、地方文化盛事、環保行動或科技新發現，包含人事時地物與受訪者觀點。'
+            },
+            biography: {
+                name: '人物小傳／專訪',
+                guide: '生動刻畫一位科學家、藝術家、運動員或默默奉獻的社區職人的成長經歷與面對挫折的態度，透過具體事蹟展現其令人敬佩的精神特質。'
+            },
+            review: {
+                name: '讀書心得／藝文賞析',
+                guide: '以真誠的讀者或觀眾視角，介紹一本好書、一場展覽或一部電影的核心主題，分享最觸動人心的片段與自身獲得的啟發與反思。'
+            },
+            mystery: {
+                name: '推理／偵探小品',
+                guide: '設計一個發生在日常生活或校園裡的趣味謎團（例如失蹤的物品、神祕的紙條），透過敏銳的細節觀察與層層邏輯推敲，在結尾揭曉出人意料的真相。'
+            }
+        };
 
         // 初始化
         window.onload = () => {
@@ -189,6 +325,7 @@
             if (savedKey) {
                 document.getElementById('api-key-input').value = savedKey;
             }
+            updateCounts();
         };
 
         // 自訂提示框
@@ -200,58 +337,140 @@
             document.getElementById('alert-modal').classList.add('hidden');
         }
         
-        function showLoading() {
+        function showLoading(subtext) {
+            if (subtext) {
+                document.getElementById('loading-subtext').innerText = subtext;
+            }
             document.getElementById('loading-modal').classList.remove('hidden');
         }
         function hideLoading() {
             document.getElementById('loading-modal').classList.add('hidden');
         }
 
-        // 載入範例文章
+        // 更新草稿區文體標籤
+        function updateGenreBadges(g1, g2) {
+            currentGenreName1 = g1 || "";
+            currentGenreName2 = g2 || "";
+
+            const b1 = document.getElementById('badge-genre-1');
+            const b2 = document.getElementById('badge-genre-2');
+
+            if (currentGenreName1) {
+                b1.innerText = currentGenreName1;
+                b1.classList.remove('hidden');
+            } else {
+                b1.classList.add('hidden');
+            }
+
+            if (currentGenreName2) {
+                b2.innerText = currentGenreName2;
+                b2.classList.remove('hidden');
+            } else {
+                b2.classList.add('hidden');
+            }
+        }
+
+        // 即時計算並顯示每篇草稿的考點數量
+        function updateCounts() {
+            const regex = /\{([^|]+)\|([^}]+)\}/g;
+            const d1 = document.getElementById('draft-1').value;
+            const d2 = document.getElementById('draft-2').value;
+            
+            const c1 = (d1.match(regex) || []).length;
+            const c2 = (d2.match(regex) || []).length;
+
+            const el1 = document.getElementById('count-1');
+            const el2 = document.getElementById('count-2');
+
+            el1.innerText = `偵測考點：${c1} / 10`;
+            el1.className = `text-xs font-bold px-2.5 py-1 rounded-full ${c1 === 10 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`;
+
+            el2.innerText = `偵測考點：${c2} / 10`;
+            el2.className = `text-xs font-bold px-2.5 py-1 rounded-full ${c2 === 10 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`;
+        }
+
+        // 載入多元文體範例文章（第一篇：議論文、第二篇：抒情文）
         function loadMockData() {
-            document.getElementById('draft-1').value = "在一個風和日麗的{情|晴}天，我們全家人去市中心遊玩。早上，媽媽幫我準備了{簿|薄}片般的餅乾當點心。我們來到一棟非常高的商業大{樓|樓}，並搭乘電梯直達頂樓的觀景{踏|塔}。從上面往下看，可以看到一條壯觀的大{瞧|橋}橫跨在寬廣的河面上。中午吃飯時，我不小心{站|沾}到了衣服，因為我正在吃美味的番茄肉{獎|醬}義大利{綿|麵}。吃飽後，爸爸點了一杯熱呼呼的{加|咖}啡，突然感覺到一陣輕微的地{陣|震}，幸好平安無事。";
-            document.getElementById('draft-2').value = "上個週末，我們在電視上看到關於日本東{驚|京}的旅遊資{迅|訊}，這讓我留下深刻的{映|印}象。由於爸爸最近工作一直坐在電腦前，導致肩{景|頸}痠痛，於是我們決定去參加一場有{易|益}身心的健行活動。這次活動是由當地的經{記|濟}發展局舉辦。中午，我們在山下吃{獸|壽}司，飯裡拌了微酸的{錯|醋}，十分爽口。店裡擺放著精緻的瓷{氣|器}，看起來非常漂亮。我們聽著老闆說哪{理|哩}有好玩的景點，度過充實的下午。";
-            showAlert("✅ 已為您載入預設的範例文章！\n\n您可以直接點擊右下角的「預覽並建立考卷」來檢視 A4 排版效果，確認系統排版功能正常運作！");
+            document.getElementById('draft-1').value = "現代社會的資{迅|訊}傳播極為快速，然而面對龐大的網路訊息，我們更需要培養獨立思考與明{便|辨}是非的能力。許多人習慣在未經查證前就隨意轉發文章，這不僅容易造成誤解，更可能動搖社會的信任基{礎|底}。古人曾說「盡信書不如無書」，在這個時代更是如此。如果我們總是盲目跟風，缺乏{豪|毫}不妥協的求證精神，就容易被不實言論牽著鼻子走。因此，閱讀新聞時應多方比對來源，避免心浮氣{躁|燥}地立刻下結論。唯有養成理性判斷的習慣，才能在紛亂的浪潮中站穩腳步，成為有{意|義}思維的現代公民，這才是真正有{益|幸}於個人與社會的處世態度，絕非空談的{患|幻}想，而是每個人都該反覆{煉|練}習的課題。";
+            document.getElementById('draft-2').value = "夏末的傍晚，微風輕輕拂過陽台上的小花{盤|盆}，帶來一陣淡雅的清香。我獨自倚在窗邊，望著遠方在夕陽下顯得格外壯麗的山{瘋|峰}，心中湧起一股說不出的思念。還記得小時候，總愛在這樣{情|晴}朗的黃昏，聽著外婆在院子裡一邊整理竹{藍|籃}，一邊哼著古老的歌謠。那時候的時光彷彿甜{密|蜜}的糖果，連空氣中飄浮的微{陳|塵}都閃耀著金色的光芒。如今我漸漸長大，雖然外婆的叮嚀不再時常在耳邊{想|響}起，但那份溫暖的記憶早已深深烙{映|印}在心底。每當感到{狐|孤}單或疲憊時，只要閉上眼睛回想那段歲月，心中便會重新充滿力量，勇敢迎接明天的到來。";
+            
+            updateGenreBadges("議論文", "抒情文");
+            updateCounts();
+            showAlert("✅ 已為您載入多元文體範例（議論文＋抒情文）！\n\n您可以直接點擊右下角的「預覽並建立考卷」檢視 A4 排版效果。");
         }
 
         // 陣列洗牌 (Fisher-Yates)
         function shuffle(array) {
-            let currentIndex = array.length, randomIndex;
+            const arr = [...array];
+            let currentIndex = arr.length, randomIndex;
             while (currentIndex !== 0) {
                 randomIndex = Math.floor(Math.random() * currentIndex);
                 currentIndex--;
-                [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+                [arr[currentIndex], arr[randomIndex]] = [arr[randomIndex], arr[currentIndex]];
             }
-            return array;
+            return arr;
         }
 
-        // 具有重試機制的 fetch
-        async function fetchWithRetry(url, options, retries = 3, delay = 2000) {
+        // 決定兩篇文章的實際文體（若選隨機，保證兩篇文體不同且優先涵蓋多元文體）
+        function resolveGenres() {
+            const sel1 = document.getElementById('genre-1').value;
+            const sel2 = document.getElementById('genre-2').value;
+            const allKeys = Object.keys(GENRE_CATALOG);
+            // 隨機池中以非記敘文為主軸，但仍保留所有多元文體
+            const shuffledKeys = shuffle(allKeys);
+
+            let key1 = sel1;
+            let key2 = sel2;
+
+            if (key1 === 'random' && key2 === 'random') {
+                // 優先挑選兩個完全不同的文體
+                key1 = shuffledKeys[0];
+                key2 = shuffledKeys[1];
+            } else if (key1 === 'random') {
+                // 避開與第二篇相同的文體
+                key1 = shuffledKeys.find(k => k !== key2) || shuffledKeys[0];
+            } else if (key2 === 'random') {
+                // 避開與第一篇相同的文體
+                key2 = shuffledKeys.find(k => k !== key1) || shuffledKeys[0];
+            }
+
+            return {
+                g1: GENRE_CATALOG[key1],
+                g2: GENRE_CATALOG[key2]
+            };
+        }
+
+        // 具有指數退避重試機制的 fetch
+        async function fetchWithRetry(url, options, retries = 3, delay = 1000) {
             for (let i = 0; i < retries; i++) {
                 try {
                     const res = await fetch(url, options);
-                    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                    if (!res.ok) {
+                        const errBody = await res.json().catch(() => ({}));
+                        const errMsg = errBody.error?.message || `HTTP error! status: ${res.status}`;
+                        throw new Error(errMsg);
+                    }
                     return res;
                 } catch (e) {
                     if (i === retries - 1) throw e;
-                    await new Promise(res => setTimeout(res, delay));
+                    await new Promise(res => setTimeout(res, delay * Math.pow(2, i)));
                 }
             }
         }
 
-        // 透過 AI 生成草稿
+        // 透過 AI 生成多元文體草稿
         async function generateDrafts() {
             const text = document.getElementById('vocab-input').value;
             const apiKeyInput = document.getElementById('api-key-input').value.trim();
+            const gradeLevel = document.getElementById('grade-level').value;
             
-            if (!apiKeyInput) {
-                showAlert("⛔ 請先在左下方填寫您的 API 金鑰（通行證），才能呼叫 AI 幫忙寫文章喔！\n\n如果您還沒有金鑰，請點擊欄位上方的「點此免費取得」連結。");
-                return;
+            // 若使用者有填寫金鑰，則儲存至 localStorage 以便下次使用
+            if (apiKeyInput) {
+                localStorage.setItem('gemini_api_key', apiKeyInput);
             }
-            
-            localStorage.setItem('gemini_api_key', apiKeyInput);
-            const apiKey = apiKeyInput;
+            const apiKey = apiKeyInput || "";
 
+            // 過濾掉非中文字元並去重
             const chars = [...new Set(text.replace(/[^\u4E00-\u9FA5]/g, '').split(''))];
             
             if (chars.length < 20) {
@@ -259,29 +478,47 @@
                 return;
             }
 
-            shuffle(chars);
-            const group1 = chars.slice(0, 10);
-            const group2 = chars.slice(10, 20);
+            const shuffledChars = shuffle(chars);
+            const group1 = shuffledChars.slice(0, 10);
+            const group2 = shuffledChars.slice(10, 20);
 
-            showLoading();
+            // 解析這次要生成的兩種文體
+            const { g1, g2 } = resolveGenres();
 
-            const prompt = `你是一位專業的台灣國小國語老師。
-請分別使用以下兩組生字，寫兩篇完全不同的通順短文（每篇約150-200字，適合國小學生閱讀的記敘文、日記或遊記）。
+            showLoading(`正在為「${gradeLevel}」撰寫【${g1.name}】與【${g2.name}】，並精準嵌入 20 個錯字考點...`);
 
-第一組生字：${group1.join(', ')}
-第二組生字：${group2.join(', ')}
+            const prompt = `你是一位資深的台灣國語文教學專家與命題老師，擅長撰寫各種不同文體的優質範文。
+請針對「${gradeLevel}」的閱讀程度，分別使用以下兩組生字，撰寫兩篇風格截然不同、語意流暢且富有教育意義的短文（每篇約 160～210 字，單一段落即可，適合印在 A4 考卷上）。
 
-【重要規則】：
-1. 第一篇必須包含第一組的10個字；第二篇必須包含第二組的10個字。
-2. 將這些生字替換成「國小常見的同音錯字或形似錯字」。錯字必須是常用字。
-3. 在文章中，請直接以 \`{錯字|正確字}\` 的格式標示，不要加任何引號或多餘符號。
-4. 兩篇文章必須語意通順、自然、邏輯合理，絕對不可以硬湊。
-5. 請務必回傳嚴格的 JSON 格式，必須包含 draft1 和 draft2 兩個欄位。`;
+【第一篇任務】
+- 指定文體：${g1.name}
+- 文體寫作要求：${g1.guide}
+- 必須完整包含的 10 個正確生字：${group1.join('、')}
+
+【第二篇任務】
+- 指定文體：${g2.name}
+- 文體寫作要求：${g2.guide}
+- 必須完整包含的 10 個正確生字：${group2.join('、')}
+
+【嚴格命題規則】：
+1. 第一篇必須剛好包含第一組的 10 個考點；第二篇必須剛好包含第二組的 10 個考點。每個指定的生字在該篇中只標記一次錯字。
+2. 將這 10 個指定生字替換成台灣學生「常見的同音錯字或形似錯字」。錯字必須是繁體常用字，且絕對不可與正確字相同！
+3. 在文章中，請直接以 \`{錯字|正確字}\` 的格式標示（例如：\`{情|晴}\`），前後不要加引號或其他多餘符號。
+4. 嚴格遵守指定的文體特徵，不可全部寫成記敘文或風景遊記。文章必須自然通順、邏輯合理，絕不可為了湊字而生硬造句。
+5. 全程使用台灣繁體中文與標準全形標點符號。`;
 
             const payload = {
                 contents: [{ parts: [{ text: prompt }] }],
                 generationConfig: {
-                    responseMimeType: "application/json"
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "OBJECT",
+                        properties: {
+                            draft1: { type: "STRING", description: "第一篇文章完整內容，內含10個{錯字|正確字}標記" },
+                            draft2: { type: "STRING", description: "第二篇文章完整內容，內含10個{錯字|正確字}標記" }
+                        },
+                        required: ["draft1", "draft2"]
+                    }
                 }
             };
 
@@ -297,38 +534,46 @@
                 const result = await response.json();
                 
                 if (result.error) {
-                    throw new Error(`伺服器拒絕連線：${result.error.message || 'API 金鑰無效'}`);
+                    throw new Error(result.error.message || 'API 金鑰無效或連線失敗');
                 }
                 
                 if (result.candidates && result.candidates.length > 0) {
                     let jsonStr = result.candidates[0].content.parts[0].text;
                     jsonStr = jsonStr.replace(/```json/g, '').replace(/```/g, '').trim();
+                    
                     const data = JSON.parse(jsonStr);
                     
                     document.getElementById('draft-1').value = data.draft1;
                     document.getElementById('draft-2').value = data.draft2;
-                    showAlert("🎉 AI 老師已成功為您撰寫完成！\n這兩篇文章是即時為您生成的通順短文。\n您可以直接預覽考卷，或在這邊做最後微調。");
+                    
+                    updateGenreBadges(g1.name, g2.name);
+                    updateCounts();
+
+                    showAlert(`🎉 AI 老師已為您撰寫完成！\n\n【第一篇】文體：${g1.name}\n【第二篇】文體：${g2.name}\n\n您可以直接預覽考卷，或在右側草稿區進行最後微調。`);
                 } else {
                     throw new Error("API 沒有回傳預期的內容。");
                 }
             } catch (error) {
                 console.error("生成錯誤:", error);
-                showAlert(`⚠️ 系統連線異常：\n\n${error.message}\n\n請檢查您的 API 金鑰是否正確，或稍後再試！`);
+                const keyHint = !apiKeyInput ? "\n\n（若您是在本機瀏覽器開啟此網頁，請先在左下方填寫您的免費 API 金鑰喔！）" : "\n\n請檢查您的 API 金鑰是否正確，或稍後再試。";
+                showAlert(`⚠️ 系統連線異常：\n${error.message}${keyHint}`);
             } finally {
                 hideLoading();
             }
         }
 
-        // 解析草稿中的標記
+        // 解析草稿中的標記並生成對應格式
         function parseDraft(text) {
             const regex = /\{([^|]+)\|([^}]+)\}/g;
             let answers = [];
             
+            // 題目版文字：替換標記為「錯字」，不加任何樣式
             let questionText = text.replace(regex, (match, wrong, correct) => {
                 answers.push({ wrong, correct });
                 return wrong;
             });
 
+            // 解答版文字：保留錯字，但標示紅色與底線讓老師方便對答案
             let answerText = text.replace(regex, (match, wrong, correct) => {
                 return `<span class="text-red-600 font-extrabold underline decoration-red-400 decoration-2 underline-offset-4">${wrong}</span>`;
             });
@@ -336,20 +581,21 @@
             return { questionText, answerText, answers };
         }
 
-        // 建立考卷表格 HTML (題號列精簡、答案格放大)
+        // 建立考卷表格 HTML (依照 PDF 橫式樣式)
         function buildTableHTML(answers, isAnswerKey) {
-            let tableHTML = `<table class="test-table font-bold font-kai mb-3">
-                <tr class="row-num">
-                    <th class="w-16">題號</th>`;
+            let tableHTML = `<table class="test-table text-xl font-bold font-kai mb-6">
+                <tr>
+                    <th class="py-2 w-20">題號</th>`;
             for(let i = 1; i <= 10; i++) {
-                tableHTML += `<th>${i}</th>`;
+                tableHTML += `<th class="w-12">${i}</th>`;
             }
-            tableHTML += `</tr><tr class="row-ans">
-                    <th class="text-lg">答案</th>`;
+            tableHTML += `</tr><tr>
+                    <th class="py-4">答案</th>`;
             for(let i = 0; i < 10; i++) {
                 let cellContent = '';
                 if (isAnswerKey && answers[i]) {
-                    cellContent = `<span class="text-red-600 text-4xl">${answers[i].correct}</span>`;
+                    // 解答版表格填入正確字，紅色標示
+                    cellContent = `<span class="text-red-600 text-2xl">${answers[i].correct}</span>`;
                 }
                 tableHTML += `<td>${cellContent}</td>`;
             }
@@ -357,38 +603,14 @@
             return tableHTML;
         }
 
-        // 建立精簡版頁首 (小標題 + 學生資訊 + 家長簽名)
-        function buildHeaderHTML(title) {
-            return `
-            <div class="flex justify-between items-start border-b border-black pb-1.5 mb-2 font-kai">
-                <div>
-                    <h1 class="text-lg font-bold tracking-wider leading-tight">${title}</h1>
-                    <div class="text-xs font-bold leading-snug text-gray-800 mt-0.5">
-                        從文章中圈出錯別字，按出現順序寫進下方表格改成正確的字。<br>
-                        (寫錯順序每字扣1分；順序和字都對得5分，共100分)
-                    </div>
-                </div>
-                <div class="text-sm font-bold tracking-wider text-right shrink-0 ml-2">
-                    <div class="mb-1">
-                        <span class="w-6 inline-block border-b border-black"></span>年
-                        <span class="w-6 inline-block border-b border-black"></span>班
-                        <span class="w-6 inline-block border-b border-black"></span>號
-                        <span class="ml-1">姓名：</span><span class="w-20 inline-block border-b border-black"></span>
-                    </div>
-                    <div>
-                        <span>家長簽名：</span><span class="w-28 inline-block border-b border-black"></span>
-                    </div>
-                </div>
-            </div>`;
-        }
-
         // 預覽與排版考卷
         function previewWorksheet() {
             const draft1 = document.getElementById('draft-1').value.trim();
             const draft2 = document.getElementById('draft-2').value.trim();
+            const showGenre = document.getElementById('show-genre-on-print').checked;
 
             if (!draft1 || !draft2) {
-                showAlert("草稿不可為空，請先生成草稿。");
+                showAlert("草稿不可為空，請先生成草稿或載入範例文章。");
                 return;
             }
 
@@ -396,59 +618,76 @@
             const parsed2 = parseDraft(draft2);
 
             if (parsed1.answers.length !== 10 || parsed2.answers.length !== 10) {
-                showAlert(`警告：\n第一篇偵測到 ${parsed1.answers.length} 個考點。\n第二篇偵測到 ${parsed2.answers.length} 個考點。\n建議修改確保每篇皆為 10 個考點，以符合百分制計算。`);
+                showAlert(`提醒：\n第一篇偵測到 ${parsed1.answers.length} 個考點。\n第二篇偵測到 ${parsed2.answers.length} 個考點。\n建議微調確保每篇皆為 10 個考點，以符合百分制計分。`);
             }
+
+            const title1 = (showGenre && currentGenreName1) ? `【第一篇】${currentGenreName1}` : `【第一篇】`;
+            const title2 = (showGenre && currentGenreName2) ? `【第二篇】${currentGenreName2}` : `【第二篇】`;
             
-            // 產生 Page 1 (題目版)
+            // 產生 Page 1 (題目版) - 完整一頁包含兩篇
             let page1HTML = `
             <div class="a4-page">
-                ${buildHeaderHTML('改錯字練習')}
-                
-                <div class="flex-1 flex flex-col justify-between">
-                    <div>
-                        <h2 class="text-base font-bold mb-0.5 font-kai">【第一篇】</h2>
-                        <div class="text-[23px] leading-[1.55] tracking-[0.06em] mb-2 text-justify text-gray-900 indent-10 font-kai">
-                            ${parsed1.questionText}
-                        </div>
-                        ${buildTableHTML(parsed1.answers, false)}
-                    </div>
-
-                    <div>
-                        <h2 class="text-base font-bold mb-0.5 font-kai">【第二篇】</h2>
-                        <div class="text-[23px] leading-[1.55] tracking-[0.06em] mb-2 text-justify text-gray-900 indent-10 font-kai">
-                            ${parsed2.questionText}
-                        </div>
-                        ${buildTableHTML(parsed2.answers, false)}
+                <div class="flex justify-between items-end mb-2">
+                    <h1 class="text-2xl font-bold tracking-widest font-kai">標題：改錯字練習</h1>
+                    <div class="text-lg font-bold tracking-widest flex items-center font-kai">
+                        <span class="w-8 inline-block mx-1"></span>年
+                        <span class="w-8 inline-block mx-1"></span>班
+                        <span class="w-8 inline-block mx-1"></span>號
+                        <span class="ml-2">姓名：</span><span class="w-24 inline-block"></span>
                     </div>
                 </div>
+                <div class="mb-4 text-base font-bold leading-relaxed font-kai">
+                    從文章中圈出錯別字，寫進下方的表格裡改成正確的字。<br>
+                    （按文字出現順序寫，寫錯順序每字扣 1 分。順序和字都對得 5 分，共 100 分）
+                </div>
+                
+                <h2 class="text-xl font-bold mb-2 font-kai">${title1}</h2>
+                <div class="text-xl leading-[2.05] tracking-[0.08em] mb-4 text-justify text-gray-900 indent-8 font-kai">
+                    ${parsed1.questionText}
+                </div>
+                ${buildTableHTML(parsed1.answers, false)}
+
+                <h2 class="text-xl font-bold mb-2 font-kai">${title2}</h2>
+                <div class="text-xl leading-[2.05] tracking-[0.08em] mb-4 text-justify text-gray-900 indent-8 font-kai">
+                    ${parsed2.questionText}
+                </div>
+                ${buildTableHTML(parsed2.answers, false)}
             </div>`;
 
-            // 產生 Page 2 (解答版)
+            // 產生 Page 2 (解答版) - 樣式與第一頁相同，但帶有紅字解答
             let page2HTML = `
             <div class="a4-page">
-                ${buildHeaderHTML('改錯字練習（解答版）')}
-                
-                <div class="flex-1 flex flex-col justify-between">
-                    <div>
-                        <h2 class="text-base font-bold mb-0.5 font-kai">【第一篇】</h2>
-                        <div class="text-[23px] leading-[1.55] tracking-[0.06em] mb-2 text-justify text-gray-900 indent-10 font-kai">
-                            ${parsed1.answerText}
-                        </div>
-                        ${buildTableHTML(parsed1.answers, true)}
-                    </div>
-
-                    <div>
-                        <h2 class="text-base font-bold mb-0.5 font-kai">【第二篇】</h2>
-                        <div class="text-[23px] leading-[1.55] tracking-[0.06em] mb-2 text-justify text-gray-900 indent-10 font-kai">
-                            ${parsed2.answerText}
-                        </div>
-                        ${buildTableHTML(parsed2.answers, true)}
+                <div class="flex justify-between items-end mb-2">
+                    <h1 class="text-2xl font-bold tracking-widest font-kai">改錯字練習（解答版）</h1>
+                    <div class="text-lg font-bold tracking-widest flex items-center font-kai">
+                        <span class="w-8 inline-block mx-1"></span>年
+                        <span class="w-8 inline-block mx-1"></span>班
+                        <span class="w-8 inline-block mx-1"></span>號
+                        <span class="ml-2">姓名：</span><span class="w-24 inline-block"></span>
                     </div>
                 </div>
+                <div class="mb-4 text-base font-bold leading-relaxed font-kai">
+                    從文章中圈出錯別字，寫進下方的表格裡改成正確的字。<br>
+                    （按文字出現順序寫，寫錯順序每字扣 1 分。順序和字都對得 5 分，共 100 分）
+                </div>
+                
+                <h2 class="text-xl font-bold mb-2 font-kai">${title1}</h2>
+                <div class="text-xl leading-[2.05] tracking-[0.08em] mb-4 text-justify text-gray-900 indent-8 font-kai">
+                    ${parsed1.answerText}
+                </div>
+                ${buildTableHTML(parsed1.answers, true)}
+
+                <h2 class="text-xl font-bold mb-2 font-kai">${title2}</h2>
+                <div class="text-xl leading-[2.05] tracking-[0.08em] mb-4 text-justify text-gray-900 indent-8 font-kai">
+                    ${parsed2.answerText}
+                </div>
+                ${buildTableHTML(parsed2.answers, true)}
             </div>`;
 
+            // 注入 DOM
             document.getElementById('print-pages-container').innerHTML = page1HTML + page2HTML;
 
+            // 切換畫面
             document.getElementById('setup-view').classList.add('hidden');
             document.getElementById('preview-view').classList.remove('hidden');
             window.scrollTo(0, 0);
